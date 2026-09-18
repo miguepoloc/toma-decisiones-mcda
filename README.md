@@ -14,25 +14,32 @@ nada localmente.
 | # | Notebook | Método | Abrir |
 |---|----------|--------|-------|
 | 00 | [`00_priorizacion_criterios.ipynb`](00_priorizacion_criterios.ipynb) | Priorización de criterios (votación en grupo) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/miguepoloc/toma-decisiones-mcda/blob/main/00_priorizacion_criterios.ipynb) |
-| 01 | [`01_ahp_cacao.ipynb`](01_ahp_cacao.ipynb) | AHP | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/miguepoloc/toma-decisiones-mcda/blob/main/01_ahp_cacao.ipynb) |
-| 02 | [`02_topsis_cacao.ipynb`](02_topsis_cacao.ipynb) | TOPSIS | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/miguepoloc/toma-decisiones-mcda/blob/main/02_topsis_cacao.ipynb) |
-| 03 | [`03_vikor_cacao.ipynb`](03_vikor_cacao.ipynb) | VIKOR | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/miguepoloc/toma-decisiones-mcda/blob/main/03_vikor_cacao.ipynb) |
-| 04 | [`04_electre_cacao.ipynb`](04_electre_cacao.ipynb) | ELECTRE | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/miguepoloc/toma-decisiones-mcda/blob/main/04_electre_cacao.ipynb) |
-| 05 | [`05_promethee_cacao.ipynb`](05_promethee_cacao.ipynb) | PROMETHEE II | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/miguepoloc/toma-decisiones-mcda/blob/main/05_promethee_cacao.ipynb) |
-| 06 | [`06_anp_cacao.ipynb`](06_anp_cacao.ipynb) | ANP | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/miguepoloc/toma-decisiones-mcda/blob/main/06_anp_cacao.ipynb) |
+| 01 | [`01_ahp_iot_palmor.ipynb`](01_ahp_iot_palmor.ipynb) | AHP | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/miguepoloc/toma-decisiones-mcda/blob/main/01_ahp_iot_palmor.ipynb) |
+| 02 | [`02_topsis_iot_palmor.ipynb`](02_topsis_iot_palmor.ipynb) | TOPSIS | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/miguepoloc/toma-decisiones-mcda/blob/main/02_topsis_iot_palmor.ipynb) |
+| 03 | [`03_vikor_iot_palmor.ipynb`](03_vikor_iot_palmor.ipynb) | VIKOR | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/miguepoloc/toma-decisiones-mcda/blob/main/03_vikor_iot_palmor.ipynb) |
+| 04 | [`04_electre_iot_palmor.ipynb`](04_electre_iot_palmor.ipynb) | ELECTRE | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/miguepoloc/toma-decisiones-mcda/blob/main/04_electre_iot_palmor.ipynb) |
+| 05 | [`05_promethee_iot_palmor.ipynb`](05_promethee_iot_palmor.ipynb) | PROMETHEE II | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/miguepoloc/toma-decisiones-mcda/blob/main/05_promethee_iot_palmor.ipynb) |
+| 06 | [`06_anp_iot_palmor.ipynb`](06_anp_iot_palmor.ipynb) | ANP | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/miguepoloc/toma-decisiones-mcda/blob/main/06_anp_iot_palmor.ipynb) |
 
-## Casos usados
+## Caso usado
 
-- **01-06** comparten un mismo caso: zonificación de 4 corregimientos de la Sierra
-  Nevada de Santa Marta (Bonda, Guachaca, San Pedro, Palmor) según su aptitud para
-  monitoreo de riesgo de Moniliasis en cultivos de cacao, con 4 criterios
-  edafoclimáticos (temperatura, humedad bajo el dosel, pH y conductividad eléctrica
-  del suelo). Es el caso de investigación doctoral real del docente; **los valores
-  numéricos son ilustrativos**, no hay datos de campo todavía.
-- **00** usa un caso distinto (selección de una tecnología de comunicación
-  LoRaWAN/GSM-GPRS/Sigfox/Zigbee para una red de sensores IoT/WSN agrícola en
-  Palmor), usado en el curso para introducir la fase de *elección de criterios*
-  antes de comparar alternativas.
+**00 a 06 comparten un mismo caso real**: elegir una tecnología de comunicación
+(LoRaWAN, GSM/GPRS, Sigfox o Zigbee) para una red de sensores IoT/WSN de monitoreo
+agroclimático en Palmor, corregimiento de Ciénaga (Sierra Nevada de Santa Marta,
+Magdalena), una zona con conectividad limitada verificada vía MinTIC. Los 4 criterios
+(alcance de comunicación, autonomía de batería, infraestructura/cobertura comercial en
+Colombia, madurez/viabilidad comercial del proveedor) y los valores técnicos de la
+matriz de decisión son reales, verificados vía WebSearch (datasheets SIMCom/DigiKey,
+The Things Network, Lauridsen et al. 2019 *Sensors*/MDPI, noticias de apagado de 2G en
+Colombia).
+
+**AHP (01), TOPSIS (02) y VIKOR (03)** resuelven exactamente el caso ya visto en clase
+(Sesiones 1-3 del curso), con los mismos pesos y matriz de decisión ya publicados y
+verificados allí. **ELECTRE (04), PROMETHEE II (05) y ANP (06)** aplican sus métodos a
+este mismo caso por primera vez en este repositorio — es una extensión nueva, con datos
+reales y métodos/umbrales de convención del curso, pero **aún no vista en clase** (en el
+curso presencial, esos 3 bloques todavía se enseñan sobre un caso distinto, de
+zonificación agrícola). Cada notebook lo aclara explícitamente en su celda introductoria.
 
 ## Dependencias
 
