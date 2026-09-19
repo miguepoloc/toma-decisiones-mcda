@@ -1,0 +1,93 @@
+'use client';
+
+import { useEffect, useMemo, useState } from 'react';
+import { createClient } from '@/lib/supabase/client';
+import type { ExpertGet } from '@/lib/types';
+import { indexJudgments } from '@/lib/ahp';
+import JudgmentEditor from './JudgmentEditor';
+
+export default function ExpertFlow({ token }: { token: string }) {
+  const supabase = useMemo(() => createClient(), []);
+  const [data, setData] = useState<ExpertGet | null | undefined>(undefined);
+  const [status, setStatus] = useState<'pending' | 'in_progress' | 'submitted'>('pending');
+  const [msg, setMsg] = useState('');
+  const [confirm, setConfirm] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    supabase.rpc('expert_get', { p_token: token }).then(({ data: d, error }) => {
+      if (!alive) return;
+      if (error || !d) { setData(null); return; }
+      setData(d as ExpertGet);
+      setStatus((d as ExpertGet).expert.status);
+    });
+    return () => { alive = false; };
+  }, [supabase, token]);
+
+  if (data === undefined) return <div className="wrap"><p className="muted">Cargando…</p></div>;
+  if (data === null) {
+    return (
+      <div className="wrap"><div className="hero"><h1>Enlace no válido</h1>
+        <p className="muted">Este enlace no existe o fue reemplazado. Pídele al estudiante que te envíe uno nuevo.</p></div></div>
+    );
+  }
+
+  const submitted = status === 'submitted';
+  const initial = indexJudgments(data.judgments.map((j) => ({ expert_id: 'me', ...j })))['me'] ?? {};
+
+  async function submit() {
+    const { error } = await supabase.rpc('expert_submit', { p_token: token });
+    if (error) setMsg(error.message);
+    else { setStatus('submitted'); setConfirm(false); window.scrollTo({ top: 0 }); }
+  }
+
+  return (
+    <div className="wrap">
+      <div className="topbar"><span className="brand">Plataforma MCDA</span><span className="muted" style={{ fontSize: 13 }}>Respondiendo como: {data.expert.name}{data.expert.role_desc ? ` · ${data.expert.role_desc}` : ''}</span></div>
+      <div className="panel">
+        <header>
+          <div className="eyebrow">Consulta a expertos</div>
+          <h1 style={{ fontSize: 30 }}>{data.project.title}</h1>
+          {data.project.objective && <p className="muted" style={{ maxWidth: '70ch' }}><b>Objetivo de la decisión:</b> {data.project.objective}</p>}
+        </header>
+
+        {submitted ? (
+          <div className="card win"><span className="big">¡Gracias! Tus respuestas fueron enviadas.</span>
+            <span className="muted">Si necesitas corregir algo, pídele al estudiante que reabra tu formulario. Abajo puedes ver lo que respondiste.</span></div>
+        ) : (
+          <div className="card">
+            <h3>Cómo responder</h3>
+            <p className="muted" style={{ maxWidth: '70ch', marginTop: 6 }}>
+              Verás pares de elementos. Mueve el control hacia el que consideres mejor o más importante; entre más lejos, más fuerte es tu preferencia
+              (1 = igual, 3 = moderada, 5 = fuerte, 7 = muy fuerte, 9 = extrema). Tus respuestas se guardan solas. Puedes cerrar la página y volver con este mismo enlace.
+              Cuando termines todas las hojas, pulsa «Enviar respuestas».
+            </p>
+          </div>
+        )}
+
+        <JudgmentEditor
+          criteria={data.project.criteria} alternatives={data.project.alternatives} initial={initial} readOnly={submitted}
+          onSet={async (sheet, key, value) => {
+            const { error } = await supabase.rpc('expert_save', { p_token: token, p_sheet: sheet, p_pair: key, p_value: value });
+            if (error) throw new Error(error.message);
+            if (status === 'pending') setStatus('in_progress');
+          }}
+        />
+
+        {!submitted && (
+          <div className="card form">
+            {!confirm ? (
+              <div className="acts"><button className="btn primary" type="button" onClick={() => setConfirm(true)}>Enviar respuestas</button></div>
+            ) : (
+              <>
+                <p>¿Enviar ahora? Después no podrás cambiar tus respuestas a menos que el estudiante reabra el formulario.</p>
+                <div className="acts"><button className="btn primary" type="button" onClick={submit}>Sí, enviar</button><button className="btn" type="button" onClick={() => setConfirm(false)}>Seguir revisando</button></div>
+              </>
+            )}
+            {msg && <p className="err" role="alert">{msg}</p>}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
