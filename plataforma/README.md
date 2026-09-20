@@ -113,6 +113,24 @@ del SQL (políticas + funciones `SECURITY DEFINER`) se ve correcta, pero eso no 
 
 ## Historial de cambios
 
+**20 sep 2026 (noche):**
+- **Excel principal y Excel de priorización, separados**: antes un único `.xlsx` traía siempre las 5 hojas
+  "Prior 1-5" (priorización de criterios, Sesión 1) pegadas al método — ahora hay dos botones ("Descargar Excel" /
+  "Descargar Excel de priorización"), `buildWorkbook()` (Notas + Criterios + hojas del método + `_datos`) y
+  `buildPrioWorkbook()` (Notas + Prior 1-5, sin `_datos`) en `excel.ts`. El respaldo completo para reimportar
+  (incluida la priorización) sigue viviendo solo en el Excel principal — el de priorización es un documento aparte,
+  no una segunda fuente de verdad.
+- **Un color de acento por método en el Excel, no uno fijo para todos**: antes cada hoja (título, encabezados,
+  subtítulos de "Experto N") usaba siempre el mismo violeta `8B6CFF`, sin importar el método — TOPSIS y VIKOR se
+  veían idénticos. Ahora `METHOD_COLOR` en `excel.ts` da un color propio a cada uno (violeta AHP, verde-azulado
+  TOPSIS, azul VIKOR, rosa PROMETHEE, morado ELECTRE — misma lógica de familia que la landing, pero los 5
+  distinguibles entre sí); el Excel de priorización usa el neutro del curso (`7F869C`), porque la priorización es
+  previa a elegir método. Verificado en `scripts/check-excel-colors.ts`.
+- **Quitado el bloque "Verificación con el método EXACTO (Saaty, 1980): iteración de potencias"** de la hoja
+  Criterios (y de cada hoja de alternativas por criterio en AHP): eran ~20 filas de fórmulas redundantes con la
+  columna «Vector prioridad» de más arriba, pensadas como demostración matemática y no como algo que un estudiante
+  necesite revisar en su informe.
+
 **20 sep 2026 (tarde, grill-me):**
 - **Borrado de proyecto**: `ProjectList.tsx` pasó de un botón "✕" con confirmación de dos clics a un modal estilo
   AWS (ícono de basurita, hay que **escribir el nombre exacto del proyecto** para habilitar "Eliminar proyecto") —

@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client';
 import { hexToken, uid, type Alternative, type Criterion, type ExpertRow, type JudgmentRow, type Method, type ProjectRow } from '@/lib/types';
 import { indexJudgments, type JMap } from '@/lib/ahp';
 import { finalists, normalizePrio, type PrioState } from '@/lib/prio';
-import { downloadExcel } from '@/lib/excel';
+import { downloadExcel, downloadPrioExcel } from '@/lib/excel';
 import { normalizeMatrix, setCell as setMatrixCell, setType as setMatrixType, type MatrixType } from '@/lib/topsis';
 import JudgmentEditor from './JudgmentEditor';
 import PrioritizationEditor from './PrioritizationEditor';
@@ -161,10 +161,16 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
     experts: experts.map((e) => ({ id: e.id, name: e.name, role_desc: e.role_desc })), idx, prio: prio as PrioState,
     method: project.method, decisionMatrix: dm,
   });
+  const fileBase = () => `MCDA_${project.title.replace(/[^\w-]+/g, '_').slice(0, 40)}_${new Date().toISOString().slice(0, 10)}`;
   async function exportExcel() {
     try {
-      await downloadExcel(studyExport(), `MCDA_${project.title.replace(/[^\w-]+/g, '_').slice(0, 40)}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      await downloadExcel(studyExport(), `${fileBase()}.xlsx`);
     } catch (e) { setMsg('No se pudo generar el Excel: ' + (e instanceof Error ? e.message : '')); }
+  }
+  async function exportPrioExcel() {
+    try {
+      await downloadPrioExcel(studyExport(), `${fileBase()}_priorizacion.xlsx`);
+    } catch (e) { setMsg('No se pudo generar el Excel de priorización: ' + (e instanceof Error ? e.message : '')); }
   }
   const copy = async (t: string) => { try { await navigator.clipboard.writeText(t); setMsg('Enlace copiado'); } catch { setMsg('Copia el enlace manualmente'); } };
 
@@ -299,7 +305,10 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
 
       {tab === 'Resultados' && (
         <div className="panel">
-          <div className="acts"><button className="btn primary" type="button" onClick={exportExcel}>Descargar Excel</button></div>
+          <div className="acts">
+            <button className="btn primary" type="button" onClick={exportExcel}>Descargar Excel</button>
+            <button className="btn" type="button" onClick={exportPrioExcel}>Descargar Excel de priorización</button>
+          </div>
           {NO_EXCEL_YET.includes(project.method) && <p className="muted" style={{ fontSize: 13 }}>El Excel exportado todavía solo arma hojas de AHP y TOPSIS; para {METHOD_OPTIONS.find((m) => m.key === project.method)?.label} los resultados de aquí abajo son la referencia por ahora.</p>}
           <Results criteria={project.criteria} alternatives={project.alternatives} experts={experts.map((e) => ({ id: e.id, label: expertLabel(e) }))} judgments={judgments} method={project.method} decisionMatrix={project.decision_matrix} showPerExpert />
         </div>
@@ -324,12 +333,16 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
             <h3>Exportar</h3>
             <p className="muted">
               {project.method === 'ahp'
-                ? 'Excel con la misma estructura del ejercicio del curso: Notas, Criterios, una hoja por criterio y Síntesis, más las 5 hojas de priorización.'
+                ? 'Excel con la misma estructura del ejercicio del curso: Notas, Criterios, una hoja por criterio y Síntesis.'
                 : project.method === 'topsis'
-                  ? 'Excel con Notas, Criterios, Matriz de decisión y TOPSIS (fórmulas vivas), más las 5 hojas de priorización.'
+                  ? 'Excel con Notas, Criterios, Matriz de decisión y TOPSIS (fórmulas vivas).'
                   : `Con ${METHOD_OPTIONS.find((m) => m.key === project.method)?.label} el Excel todavía arma la estructura de AHP (no representa la matriz de decisión): usa la pestaña Resultados como referencia mientras se agrega.`}
+              {' '}La priorización de criterios (Sesión 1) es un Excel aparte, para no descargarla siempre que solo hace falta el método.
             </p>
-            <div className="acts"><button className="btn primary" type="button" onClick={exportExcel}>Descargar Excel</button></div>
+            <div className="acts">
+              <button className="btn primary" type="button" onClick={exportExcel}>Descargar Excel</button>
+              <button className="btn" type="button" onClick={exportPrioExcel}>Descargar Excel de priorización</button>
+            </div>
           </div>
         </div>
       )}

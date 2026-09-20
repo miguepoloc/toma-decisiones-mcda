@@ -5,24 +5,48 @@ import { aggMatrix, altSheet, analyze, expertMatrix, CRIT_SHEET, synthesis, type
 import { toLegacy, type Study } from './legacy.ts';
 import { alive, cols, f2, finalists, inIndep, mean, passes, ranked, scoreOf } from './prio.ts';
 import { getCell, getType, topsis } from './topsis.ts';
-import type { Alternative, Criterion, DecisionMatrix } from './types.ts';
+import type { Alternative, Criterion, DecisionMatrix, Method } from './types.ts';
 
-const C_P = '8B6CFF', C_P2 = '5B3FCC', C_G = 'D8F5E3', C_GR = '666666';
-const fillP = { patternType: 'solid', fgColor: { rgb: C_P } };
-const stl: Record<string, any> = {
-  title: { font: { bold: true, sz: 14, color: { rgb: C_P } } },
-  note: { font: { italic: true, sz: 9, color: { rgb: C_GR } }, alignment: { wrapText: true, vertical: 'top' } },
-  hdr: { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: fillP, alignment: { horizontal: 'center', vertical: 'center', wrapText: true } },
-  hdrL: { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: fillP, alignment: { vertical: 'center', wrapText: true } },
-  b: { font: { bold: true } },
-  b12: { font: { bold: true, sz: 12 } },
-  sub: { font: { bold: true, color: { rgb: C_P2 } } },
-  key: { font: { bold: true }, fill: { patternType: 'solid', fgColor: { rgb: C_G } } },
-  c: { alignment: { horizontal: 'center' } },
-  wrap: { alignment: { wrapText: true, vertical: 'top' } },
-  gain: { font: { bold: true, sz: 12, color: { rgb: C_P } } },
-  gkey: { font: { bold: true, sz: 12 }, fill: { patternType: 'solid', fgColor: { rgb: C_G } } },
+// Un color de acento por método (mismas familias que la landing/`sesiones/pptx_theme.py` del curso:
+// violeta = comparación por pares, verde-azulado/azul = distancia al ideal, magenta/morado =
+// sobreclasificación), pero cada uno distinguible del resto — TOPSIS y VIKOR ya no comparten tono.
+// NEUTRAL es para el Excel de priorización (Sesión 1, previo a elegir método, sin familia propia).
+const NEUTRAL = '7F869C';
+const METHOD_COLOR: Record<Method, string> = {
+  ahp: '8B6CFF', topsis: '1FA69B', vikor: '2E6FD6', promethee: 'E23F86', electre: '9B3FB0',
 };
+const C_G = 'D8F5E3', C_GR = '666666';
+function darken(hex: string, factor = 0.32): string {
+  const n = parseInt(hex, 16);
+  const r = Math.round(((n >> 16) & 255) * (1 - factor));
+  const g = Math.round(((n >> 8) & 255) * (1 - factor));
+  const b = Math.round((n & 255) * (1 - factor));
+  return [r, g, b].map((x) => x.toString(16).padStart(2, '0')).join('').toUpperCase();
+}
+// `stl` se recalcula por color de acento con setPalette() al empezar cada build*Workbook(); las
+// funciones de hoja de más abajo lo leen por closure. Seguro porque cada build es 100% síncrono
+// (sin await entre setPalette() y los put() que lo consumen) — no hay forma de que se entrelacen.
+let C_P = METHOD_COLOR.ahp;
+let stl: Record<string, any>;
+function setPalette(hex: string) {
+  C_P = hex;
+  const fillP = { patternType: 'solid', fgColor: { rgb: C_P } };
+  stl = {
+    title: { font: { bold: true, sz: 14, color: { rgb: C_P } } },
+    note: { font: { italic: true, sz: 9, color: { rgb: C_GR } }, alignment: { wrapText: true, vertical: 'top' } },
+    hdr: { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: fillP, alignment: { horizontal: 'center', vertical: 'center', wrapText: true } },
+    hdrL: { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: fillP, alignment: { vertical: 'center', wrapText: true } },
+    b: { font: { bold: true } },
+    b12: { font: { bold: true, sz: 12 } },
+    sub: { font: { bold: true, color: { rgb: darken(C_P) } } },
+    key: { font: { bold: true }, fill: { patternType: 'solid', fgColor: { rgb: C_G } } },
+    c: { alignment: { horizontal: 'center' } },
+    wrap: { alignment: { wrapText: true, vertical: 'top' } },
+    gain: { font: { bold: true, sz: 12, color: { rgb: C_P } } },
+    gkey: { font: { bold: true, sz: 12 }, fill: { patternType: 'solid', fgColor: { rgb: C_G } } },
+  };
+}
+setPalette(C_P);
 
 export function colL(i: number): string {
   let s = '';
@@ -63,7 +87,7 @@ function W() {
 
 const qs = (n: string) => "'" + n.replace(/'/g, "''") + "'!";
 
-function ahpSheet(items: Item[], maps: JMap[], exNames: string[], title: string, note: string, isCrit: boolean) {
+function ahpSheet(items: Item[], maps: JMap[], exNames: string[], title: string, note: string) {
   const n = items.length, names = items.map((x) => x.name), { put, fin } = W(), E = maps.length;
   const A = aggMatrix(items, maps), an = analyze(A), EM = maps.map((m) => expertMatrix(items, m));
   const rSum = 3 + n, rNH = 5 + n, rN0 = 6 + n, rVH = 7 + 2 * n, rA0 = 8 + 2 * n, rLam = 8 + 3 * n, rCI = 9 + 3 * n,
@@ -118,34 +142,6 @@ function ahpSheet(items: Item[], maps: JMap[], exNames: string[], title: string,
         else { o.f = '1/' + colL(1 + i) + (m0(b) + j); put(m0(b) + i, 1 + j, EM[b][i][j], o); }
       }
     }
-  }
-  if (isCrit && E > 0) {
-    const p = m0(E - 1) + n + 2;
-    put(p, 0, 'Verificación con el método EXACTO (Saaty, 1980): iteración de potencias', { s: stl.b });
-    put(p + 1, 0, 'w(k+1) = A·w(k), normalizado en cada paso. Arranca de un vector parejo (1/n cada uno) y converge al mismo vector de prioridad que el atajo de la columna «Vector prioridad» (normalizar + promediar).', { s: stl.note });
-    let r = p + 3, prev = r, pv: number[] = Array(n).fill(1 / n);
-    put(r, 0, 'w(0), arranque parejo', { s: stl.b });
-    for (let j = 0; j < n; j++) put(r, 1 + j, 1 / n, { f: `1/${n}`, z: '0.0000' });
-    for (let k = 1; k <= 6; k++) {
-      const rA = prev + 1, rW = prev + 2, q = A.map((row) => row.reduce((a, x, j) => a + x * pv[j], 0)), sm = q.reduce((a, b) => a + b, 0);
-      put(rA, 0, `Iteración ${k}, A·w(${k - 1}) (sin normalizar)`);
-      put(rW, 0, `w(${k})`, { s: stl.b });
-      for (let j = 0; j < n; j++) {
-        put(rA, 1 + j, q[j], { f: `SUMPRODUCT(B${3 + j}:${last}${3 + j},B${prev}:${last}${prev})`, z: '0.0000' });
-        put(rW, 1 + j, q[j] / sm, { f: `${colL(1 + j)}${rA}/SUM(B${rA}:${last}${rA})`, z: '0.0000' });
-      }
-      pv = q.map((x) => x / sm);
-      prev = rW;
-    }
-    put(prev + 2, 0, 'Comparando con el atajo (normalizar + promediar)', { s: stl.b });
-    put(prev + 3, 0, 'Potencias, w(6)'); put(prev + 4, 0, 'Atajo (normalizar+promediar)'); put(prev + 5, 0, 'Diferencia máxima', { s: stl.b });
-    for (let j = 0; j < n; j++) {
-      put(prev + 3, 1 + j, pv[j], { f: `${colL(1 + j)}${prev}`, z: '0.0000' });
-      put(prev + 4, 1 + j, an.w[j], { f: `${colL(vc)}${rN0 + j}`, z: '0.0000' });
-    }
-    put(prev + 5, 1, Math.max(...pv.map((x, j) => Math.abs(x - an.w[j]))), {
-      f: 'MAX(' + Array.from({ length: n }, (_, j) => `ABS(${colL(1 + j)}${prev + 3}-${colL(1 + j)}${prev + 4})`).join(',') + ')', s: stl.b, z: '0.0000',
-    });
   }
   const colsW = [34, ...Array.from({ length: Math.max(n, 4) + 1 }, () => 17)];
   return { ws: fin(colsW, [{ hpt: 30 }], [{ s: { r: 0, c: 1 }, e: { r: 0, c: Math.max(n, 4) } }]), rN0, vc, w: an.w };
@@ -227,12 +223,16 @@ function topsisSheet(criteria: Criterion[], alternatives: Alternative[], dm: Dec
   return fin(colsW, [{ hpt: 30 }], [{ s: { r: 0, c: 1 }, e: { r: 0, c: cRk } }]);
 }
 
+/** Excel principal del estudio: Notas, Criterios y las hojas del método elegido, más el respaldo
+ * oculto `_datos`. La priorización de criterios (Sesión 1) vive en un .xlsx aparte — buildPrioWorkbook()
+ * más abajo — para no forzar su descarga cada vez que solo hace falta el método. */
 export function buildWorkbook(XLSX: any, study: Study) {
+  setPalette(METHOD_COLOR[study.method] ?? METHOD_COLOR.ahp);
   const wb = XLSX.utils.book_new(), used = new Set<string>();
   const ex = study.experts.map((e) => e.role_desc || e.name);
   const expertIds = study.experts.map((e) => e.id);
-  const S = study, A = study.prio;
-  const res = ['Notas', 'Criterios', 'Síntesis', 'Matriz de decisión', 'TOPSIS', '_datos', 'Prior 1. Lluvia de ideas', 'Prior 2. Tamizaje', 'Prior 3. Independencia', 'Prior 4. Panel', 'Prior 5. Resultado final'];
+  const S = study;
+  const res = ['Notas', 'Criterios', 'Síntesis', 'Matriz de decisión', 'TOPSIS', '_datos'];
   res.forEach((x) => used.add(x.toLowerCase()));
   const sname = (n: string) => {
     const b = String(n).replace(/[[\]:*?/\\]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 28) || 'Hoja';
@@ -242,31 +242,111 @@ export function buildWorkbook(XLSX: any, study: Study) {
     return s;
   };
   const add = (name: string, ws: any) => XLSX.utils.book_append_sheet(wb, ws, name);
-  const candOf = (id: string | null) => A.cands.find((c) => c.id === id);
   const mapsFor = (sheet: string): JMap[] => expertIds.map((e) => S.idx[e]?.[sheet] ?? {});
+  const isTopsis = S.method === 'topsis';
 
   { // Notas
     const { put, fin } = W();
-    const ord = ['Notas', 'Prior 1–5', 'Criterios', ...S.criteria.map((c) => c.name), 'Síntesis'].join(' → ');
+    const ord = (isTopsis ? ['Notas', 'Criterios', 'Matriz de decisión', 'TOPSIS'] : ['Notas', 'Criterios', ...S.criteria.map((c) => c.name), 'Síntesis']).join(' → ');
+    const usoTxt = isTopsis
+      ? 'Cómo usarlo: la hoja Criterios pesa los criterios con juicios por pares, igual que en AHP. «Matriz de decisión» trae el valor real de cada alternativa por criterio y si es beneficio o costo. «TOPSIS» normaliza, pondera con esos pesos, calcula el ideal mejor/peor y la cercanía relativa Ci de cada alternativa. Las celdas con GEOMEAN, SUMSQ, SUMPRODUCT, RANK, etc. son fórmulas vivas: si cambias un juicio o un valor, todo se recalcula.'
+      : 'Cómo usarlo: la hoja Criterios es una matriz de juicios por pares que pesa los criterios; le sigue una matriz de comparación de las alternativas por cada criterio, y la Síntesis combina peso × prioridad local en el resultado final. Las celdas con GEOMEAN, SUM, AVERAGE, SUMPRODUCT y RANK son fórmulas vivas: si cambias un juicio individual, todo se recalcula.';
     const lines: [string, any][] = [
-      [S.title || 'Priorización de criterios y AHP', stl.title],
+      [S.title || 'Estudio MCDA', stl.title],
       ['', null],
       ['Objetivo de decisión: ' + S.objective, stl.wrap],
-      [`Cada juicio del AHP es la media geométrica de un panel de ${S.experts.length} experto(s) (${ex.join('; ')}), no la opinión de una sola persona. Ver hoja Criterios (juicios individuales debajo de la verificación de consistencia) para el mecanismo de agregación (Forman & Peniwati, 1998).`, stl.wrap],
+      [`Cada juicio de la hoja Criterios es la media geométrica de un panel de ${S.experts.length} experto(s) (${ex.join('; ')}), no la opinión de una sola persona (Forman & Peniwati, 1998); ver juicios individuales debajo de la verificación de consistencia.`, stl.wrap],
       ['Orden de hojas: ' + ord, stl.wrap],
-      ['Cómo usarlo: las hojas «Prior 1» a «Prior 5» son la priorización de criterios (Sesión 1): lluvia de ideas, tamizaje, independencia, panel de importancia y resultado final. Las hojas siguientes son el AHP (Sesión 2): una matriz de criterios, una matriz de estrategias por cada criterio y la síntesis. Las celdas con GEOMEAN, SUM, AVERAGE, SUMPRODUCT y RANK son fórmulas vivas: si cambias un juicio individual, todo se recalcula.', stl.wrap],
+      [usoTxt, stl.wrap],
       ['¿Qué es GEOMEAN()? Es la media geométrica (la raíz n-ésima del producto de n números), la función de Excel que se usa para combinar el mismo juicio de varios expertos en un solo número. No es el promedio normal (aritmético); es la forma correcta de agregar juicios de razón en AHP.', stl.wrap],
-      ['Revise siempre la fila «¿Consistente? (CR < 0.10)» de cada hoja antes de dar los juicios por buenos.', stl.wrap],
+      ['Revise siempre la fila «¿Consistente? (CR < 0.10)» de la hoja Criterios antes de dar los juicios por buenos.', stl.wrap],
+      ['La priorización de criterios previa (Sesión 1: lluvia de ideas, tamizaje, independencia, panel de importancia, resultado final) está en un Excel aparte — descárgala desde la pestaña Compartir si la necesitas.', stl.wrap],
       ['', null],
-      ['Exportado desde la plataforma MCDA el ' + new Date().toLocaleString() + '. La hoja oculta «_datos» guarda el estado completo para volver a cargarlo en la plataforma o en la herramienta HTML.', stl.note],
+      ['Exportado desde la plataforma MCDA el ' + new Date().toLocaleString() + '. La hoja oculta «_datos» guarda el estado completo (incluida la priorización) para volver a cargarlo en la plataforma o en la herramienta HTML.', stl.note],
     ];
     lines.forEach(([t, s], i) => put(i + 1, 0, t, { s }));
-    add('Notas', fin([100], [{ hpt: 22 }, {}, { hpt: 32 }, { hpt: 48 }, { hpt: 32 }, { hpt: 78 }, { hpt: 48 }, { hpt: 20 }, { hpt: 20 }, { hpt: 20 }]));
+    add('Notas', fin([100], [{ hpt: 22 }, {}, { hpt: 32 }, { hpt: 48 }, { hpt: 32 }, { hpt: 66 }, { hpt: 48 }, { hpt: 20 }, { hpt: 32 }, {}, { hpt: 20 }]));
+  }
+  // El peso de los criterios siempre sale de la hoja Criterios (juicios por pares), sea cual sea
+  // el método elegido para comparar las alternativas — ver CLAUDE.md § "Visión multicriterio".
+  const critInfo = ahpSheet(S.criteria, mapsFor(CRIT_SHEET), ex, 'AHP, Criterios', 'Media geométrica de los expertos (Forman & Peniwati, 1998); ver juicios individuales más abajo. Objetivo: ' + S.objective);
+  add('Criterios', critInfo.ws);
+  if (S.method === 'topsis') {
+    const matInfo = matrixSheet(S.criteria, S.alternatives, S.decisionMatrix, 'Matriz de decisión',
+      'Valores reales por alternativa y criterio, tal como los cargaste en la plataforma. "Tipo" indica si más es mejor (Beneficio) o menos es mejor (Costo).');
+    add('Matriz de decisión', matInfo.ws);
+    add('TOPSIS', topsisSheet(S.criteria, S.alternatives, S.decisionMatrix, critInfo.w, matInfo, 'Matriz de decisión', critInfo));
+  } else {
+    const alts = S.criteria.map((c) => {
+      const nm = sname(c.name);
+      const info = ahpSheet(S.alternatives, mapsFor(altSheet(c.id)), ex, 'AHP, ' + c.name, 'Media geométrica de los expertos. ' + (c.hint || ''));
+      add(nm, info.ws);
+      return { nm, info };
+    });
+    { // Síntesis
+      const { put, fin } = W(), d = synthesis(S.criteria, S.alternatives, expertIds, S.idx);
+      const nc = S.criteria.length, m = S.alternatives.length, lc = colL(nc), G = nc + 1, R = nc + 2;
+      put(1, 0, 'Estrategia', { s: stl.b });
+      S.criteria.forEach((c, j) => put(2, 1 + j, c.name, { s: stl.hdr }));
+      put(2, G, 'Prioridad global', { s: stl.hdr }); put(2, R, 'Ranking', { s: stl.hdr });
+      put(3, 0, 'Peso del criterio', { s: stl.b });
+      S.criteria.forEach((_, j) => put(3, 1 + j, d.wr[j], { f: `Criterios!${colL(critInfo.vc)}${critInfo.rN0 + j}`, z: '0.0000' }));
+      S.alternatives.forEach((a, i) => {
+        const r = 4 + i;
+        put(r, 0, a.name, { s: stl.b });
+        S.criteria.forEach((_, j) => put(r, 1 + j, d.rows[i].loc[j], { f: `${qs(alts[j].nm)}${colL(alts[j].info.vc)}${alts[j].info.rN0 + i}`, z: '0.0000' }));
+        put(r, G, d.rows[i].g, { f: `SUMPRODUCT(B${r}:${lc}${r},B$3:${lc}$3)`, s: stl.key, z: '0.0000' });
+        put(r, R, d.rows[i].rank, { f: `RANK(${colL(G)}${r},${colL(G)}$4:${colL(G)}$${3 + m})`, s: stl.c });
+      });
+      const g = 4 + m + 1, top = d.rows[d.order[0]];
+      put(g, 0, 'Ganador', { s: stl.gain });
+      put(g, 1, d.tie ? 'Empate (sin juicios)' : top.name, { f: `INDEX(A4:A${3 + m},MATCH(MAX(${colL(G)}4:${colL(G)}${3 + m}),${colL(G)}4:${colL(G)}${3 + m},0))`, s: stl.gkey });
+      put(g, 2, 'con prioridad global de');
+      put(g, 3, top.g, { f: `MAX(${colL(G)}4:${colL(G)}${3 + m})`, z: '0.0%' });
+      add('Síntesis', fin([26, ...Array.from({ length: nc + 2 }, () => 16)], [{ hpt: 20 }, { hpt: 34 }]));
+    }
+  }
+  { // datos ocultos (formato de respaldo de la herramienta HTML)
+    const { put, fin } = W(), txt = JSON.stringify(toLegacy(S));
+    for (let i = 0, r = 1; i < txt.length; i += 30000, r++) put(r, 0, txt.slice(i, i + 30000));
+    add('_datos', fin([20]));
+  }
+  wb.Workbook = { Sheets: wb.SheetNames.map((n: string) => ({ Hidden: n === '_datos' ? 1 : 0 })) };
+  return wb;
+}
+
+/** Excel de la priorización de criterios (Sesión 1: lluvia de ideas, tamizaje, independencia, panel
+ * de importancia, resultado final) — separado de buildWorkbook() para no forzar su descarga cada vez
+ * que solo hace falta el método (AHP/TOPSIS/...). Sin hoja `_datos`: el respaldo completo para
+ * reimportar (incluida esta misma priorización) vive en el Excel principal. Color neutro porque la
+ * priorización es previa a elegir método, sin familia propia (mismo criterio que usa el curso para
+ * contenido panorámico de Sesión 1 — ver `sesiones/pptx_theme.py`).
+ */
+export function buildPrioWorkbook(XLSX: any, study: Study) {
+  setPalette(NEUTRAL);
+  const wb = XLSX.utils.book_new();
+  const A = study.prio;
+  const add = (name: string, ws: any) => XLSX.utils.book_append_sheet(wb, ws, name);
+  const candOf = (id: string | null) => A.cands.find((c) => c.id === id);
+
+  { // Notas
+    const { put, fin } = W();
+    const lines: [string, any][] = [
+      [(study.title || 'Estudio MCDA') + ' — Priorización de criterios', stl.title],
+      ['', null],
+      ['Objetivo de decisión: ' + study.objective, stl.wrap],
+      ['Orden de hojas: Notas → Prior 1. Lluvia de ideas → Prior 2. Tamizaje → Prior 3. Independencia → Prior 4. Panel → Prior 5. Resultado final.', stl.wrap],
+      ['Esta es la priorización de criterios de la Sesión 1 del curso: de una lluvia de ideas amplia a los criterios finales que entran al método (AHP/TOPSIS/...), documentando cada descarte. El Excel del método (Criterios, Matriz de decisión, etc.) se descarga aparte, desde la misma pestaña Compartir.', stl.wrap],
+      ['', null],
+      ['Exportado desde la plataforma MCDA el ' + new Date().toLocaleString() + '.', stl.note],
+    ];
+    lines.forEach(([t, s], i) => put(i + 1, 0, t, { s }));
+    add('Notas', fin([100], [{ hpt: 22 }, {}, { hpt: 32 }, { hpt: 32 }, { hpt: 60 }, {}, { hpt: 20 }]));
   }
   { // Prior 1
     const { put, fin } = W();
     put(1, 0, 'Priorización — 1. Lluvia de ideas', { s: stl.title });
-    put(3, 0, 'Objetivo: ' + S.objective, { s: stl.wrap });
+    put(3, 0, 'Objetivo: ' + study.objective, { s: stl.wrap });
     ['#', 'Candidato', 'Descripción'].forEach((h, j) => put(5, j, h, { s: stl.hdrL }));
     A.cands.forEach((c, i) => { put(6 + i, 0, i + 1, { s: stl.c }); put(6 + i, 1, c.name, { s: stl.wrap }); put(6 + i, 2, c.desc, { s: stl.wrap }); });
     add('Prior 1. Lluvia de ideas', fin([5, 44, 70], [{ hpt: 24 }, {}, { hpt: 44 }], [{ s: { r: 2, c: 0 }, e: { r: 2, c: 2 } }]));
@@ -340,57 +420,11 @@ export function buildWorkbook(XLSX: any, study: Study) {
     });
     add('Prior 5. Resultado final', fin([46, 32, 80], [{ hpt: 24 }]));
   }
-  // El peso de los criterios siempre sale de la hoja Criterios (juicios por pares), sea cual sea
-  // el método elegido para comparar las alternativas — ver CLAUDE.md § "Visión multicriterio".
-  const critInfo = ahpSheet(S.criteria, mapsFor(CRIT_SHEET), ex, 'AHP, Criterios', 'Media geométrica de los expertos (Forman & Peniwati, 1998); ver juicios individuales más abajo. Objetivo: ' + S.objective, true);
-  add('Criterios', critInfo.ws);
-  if (S.method === 'topsis') {
-    const matInfo = matrixSheet(S.criteria, S.alternatives, S.decisionMatrix, 'Matriz de decisión',
-      'Valores reales por alternativa y criterio, tal como los cargaste en la plataforma. "Tipo" indica si más es mejor (Beneficio) o menos es mejor (Costo).');
-    add('Matriz de decisión', matInfo.ws);
-    add('TOPSIS', topsisSheet(S.criteria, S.alternatives, S.decisionMatrix, critInfo.w, matInfo, 'Matriz de decisión', critInfo));
-  } else {
-    const alts = S.criteria.map((c) => {
-      const nm = sname(c.name);
-      const info = ahpSheet(S.alternatives, mapsFor(altSheet(c.id)), ex, 'AHP, ' + c.name, 'Media geométrica de los expertos. ' + (c.hint || ''), false);
-      add(nm, info.ws);
-      return { nm, info };
-    });
-    { // Síntesis
-      const { put, fin } = W(), d = synthesis(S.criteria, S.alternatives, expertIds, S.idx);
-      const nc = S.criteria.length, m = S.alternatives.length, lc = colL(nc), G = nc + 1, R = nc + 2;
-      put(1, 0, 'Estrategia', { s: stl.b });
-      S.criteria.forEach((c, j) => put(2, 1 + j, c.name, { s: stl.hdr }));
-      put(2, G, 'Prioridad global', { s: stl.hdr }); put(2, R, 'Ranking', { s: stl.hdr });
-      put(3, 0, 'Peso del criterio', { s: stl.b });
-      S.criteria.forEach((_, j) => put(3, 1 + j, d.wr[j], { f: `Criterios!${colL(critInfo.vc)}${critInfo.rN0 + j}`, z: '0.0000' }));
-      S.alternatives.forEach((a, i) => {
-        const r = 4 + i;
-        put(r, 0, a.name, { s: stl.b });
-        S.criteria.forEach((_, j) => put(r, 1 + j, d.rows[i].loc[j], { f: `${qs(alts[j].nm)}${colL(alts[j].info.vc)}${alts[j].info.rN0 + i}`, z: '0.0000' }));
-        put(r, G, d.rows[i].g, { f: `SUMPRODUCT(B${r}:${lc}${r},B$3:${lc}$3)`, s: stl.key, z: '0.0000' });
-        put(r, R, d.rows[i].rank, { f: `RANK(${colL(G)}${r},${colL(G)}$4:${colL(G)}$${3 + m})`, s: stl.c });
-      });
-      const g = 4 + m + 1, top = d.rows[d.order[0]];
-      put(g, 0, 'Ganador', { s: stl.gain });
-      put(g, 1, d.tie ? 'Empate (sin juicios)' : top.name, { f: `INDEX(A4:A${3 + m},MATCH(MAX(${colL(G)}4:${colL(G)}${3 + m}),${colL(G)}4:${colL(G)}${3 + m},0))`, s: stl.gkey });
-      put(g, 2, 'con prioridad global de');
-      put(g, 3, top.g, { f: `MAX(${colL(G)}4:${colL(G)}${3 + m})`, z: '0.0%' });
-      add('Síntesis', fin([26, ...Array.from({ length: nc + 2 }, () => 16)], [{ hpt: 20 }, { hpt: 34 }]));
-    }
-  }
-  { // datos ocultos (formato de respaldo de la herramienta HTML)
-    const { put, fin } = W(), txt = JSON.stringify(toLegacy(S));
-    for (let i = 0, r = 1; i < txt.length; i += 30000, r++) put(r, 0, txt.slice(i, i + 30000));
-    add('_datos', fin([20]));
-  }
-  wb.Workbook = { Sheets: wb.SheetNames.map((n: string) => ({ Hidden: n === '_datos' ? 1 : 0 })) };
   return wb;
 }
 
-export async function downloadExcel(study: Study, filename: string) {
-  const XLSX = (await import('xlsx-js-style')).default as any;
-  const out = XLSX.write(buildWorkbook(XLSX, study), { bookType: 'xlsx', type: 'array', compression: true });
+function download(XLSX: any, wb: any, filename: string) {
+  const out = XLSX.write(wb, { bookType: 'xlsx', type: 'array', compression: true });
   const blob = new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -399,4 +433,14 @@ export async function downloadExcel(study: Study, filename: string) {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 1500);
+}
+
+export async function downloadExcel(study: Study, filename: string) {
+  const XLSX = (await import('xlsx-js-style')).default as any;
+  download(XLSX, buildWorkbook(XLSX, study), filename);
+}
+
+export async function downloadPrioExcel(study: Study, filename: string) {
+  const XLSX = (await import('xlsx-js-style')).default as any;
+  download(XLSX, buildPrioWorkbook(XLSX, study), filename);
 }

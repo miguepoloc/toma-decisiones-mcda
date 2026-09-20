@@ -83,8 +83,11 @@ navegador desde los datos guardados (`decision_matrix` en `projects`, migracione
 "¿qué método uso?" en `/metodo` (árbol de 3 preguntas, con los colores de familia reales del curso — violeta
 comparación por pares, verde-azulado distancia al ideal, magenta sobreclasificación — tomados de
 `sesiones/pptx_theme.py` del docente). **Excel**: AHP y, desde el 20 sep 2026 (tarde), TOPSIS tienen hojas propias con
-fórmulas vivas (`matrixSheet()`/`topsisSheet()` en `excel.ts`); VIKOR/PROMETHEE/ELECTRE todavía arman la estructura
-de AHP como referencia, avisado en la UI. Falta: **ANP** (Sesión 6 — generaliza el paso de PESOS a una red con
+fórmulas vivas (`matrixSheet()`/`topsisSheet()` en `excel.ts`), cada método con su propio color de acento
+(`METHOD_COLOR` — ya no todos violeta); VIKOR/PROMETHEE/ELECTRE todavía arman la estructura de AHP como referencia,
+avisado en la UI. La priorización de criterios (Sesión 1, Prior 1-5) es, desde el 20 sep 2026 (noche), un Excel
+aparte (`buildPrioWorkbook()`) en vez de venir siempre pegada al del método — el respaldo `_datos` para reimportar
+sigue viviendo solo en el Excel del método. Falta: **ANP** (Sesión 6 — generaliza el paso de PESOS a una red con
 dependencias, no encaja en el patrón de matriz de decisión de los otros 4, necesita su propia conversación de diseño
 antes de tocar código), exportar VIKOR/PROMETHEE/ELECTRE a Excel, y la extensión Fuzzy (el temario la trata como
 "enriquecimiento" sobre cualquier método, no un método aparte). Detalle completo en `plataforma/README.md` § "Visión:
