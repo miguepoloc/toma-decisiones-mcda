@@ -1,9 +1,11 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import type { PublicGet } from '@/lib/types';
 import Results from './Results';
+import Logo from './Logo';
 
 export default function PublicView({ token }: { token: string }) {
   const supabase = useMemo(() => createClient(), []);
@@ -26,14 +28,14 @@ export default function PublicView({ token }: { token: string }) {
   }
   return (
     <div className="wrap">
-      <div className="topbar"><span className="brand">Plataforma MCDA</span><span className="muted" style={{ fontSize: 13 }}>Vista pública de solo lectura</span></div>
+      <div className="topbar"><Link className="brand" href="/"><Logo />Plataforma MCDA</Link><span className="muted" style={{ fontSize: 13 }}>Vista pública de solo lectura</span></div>
       <div className="panel">
         <header>
           <div className="eyebrow">Resultados AHP</div>
           <h1 style={{ fontSize: 30 }}>{data.project.title}</h1>
           {data.project.objective && <p className="muted" style={{ maxWidth: '70ch' }}><b>Objetivo:</b> {data.project.objective}</p>}
         </header>
-        <Results criteria={data.project.criteria} alternatives={data.project.alternatives} experts={data.experts} judgments={data.judgments} />
+        <Results criteria={data.project.criteria} alternatives={data.project.alternatives} experts={data.experts} judgments={data.judgments} method={data.project.method} decisionMatrix={data.project.decision_matrix} />
       </div>
     </div>
   );

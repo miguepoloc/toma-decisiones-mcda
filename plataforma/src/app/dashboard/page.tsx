@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import NewProject from '@/components/NewProject';
 import SignOutButton from '@/components/SignOutButton';
+import Logo from '@/components/Logo';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,7 +17,7 @@ export default async function Dashboard() {
   return (
     <div className="wrap">
       <div className="topbar">
-        <Link className="brand" href="/">Plataforma MCDA</Link>
+        <Link className="brand" href="/"><Logo />Plataforma MCDA</Link>
         <div className="user"><span>{user.email}</span><SignOutButton /></div>
       </div>
       <div className="panel">

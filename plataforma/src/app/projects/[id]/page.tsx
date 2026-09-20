@@ -3,6 +3,7 @@ import { notFound, redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import ProjectWorkspace from '@/components/ProjectWorkspace';
 import SignOutButton from '@/components/SignOutButton';
+import Logo from '@/components/Logo';
 import type { ExpertRow, JudgmentRow, ProjectRow } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -24,7 +25,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
   return (
     <div className="wrap">
       <div className="topbar">
-        <Link className="brand" href="/dashboard">← Mis proyectos</Link>
+        <Link className="brand" href="/dashboard"><Logo />← Mis proyectos</Link>
         <div className="user"><span>{user.email}</span><SignOutButton /></div>
       </div>
       <ProjectWorkspace

@@ -4,13 +4,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Qué es este repositorio
 
-Material y herramientas del curso de posgrado **Toma de Decisiones Multicriterio** (Maestría en Ingeniería, Universidad del Magdalena, docente Miguel Ángel Polo-Castañeda), usado por Harold Hernández Solórzano para su tesis. Idioma de trabajo: **español** (UI, textos y respuestas).
+Material y herramientas del curso de posgrado **Toma de Decisiones Multicriterio** (Maestría en Ingeniería, Universidad
+del Magdalena, docente **Miguel Ángel Polo-Castañeda**, quien también trabaja directamente en este repositorio, no solo
+sus estudiantes). Idioma de trabajo: **español** (UI, textos y respuestas).
 
-Tres capas que conviene no confundir:
+El repositorio completo del curso (guiones de sesión, bibliografía, evaluación, cronograma) vive **fuera** de este repo
+de código, en la carpeta de OneDrive del docente `Toma de decisiones/` (README.md ahí = fuente de verdad de la
+pedagogía: 6 sesiones, 3 fines de semana — S1 priorización de criterios, S2 AHP, S3 TOPSIS/VIKOR, S4 taller comparativo
+Python de 6 métodos, S5 AHP+SIG, S6 ANP). Este repo de código es la implementación de las herramientas que usan esas
+sesiones, no el material de clase en sí.
 
-1. **Notebooks del profesor** (`00_…06_*.ipynb`, `requirements.txt`): métodos MCDA con `pyDecision` sobre el caso guiado IoT/WSN Palmor (LoRaWAN, GSM/GPRS, Sigfox, Zigbee). Son de referencia; ya vienen ejecutados. `pip install -r requirements.txt`.
-2. **Herramientas HTML de Harold** (`MCDA_ASR_Harold.html`, `MCDA_plantilla_en_blanco.html`, sin versionar): priorización de criterios (Parte A, Sesión 1) + AHP dinámico con varios expertos (Parte B, Sesión 2), aplicadas a su tesis.
-3. **`plataforma/`**: versión con servidor (Next.js 15 + Supabase + Vercel) de la misma herramienta. Ver `plataforma/README.md` para puesta en marcha.
+Capas que conviene no confundir:
+
+1. **Notebooks del profesor** (`00_…06_*.ipynb`, `requirements.txt`): métodos MCDA con `pyDecision` sobre el caso guiado IoT/WSN Palmor (LoRaWAN, GSM/GPRS, Sigfox, Zigbee) — uno por método (priorización, AHP, TOPSIS, VIKOR, ELECTRE, PROMETHEE, ANP). Son de referencia matemática para cualquier método nuevo que se agregue a `plataforma/`; ya vienen ejecutados. `pip install -r requirements.txt`.
+2. **Herramientas HTML de Harold** (`MCDA_ASR_Harold.html`, `MCDA_plantilla_en_blanco.html`, sin versionar): priorización de criterios (Parte A, Sesión 1) + AHP dinámico con varios expertos (Parte B, Sesión 2), aplicadas a su tesis (estrategia de adaptación ASR).
+3. **`plataforma/`**: versión con servidor (Next.js 15 + Supabase + Vercel) de la misma herramienta, ya desplegada en producción (`https://mcda-decisions.vercel.app`). **Hoy solo cubre AHP + priorización simple** (lo que Harold necesita para S1-S2); el docente quiere expandirla a las 6 sesiones/métodos del curso — ver "Visión multicriterio" más abajo. Ver `plataforma/README.md` para puesta en marcha y el roadmap completo.
 
 También hay material del curso sin versionar (PDF de sesiones, `Ejercicio.xlsx`, `Herramienta_priorizacion_criterios_3ASR .xlsx`, `Plantilla_Informe_AHP.docx`): son la referencia de formato; no modificarlos sin que se pida.
 
@@ -22,7 +30,7 @@ También hay material del curso sin versionar (PDF de sesiones, `Ejercicio.xlsx`
 - **Nunca inventar juicios de expertos** ni presentarlos como del panel. Los juicios de ejemplo (botón «Cargar juicios de ejemplo») son solo para probar el mecanismo y van marcados como tales.
 - Discrepancia abierta entre libros: `Herramienta_priorizacion_criterios_3ASR .xlsx` (hoja «Ejemplo 5») deja a Costo computacional dentro y Transferibilidad fuera, pero el AHP usa Transferibilidad. Con sus calificaciones de evaluadores (Plantilla en blanco) y corte 4.0 salen justo los 5 del AHP.
 - `Ejercicio.xlsx` está a medio adaptar y tiene errores conocidos: en la hoja Criterios (n=5) las sumas, el bloque A·w, la iteración de potencias y el CI siguen calculando con n=4; las hojas de alternativas y Síntesis aún son de Palmor. Las herramientas nuevas ya calculan con n dinámico.
-- El remoto `origin` apunta al repositorio **del profesor** (`miguepoloc/…`): no hacer push allí. No hacer commit salvo que se pida. `plataforma/prototipos/` contiene datos de tesis: quitarlo si el repositorio nuevo va a ser público.
+- El remoto `origin` apunta al repositorio **del profesor** (`miguepoloc/…`). Si trabajas como Harold en un clon aparte: no hacer push a `origin`, es su repo. Si trabajas directamente como el profesor (sesión propia sobre su clon): aplican las reglas normales (nunca push/commit sin que se pida explícitamente, igual que en cualquier repo). `plataforma/prototipos/` contiene datos de tesis de Harold: quitarlo o separarlo si la plataforma se vuelve pública/general para todo el curso (más urgente ahora que el plan es que sirva para todos los estudiantes, no solo Harold).
 
 ## Comandos
 
@@ -34,7 +42,7 @@ npm run dev          # http://localhost:3000 (requiere .env.local con las claves
 npm run build        # next build (con NEXT_PUBLIC_SUPABASE_URL/ANON_KEY dummy compila igual)
 npm run typecheck    # tsc --noEmit
 npm test             # scripts/check-ahp.ts (node --experimental-strip-types, sin dependencias)
-npx tsx scripts/check-excel.ts   # genera /tmp/plataforma_test.xlsx y prueba la ida y vuelta con el formato HTML
+node --experimental-strip-types --no-warnings scripts/check-excel.ts   # genera /tmp/plataforma_test.xlsx, prueba ida y vuelta (no `npx tsx`, no está instalado)
 ```
 
 No hay linter configurado. `check-ahp.ts` es el único test unitario; para una sola comprobación, edítalo o llama a `ahp.ts` desde un script propio (importar con extensión `.ts`; `ahp.ts` solo usa `import type` para poder correr sin bundler).
@@ -58,7 +66,20 @@ Un juicio es un entero `value ∈ [-8, 8]` por par: 0 = igual; negativo = gana e
 - Next.js App Router. Rutas: `/dashboard` y `/projects/[id]` (dueño, protegidas en `src/middleware.ts` + `lib/supabase/middleware.ts`), `/e/[token]` (experto sin cuenta), `/p/[token]` (público de solo lectura). `ProjectWorkspace` es el cliente central (pestañas Proyecto, Priorización A, Expertos, Resultados, Compartir; guardado con debounce).
 - Seguridad en `supabase/migrations/0001_init.sql`: RLS deja al dueño ver solo lo suyo; expertos y público entran **únicamente** por funciones `SECURITY DEFINER` (`expert_get`, `expert_save`, `expert_submit`, `public_get`) que validan un token aleatorio. `public_get` no expone nombres de expertos, enlaces ni la Parte A. Nunca usar la clave `service_role` en el frontend.
 - `lib/legacy.ts` + `lib/importer.ts` convierten entre el formato de respaldo v2 de la herramienta HTML y las tablas (importar `.json`/`.xlsx`); `lib/excel.ts` es el port a TS del generador de Excel.
-- **Estado de verificación:** compila, tipos y `npm test` pasan; las rutas protegidas redirigen. **El SQL/RLS, el login y las llamadas RPC nunca se probaron contra un Supabase real**: hacerlo (lista de 5 comprobaciones en `plataforma/README.md`) antes de dar por buena la seguridad.
+- **Estado de verificación (19-20 sep 2026):** compila, tipos y `npm test` pasan; las rutas protegidas redirigen. `scripts/check-excel.ts` tenía imports relativos sin extensión `.ts` (rompía bajo `node --experimental-strip-types`, aunque Next.js lo toleraba al compilar) — corregido, ahora sí corre. Ya hay un **Supabase real** provisionado (`hymmznfylafdldfngxcu`) con la migración corrida, y la app está desplegada en producción (`mcda-decisions.vercel.app`, Vercel scope `migue-polos-projects`). Lo que sigue sin caminarse explícitamente de punta a punta es el checklist de RLS (5 pasos en `plataforma/README.md` § "Qué está verificado y qué no") — la lectura del SQL se ve correcta, pero no reemplaza probarlo. **Trampa de Vercel a recordar:** un alias creado con `vercel alias set` NO queda exento de la protección SSO del proyecto aunque apunte al mismo deployment que producción; hay que registrarlo como **Domain** en Settings → Domains del dashboard (detalle completo en `plataforma/README.md` § "Despliegue actual").
+
+### Visión multicriterio (en construcción, TOPSIS ya hecho)
+`plataforma/` cubre AHP + priorización simple (Parte A) **y, desde el 20 sep 2026, TOPSIS** (`src/lib/topsis.ts`,
+verificado contra el notebook del curso, `npm test` corre ambos). Un proyecto elige `method: 'ahp' | 'topsis'`; el
+peso de criterios siempre sale de la hoja Criterios (juicios por pares), lo que cambia es cómo se ranquean las
+alternativas: por pares (AHP) o con una matriz de decisión cuantitativa + esos mismos pesos (TOPSIS — reemplaza el
+paso de "una matriz AHP por criterio + síntesis", no lo complementa). Nada persiste resultados calculados: TOPSIS,
+como AHP, se recalcula en el navegador desde los datos guardados (`decision_matrix` en `projects`, migración
+`0002_decision_matrix.sql`, **hay que correrla contra Supabase antes de que el selector de método funcione en
+producción**). Asistente "¿qué método uso?" en `/metodo`. Falta: VIKOR/ELECTRE/PROMETHEE/ANP, exportar TOPSIS a Excel,
+y la extensión Fuzzy (el temario la trata como "enriquecimiento" sobre cualquier método, no un 7º método aparte).
+Roadmap completo y las decisiones ya tomadas con el docente (un método por proyecto pero sin bloquear comparar varios
+después, JSONB en vez de tabla aparte) en `plataforma/README.md` § "Visión: plataforma multicriterio completa".
 
 ### Artefactos publicados en claude.ai (privados, del propietario de la sesión)
 Priorizador de criterios (`Tu8BSq5BvgYRwjdxcd9k3o`), MCDA para ASR con datos de Harold (`9dKxsYtKh7P1m27RUnEYSr`) y plantilla en blanco (`KULzPjwGLgGk562R2fQtgy`). El estado de cada uno vive en el `localStorage` de su propio origen; no se comparte entre ellos.

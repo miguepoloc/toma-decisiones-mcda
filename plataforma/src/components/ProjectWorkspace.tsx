@@ -2,17 +2,20 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { hexToken, uid, type Alternative, type Criterion, type ExpertRow, type JudgmentRow, type ProjectRow } from '@/lib/types';
+import { hexToken, uid, type Alternative, type Criterion, type ExpertRow, type JudgmentRow, type Method, type ProjectRow } from '@/lib/types';
 import { indexJudgments, type JMap } from '@/lib/ahp';
 import { finalists, normalizePrio, type PrioState } from '@/lib/prio';
 import { downloadExcel } from '@/lib/excel';
+import { normalizeMatrix, setCell as setMatrixCell, setType as setMatrixType, type MatrixType } from '@/lib/topsis';
 import JudgmentEditor from './JudgmentEditor';
 import PrioritizationEditor from './PrioritizationEditor';
+import DecisionMatrixEditor from './DecisionMatrixEditor';
 import Results from './Results';
 
 type Props = { initialProject: ProjectRow; initialExperts: ExpertRow[]; initialJudgments: JudgmentRow[] };
-type Patch = Partial<Pick<ProjectRow, 'title' | 'objective' | 'criteria' | 'alternatives' | 'prioritization' | 'is_public' | 'public_token'>>;
-const TABS = ['Proyecto', 'Priorización (A)', 'Expertos', 'Resultados', 'Compartir'];
+type Patch = Partial<Pick<ProjectRow, 'title' | 'objective' | 'method' | 'criteria' | 'alternatives' | 'decision_matrix' | 'prioritization' | 'is_public' | 'public_token'>>;
+const TABS_AHP = ['Proyecto', 'Priorización (A)', 'Expertos', 'Resultados', 'Compartir'];
+const TABS_TOPSIS = ['Proyecto', 'Priorización (A)', 'Expertos', 'Matriz de decisión', 'Resultados', 'Compartir'];
 
 const expertLabel = (e: ExpertRow) => (e.role_desc ? `${e.name} · ${e.role_desc}` : e.name);
 const origin = () => (typeof window === 'undefined' ? '' : window.location.origin);
@@ -22,7 +25,7 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
   const [project, setProject] = useState(initialProject);
   const [experts, setExperts] = useState(initialExperts);
   const [judgments, setJudgments] = useState(initialJudgments);
-  const [tab, setTab] = useState(0);
+  const [tab, setTab] = useState('Proyecto');
   const [editing, setEditing] = useState<string | null>(null);
   const [save, setSave] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [saveErr, setSaveErr] = useState('');
@@ -34,6 +37,8 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
 
   const prio = useMemo(() => normalizePrio(project.prioritization), [project.prioritization]);
   const idx = useMemo(() => indexJudgments(judgments), [judgments]);
+  const dm = useMemo(() => normalizeMatrix(project.decision_matrix), [project.decision_matrix]);
+  const TABS = project.method === 'topsis' ? TABS_TOPSIS : TABS_AHP;
 
   const flush = useCallback(async () => {
     const p = pending.current;
@@ -134,6 +139,14 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
     });
   }
 
+  /* ---- matriz de decisión (TOPSIS y, a futuro, VIKOR/ELECTRE/PROMETHEE sobre los mismos datos) ---- */
+  function setDMCell(altId: string, critId: string, value: number | null) {
+    patch({ decision_matrix: setMatrixCell(dm, altId, critId, value) });
+  }
+  function setDMType(critId: string, type: MatrixType) {
+    patch({ decision_matrix: setMatrixType(dm, critId, type) }, true);
+  }
+
   const studyExport = () => ({
     title: project.title, objective: project.objective, criteria: project.criteria, alternatives: project.alternatives,
     experts: experts.map((e) => ({ id: e.id, name: e.name, role_desc: e.role_desc })), idx, prio: prio as PrioState,
@@ -159,15 +172,28 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
       </div>
 
       <div className="tabsbar" role="tablist">
-        {TABS.map((t, i) => <button key={t} role="tab" aria-selected={tab === i} onClick={() => { setTab(i); setEditing(null); setMsg(''); }}>{t}</button>)}
+        {TABS.map((t) => <button key={t} role="tab" aria-selected={tab === t} onClick={() => { setTab(t); setEditing(null); setMsg(''); }}>{t}</button>)}
       </div>
       {msg && <p className="muted" role="status" style={{ marginBottom: 10 }}>{msg}</p>}
 
-      {tab === 0 && (
+      {tab === 'Proyecto' && (
         <div className="panel">
           <div className="card form">
             <div><label className="lbl" htmlFor="t">Título del proyecto</label><input id="t" type="text" value={project.title} onChange={(e) => patch({ title: e.target.value })} /></div>
             <div><label className="lbl" htmlFor="o">Objetivo de decisión</label><textarea id="o" value={project.objective} onChange={(e) => patch({ objective: e.target.value })} placeholder="Ej.: seleccionar la alternativa X que mejor cumpla Y en el contexto Z" /></div>
+          </div>
+          <div className="card form">
+            <label className="lbl">Cómo comparar las alternativas (el peso de los criterios siempre sale de la pestaña Expertos)</label>
+            <div className="seg" role="group" aria-label="Método">
+              <button type="button" aria-pressed={project.method !== 'topsis'} onClick={() => patch({ method: 'ahp' as Method }, true)}>AHP · juicios por pares</button>
+              <button type="button" aria-pressed={project.method === 'topsis'} onClick={() => patch({ method: 'topsis' as Method }, true)}>TOPSIS · matriz de datos</button>
+            </div>
+            <p className="muted" style={{ fontSize: 13 }}>
+              {project.method === 'topsis'
+                ? 'Vas a escribir el valor real de cada alternativa en cada criterio (pestaña «Matriz de decisión») en vez de comparar de a pares.'
+                : 'Tus expertos comparan las alternativas de a pares, un criterio a la vez (como hasta ahora).'}
+              {' '}¿No sabes cuál te conviene? <a href="/metodo" target="_blank" rel="noreferrer">Compara los dos</a>.
+            </p>
           </div>
           <div className="card form">
             <div className="fgrp">
@@ -197,9 +223,9 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
         </div>
       )}
 
-      {tab === 1 && <PrioritizationEditor state={prio} criteriaCount={project.criteria.length} onChange={(s) => patch({ prioritization: s })} onSync={syncFinals} />}
+      {tab === 'Priorización (A)' && <PrioritizationEditor state={prio} criteriaCount={project.criteria.length} onChange={(s) => patch({ prioritization: s })} onSync={syncFinals} />}
 
-      {tab === 2 && (
+      {tab === 'Expertos' && (
         <div className="panel">
           {editingExpert ? (
             <>
@@ -210,13 +236,15 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
                   <button className="btn primary" type="button" onClick={async () => { await updateExpert(editingExpert.id, { status: 'submitted', filled_by: 'owner', submitted_at: new Date().toISOString() }); setEditing(null); }}>Marcar como completado</button>
                 </div>
               </div>
-              <JudgmentEditor key={editingExpert.id} criteria={project.criteria} alternatives={project.alternatives}
+              <JudgmentEditor key={editingExpert.id} criteria={project.criteria} alternatives={project.alternatives} method={project.method}
                 initial={idx[editingExpert.id] ?? ({} as Record<string, JMap>)}
                 onSet={(s, k, v) => ownerSet(editingExpert.id, s, k, v)} onLocalChange={(s, k, v) => ownerLocal(editingExpert.id, s, k, v)} />
             </>
           ) : (
             <>
-              <p className="muted" style={{ maxWidth: '70ch' }}>Cada experto tiene su propio enlace: lo abre sin crear cuenta y solo ve sus preguntas. También puedes llenar los juicios tú mismo por él o ella (por ejemplo tras una entrevista).</p>
+              <p className="muted" style={{ maxWidth: '70ch' }}>Cada experto tiene su propio enlace: lo abre sin crear cuenta y solo ve sus preguntas. También puedes llenar los juicios tú mismo por él o ella (por ejemplo tras una entrevista).
+                {project.method === 'topsis' && ' Con TOPSIS, tus expertos solo pesan los criterios (hoja «Criterios»); las alternativas se comparan con la matriz de datos de la pestaña «Matriz de decisión», no de a pares.'}
+              </p>
               <div className="plist">
                 {experts.map((e) => {
                   const n = judgments.filter((j) => j.expert_id === e.id).length;
@@ -256,14 +284,19 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
         </div>
       )}
 
-      {tab === 3 && (
+      {tab === 'Matriz de decisión' && (
+        <DecisionMatrixEditor criteria={project.criteria} alternatives={project.alternatives} matrix={dm} onSetCell={setDMCell} onSetType={setDMType} />
+      )}
+
+      {tab === 'Resultados' && (
         <div className="panel">
           <div className="acts"><button className="btn primary" type="button" onClick={exportExcel}>Descargar Excel</button></div>
-          <Results criteria={project.criteria} alternatives={project.alternatives} experts={experts.map((e) => ({ id: e.id, label: expertLabel(e) }))} judgments={judgments} showPerExpert />
+          {project.method === 'topsis' && <p className="muted" style={{ fontSize: 13 }}>El Excel exportado todavía solo arma hojas AHP; para TOPSIS los resultados de aquí abajo son la referencia por ahora.</p>}
+          <Results criteria={project.criteria} alternatives={project.alternatives} experts={experts.map((e) => ({ id: e.id, label: expertLabel(e) }))} judgments={judgments} method={project.method} decisionMatrix={project.decision_matrix} showPerExpert />
         </div>
       )}
 
-      {tab === 4 && (
+      {tab === 'Compartir' && (
         <div className="panel">
           <div className="card form">
             <h3>Resultados públicos</h3>
@@ -280,7 +313,9 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
           </div>
           <div className="card form">
             <h3>Exportar</h3>
-            <p className="muted">Excel con la misma estructura del ejercicio del curso: Notas, Criterios, una hoja por criterio y Síntesis, más las 5 hojas de priorización.</p>
+            <p className="muted">Excel con la misma estructura del ejercicio del curso: Notas, Criterios, una hoja por criterio y Síntesis, más las 5 hojas de priorización.
+              {project.method === 'topsis' && ' Con TOPSIS, por ahora arma igual la estructura AHP (no representa todavía la matriz de decisión): usa la pestaña Resultados como referencia.'}
+            </p>
             <div className="acts"><button className="btn primary" type="button" onClick={exportExcel}>Descargar Excel</button></div>
           </div>
         </div>

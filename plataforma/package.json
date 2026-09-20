@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types --no-warnings scripts/check-ahp.ts"
+    "test": "node --experimental-strip-types --no-warnings scripts/check-ahp.ts && node --experimental-strip-types --no-warnings scripts/check-topsis.ts",
+    "test:excel": "node --experimental-strip-types --no-warnings scripts/check-excel.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.6.1",

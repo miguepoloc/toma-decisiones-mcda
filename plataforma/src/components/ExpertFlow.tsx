@@ -1,10 +1,12 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import type { ExpertGet } from '@/lib/types';
 import { indexJudgments } from '@/lib/ahp';
 import JudgmentEditor from './JudgmentEditor';
+import Logo from './Logo';
 
 export default function ExpertFlow({ token }: { token: string }) {
   const supabase = useMemo(() => createClient(), []);
@@ -43,7 +45,7 @@ export default function ExpertFlow({ token }: { token: string }) {
 
   return (
     <div className="wrap">
-      <div className="topbar"><span className="brand">Plataforma MCDA</span><span className="muted" style={{ fontSize: 13 }}>Respondiendo como: {data.expert.name}{data.expert.role_desc ? ` · ${data.expert.role_desc}` : ''}</span></div>
+      <div className="topbar"><Link className="brand" href="/"><Logo />Plataforma MCDA</Link><span className="muted" style={{ fontSize: 13 }}>Respondiendo como: {data.expert.name}{data.expert.role_desc ? ` · ${data.expert.role_desc}` : ''}</span></div>
       <div className="panel">
         <header>
           <div className="eyebrow">Consulta a expertos</div>
@@ -66,7 +68,7 @@ export default function ExpertFlow({ token }: { token: string }) {
         )}
 
         <JudgmentEditor
-          criteria={data.project.criteria} alternatives={data.project.alternatives} initial={initial} readOnly={submitted}
+          criteria={data.project.criteria} alternatives={data.project.alternatives} method={data.project.method} initial={initial} readOnly={submitted}
           onSet={async (sheet, key, value) => {
             const { error } = await supabase.rpc('expert_save', { p_token: token, p_sheet: sheet, p_pair: key, p_value: value });
             if (error) throw new Error(error.message);

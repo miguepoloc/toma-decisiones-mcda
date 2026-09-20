@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { Alternative, Criterion } from '@/lib/types';
+import type { Alternative, Criterion, Method } from '@/lib/types';
 import {
   CRIT_SHEET, altSheet, analyze, answeredCount, expertMatrix, pairsOf, phrase, getV, setV, sheetItems,
   type JMap,
@@ -10,6 +10,9 @@ import {
 type Props = {
   criteria: Criterion[];
   alternatives: Alternative[];
+  /** 'topsis': el experto solo pesa criterios (sheet 'crit'); las alternativas se comparan con una
+   * matriz de decisión cuantitativa (DecisionMatrixEditor), no de a pares. Default 'ahp'. */
+  method?: Method;
   /** Juicios iniciales de este experto: hoja -> (clave de par -> valor). */
   initial: Record<string, JMap>;
   readOnly?: boolean;
@@ -21,7 +24,7 @@ type Props = {
 
 type Save = 'idle' | 'saving' | 'saved' | 'error';
 
-export default function JudgmentEditor({ criteria, alternatives, initial, readOnly, onSet, onLocalChange }: Props) {
+export default function JudgmentEditor({ criteria, alternatives, method = 'ahp', initial, readOnly, onSet, onLocalChange }: Props) {
   const [local, setLocal] = useState<Record<string, JMap>>(initial);
   const [sheet, setSheet] = useState(CRIT_SHEET);
   const [save, setSave] = useState<Save>('idle');
@@ -32,8 +35,10 @@ export default function JudgmentEditor({ criteria, alternatives, initial, readOn
   useEffect(() => () => Object.values(timers.current).forEach(clearTimeout), []);
 
   const sheets = useMemo(
-    () => [{ key: CRIT_SHEET, label: 'Criterios' }, ...criteria.map((c) => ({ key: altSheet(c.id), label: c.name }))],
-    [criteria],
+    () => (method === 'topsis'
+      ? [{ key: CRIT_SHEET, label: 'Criterios' }]
+      : [{ key: CRIT_SHEET, label: 'Criterios' }, ...criteria.map((c) => ({ key: altSheet(c.id), label: c.name }))]),
+    [criteria, method],
   );
   const cur = sheets.find((s) => s.key === sheet) ?? sheets[0];
   const items = sheetItems(cur.key, criteria, alternatives);
