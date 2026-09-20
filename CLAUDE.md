@@ -68,18 +68,23 @@ Un juicio es un entero `value ∈ [-8, 8]` por par: 0 = igual; negativo = gana e
 - `lib/legacy.ts` + `lib/importer.ts` convierten entre el formato de respaldo v2 de la herramienta HTML y las tablas (importar `.json`/`.xlsx`); `lib/excel.ts` es el port a TS del generador de Excel.
 - **Estado de verificación (19-20 sep 2026):** compila, tipos y `npm test` pasan; las rutas protegidas redirigen. `scripts/check-excel.ts` tenía imports relativos sin extensión `.ts` (rompía bajo `node --experimental-strip-types`, aunque Next.js lo toleraba al compilar) — corregido, ahora sí corre. Ya hay un **Supabase real** provisionado (`hymmznfylafdldfngxcu`) con la migración corrida, y la app está desplegada en producción (`mcda-decisions.vercel.app`, Vercel scope `migue-polos-projects`). Lo que sigue sin caminarse explícitamente de punta a punta es el checklist de RLS (5 pasos en `plataforma/README.md` § "Qué está verificado y qué no") — la lectura del SQL se ve correcta, pero no reemplaza probarlo. **Trampa de Vercel a recordar:** un alias creado con `vercel alias set` NO queda exento de la protección SSO del proyecto aunque apunte al mismo deployment que producción; hay que registrarlo como **Domain** en Settings → Domains del dashboard (detalle completo en `plataforma/README.md` § "Despliegue actual").
 
-### Visión multicriterio (en construcción, TOPSIS ya hecho)
-`plataforma/` cubre AHP + priorización simple (Parte A) **y, desde el 20 sep 2026, TOPSIS** (`src/lib/topsis.ts`,
-verificado contra el notebook del curso, `npm test` corre ambos). Un proyecto elige `method: 'ahp' | 'topsis'`; el
-peso de criterios siempre sale de la hoja Criterios (juicios por pares), lo que cambia es cómo se ranquean las
-alternativas: por pares (AHP) o con una matriz de decisión cuantitativa + esos mismos pesos (TOPSIS — reemplaza el
-paso de "una matriz AHP por criterio + síntesis", no lo complementa). Nada persiste resultados calculados: TOPSIS,
-como AHP, se recalcula en el navegador desde los datos guardados (`decision_matrix` en `projects`, migración
-`0002_decision_matrix.sql`, **hay que correrla contra Supabase antes de que el selector de método funcione en
-producción**). Asistente "¿qué método uso?" en `/metodo`. Falta: VIKOR/ELECTRE/PROMETHEE/ANP, exportar TOPSIS a Excel,
-y la extensión Fuzzy (el temario la trata como "enriquecimiento" sobre cualquier método, no un 7º método aparte).
-Roadmap completo y las decisiones ya tomadas con el docente (un método por proyecto pero sin bloquear comparar varios
-después, JSONB en vez de tabla aparte) en `plataforma/README.md` § "Visión: plataforma multicriterio completa".
+### Visión multicriterio (5 de 6 métodos del curso ya hechos)
+`plataforma/` cubre AHP + priorización simple (Parte A) **y, desde el 20 sep 2026, TOPSIS, VIKOR, PROMETHEE y
+ELECTRE** (`src/lib/{topsis,vikor,promethee,electre}.ts`, cada uno verificado con valores exactos contra el notebook
+de referencia del curso, `npm test` corre los 5). Un proyecto elige `method`; el peso de criterios siempre sale de la
+hoja Criterios (juicios por pares), lo que cambia es cómo se ranquean las alternativas: por pares (AHP) o con una
+matriz de decisión cuantitativa + esos mismos pesos (los otros 4 — reemplaza el paso de "una matriz AHP por criterio
++ síntesis", no lo complementa). **ELECTRE es distinto de los otros 3**: no da un ranking, da una relación de
+superación con posible incomparabilidad (c*=0.65/d*=0.30, convención del curso) — Results.tsx lo muestra con su
+propia UI, no como lista ordenada. Nada persiste resultados calculados: cada método, como AHP, se recalcula en el
+navegador desde los datos guardados (`decision_matrix` en `projects`, migraciones `0002_decision_matrix.sql` +
+`0003_more_methods.sql` — desde hoy la integración GitHub↔Supabase del proyecto las aplica sola al hacer push a
+`main`, Working directory `plataforma` + Deploy to production activado, ya no hace falta pegarlas a mano). Asistente
+"¿qué método uso?" en `/metodo` (árbol de 3 preguntas). Falta: **ANP** (Sesión 6 — generaliza el paso de PESOS a una
+red con dependencias, no encaja en el patrón de matriz de decisión de los otros 4, necesita su propia conversación de
+diseño antes de tocar código), exportar los 4 métodos nuevos a Excel, y la extensión Fuzzy (el temario la trata como
+"enriquecimiento" sobre cualquier método, no un método aparte). Detalle completo en `plataforma/README.md` § "Visión:
+plataforma multicriterio completa".
 
 ### Artefactos publicados en claude.ai (privados, del propietario de la sesión)
 Priorizador de criterios (`Tu8BSq5BvgYRwjdxcd9k3o`), MCDA para ASR con datos de Harold (`9dKxsYtKh7P1m27RUnEYSr`) y plantilla en blanco (`KULzPjwGLgGk562R2fQtgy`). El estado de cada uno vive en el `localStorage` de su propio origen; no se comparte entre ellos.

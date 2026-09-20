@@ -10,8 +10,9 @@ import {
 type Props = {
   criteria: Criterion[];
   alternatives: Alternative[];
-  /** 'topsis': el experto solo pesa criterios (sheet 'crit'); las alternativas se comparan con una
-   * matriz de decisión cuantitativa (DecisionMatrixEditor), no de a pares. Default 'ahp'. */
+  /** Cualquier método distinto de 'ahp': el experto solo pesa criterios (sheet 'crit'); las
+   * alternativas se comparan con una matriz de decisión cuantitativa (DecisionMatrixEditor), no de a
+   * pares. Default 'ahp'. */
   method?: Method;
   /** Juicios iniciales de este experto: hoja -> (clave de par -> valor). */
   initial: Record<string, JMap>;
@@ -35,9 +36,9 @@ export default function JudgmentEditor({ criteria, alternatives, method = 'ahp',
   useEffect(() => () => Object.values(timers.current).forEach(clearTimeout), []);
 
   const sheets = useMemo(
-    () => (method === 'topsis'
-      ? [{ key: CRIT_SHEET, label: 'Criterios' }]
-      : [{ key: CRIT_SHEET, label: 'Criterios' }, ...criteria.map((c) => ({ key: altSheet(c.id), label: c.name }))]),
+    () => (method === 'ahp'
+      ? [{ key: CRIT_SHEET, label: 'Criterios' }, ...criteria.map((c) => ({ key: altSheet(c.id), label: c.name }))]
+      : [{ key: CRIT_SHEET, label: 'Criterios' }]),
     [criteria, method],
   );
   const cur = sheets.find((s) => s.key === sheet) ?? sheets[0];

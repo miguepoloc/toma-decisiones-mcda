@@ -3,9 +3,10 @@ import type { PrioState } from './prio.ts';
 export type Criterion = { id: string; name: string; hint: string; src?: string | null };
 export type Alternative = { id: string; name: string };
 export type ExpertStatus = 'pending' | 'in_progress' | 'submitted';
-/** 'ahp' = alternativas comparadas de a pares (como hasta ahora); 'topsis' = matriz de decisión
- * cuantitativa + los mismos pesos de la hoja Criterios. Ver plataforma/README.md § "Visión". */
-export type Method = 'ahp' | 'topsis';
+/** 'ahp' = alternativas comparadas de a pares (como hasta ahora); los demás usan una matriz de
+ * decisión cuantitativa + los mismos pesos de la hoja Criterios ('electre' NO da un ranking total,
+ * da relaciones de superación con incomparabilidad posible). Ver plataforma/README.md § "Visión". */
+export type Method = 'ahp' | 'topsis' | 'vikor' | 'electre' | 'promethee';
 export type MatrixType = 'max' | 'min';
 /** { values: { <altId>: { <critId>: number } }, types: { <critId>: 'max'|'min' } }, referenciado
  * por id igual que los juicios de AHP (no por posición). */

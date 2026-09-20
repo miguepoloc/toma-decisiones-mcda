@@ -72,20 +72,24 @@ El Excel que descarga la plataforma usa el mismo formato, así que también se p
 ```
 plataforma/
 ├─ supabase/migrations/                0001_init.sql (tablas, RLS, funciones por token) + 0002_decision_matrix.sql
-│                                      (method/decision_matrix en projects, ver Visión)
+│                                      (method/decision_matrix en projects) + 0003_more_methods.sql (amplía method
+│                                      a los 5), ver Visión
 ├─ src/app/                            Páginas: /, /tutorial, /metodo, /login, /dashboard, /projects/[id], /e/[token], /p/[token]
 │                                      icon.tsx, apple-icon.tsx (favicon generado con next/og, ver Historial)
 ├─ src/components/                     JudgmentEditor, DecisionMatrixEditor, Results, PrioritizationEditor,
 │                                      ProjectWorkspace, Logo, …
-├─ src/lib/                            ahp.ts, topsis.ts (cálculo), prio.ts (Parte A), excel.ts, legacy.ts/importer.ts, supabase/*
-├─ scripts/                            check-ahp.ts, check-topsis.ts (matemática), check-excel.ts (exportación e ida y vuelta)
+├─ src/lib/                            ahp.ts, topsis.ts, vikor.ts, promethee.ts, electre.ts (cálculo), prio.ts
+│                                      (Parte A), excel.ts, legacy.ts/importer.ts, supabase/*
+├─ scripts/                            check-{ahp,topsis,vikor,promethee,electre}.ts (matemática), check-excel.ts
+│                                      (exportación e ida y vuelta)
 └─ prototipos/                         Herramientas HTML autónomas, Excel de ejemplo y datos semilla (referencia,
                                        incluye datos de tesis de Harold — ver Notas sobre hacerlo público)
 ```
 
 ## Modelo de datos
-- `projects`: dueño, título, objetivo, `method` (`'ahp'` | `'topsis'`), `criteria` y `alternatives` (JSON), `decision_matrix`
-  (JSON, solo con `method='topsis'`: valores por alternativa×criterio + tipo beneficio/costo por criterio, ver `src/lib/topsis.ts`),
+- `projects`: dueño, título, objetivo, `method` (`'ahp' | 'topsis' | 'vikor' | 'electre' | 'promethee'`), `criteria` y
+  `alternatives` (JSON), `decision_matrix` (JSON, solo con `method != 'ahp'`: valores por alternativa×criterio + tipo
+  beneficio/costo por criterio — un único formato que reusan los 4 métodos, `src/lib/types.ts` § `DecisionMatrix`),
   `prioritization` (JSON de la Parte A), `is_public`, `public_token`.
 - `experts`: uno por experto del proyecto, con `invite_token`, estado (`pending` → `in_progress` → `submitted`) y quién lo llenó.
 - `judgments`: un renglón por par comparado: `(expert_id, sheet, pair_key, value)`. `value ∈ [-8, 8]`; 0 = igual; negativo = gana el primero;
@@ -135,24 +139,36 @@ del SQL (políticas + funciones `SECURITY DEFINER`) se ve correcta, pero eso no 
 
 ## Visión: plataforma multicriterio completa
 
-**20 sep 2026: decidido con el docente y arrancado.** Primer método nuevo: **TOPSIS**, ya implementado
-(`src/lib/topsis.ts`, verificado contra el notebook de referencia del curso — `npm test` corre ambos, AHP y TOPSIS).
-Un proyecto elige `method: 'ahp' | 'topsis'` en la pestaña «Proyecto» (el peso de criterios sigue saliendo siempre de
-la hoja Criterios, sin importar el método); con TOPSIS aparece una pestaña «Matriz de decisión» donde el dueño escribe
-el valor real de cada alternativa por criterio (beneficio/costo), y los expertos solo pesan criterios (ya no comparan
-alternativas de a pares). Nada de esto usa una tabla de "resultados" nueva: TOPSIS se calcula en el navegador a partir
-de la matriz guardada, igual que AHP ya se calculaba en vivo desde los juicios — por eso "comparar métodos sobre los
-mismos datos" (lo que pidió el docente) no exige rehacer el modelo de datos más adelante, solo correr otra función
-pura sobre la misma matriz. Falta: exportar TOPSIS a Excel (el botón sigue generando solo hojas AHP), y VIKOR ya es
-casi gratis agregar ahora que existe la UI de matriz de decisión.
+**20 sep 2026: decidido con el docente y construido.** Cinco métodos ya funcionando: **AHP** (el original), **TOPSIS**,
+**VIKOR**, **PROMETHEE** y **ELECTRE** (`src/lib/{topsis,vikor,promethee,electre}.ts`, cada uno verificado contra su
+notebook de referencia del curso con valores exactos — `npm test` corre los 5). Un proyecto elige `method` en la
+pestaña «Proyecto» (el peso de criterios sigue saliendo siempre de la hoja Criterios, sin importar el método); con
+cualquier método que no sea AHP aparece una pestaña «Matriz de decisión» donde el dueño escribe el valor real de cada
+alternativa por criterio (beneficio/costo), y los expertos solo pesan criterios (ya no comparan alternativas de a
+pares). Nada de esto usa una tabla de "resultados" nueva: cada método se calcula en el navegador a partir de la
+matriz guardada, igual que AHP ya se calculaba en vivo desde los juicios — por eso "comparar métodos sobre los mismos
+datos" (lo que pidió el docente) no exigió rehacer el modelo de datos, cada método nuevo fue solo otra función pura
+sobre la misma matriz + una migración que amplía el `check` de `method`.
 
-**Asistente "¿qué método uso?"** en `/metodo`: 2 preguntas (no las 3-5 "ideales" de abajo — con solo AHP/TOPSIS
-disponibles, 2 preguntas honestas ganan a 5 rellenas) + tabla comparativa, enlazado desde la landing, el tutorial y el
-selector de método del proyecto. Crece cuando se agreguen más métodos.
+**ELECTRE es distinto de los otros 4:** no da un ranking total — da una relación de superación ("A supera a B") donde
+un par puede quedar **incomparable**, con c*=0.65/d*=0.30 como convención del curso. La UI de Results.tsx lo muestra
+aparte (relaciones + tabla de concordancia/discordancia), no como una lista ordenada con barras.
 
-**Migración pendiente de correr contra Supabase real:** `supabase/migrations/0002_decision_matrix.sql` (agrega
-`method`/`decision_matrix` a `projects`, actualiza `expert_get`/`public_get`). Sin correrla, la app no truena (se
-degrada a comportarse como AHP), pero el selector de método no puede guardar.
+**Asistente "¿qué método uso?"** en `/metodo`: árbol de 3 preguntas (¿datos cuantitativos? → ¿aceptas incomparabilidad?
+→ ¿qué te importa más?) que termina en uno de los 5 métodos, más tabla comparativa. Enlazado desde landing, tutorial y
+el selector de método del proyecto.
+
+**Falta:** exportar los 4 métodos nuevos a Excel (el botón sigue generando solo hojas AHP, avisado en la propia UI),
+y ANP — la pieza que de verdad requiere un modelo de datos distinto (supermatriz/red de dependencias, no una matriz de
+decisión más), pendiente de una conversación de diseño aparte.
+
+**Migraciones que hay que tener corridas contra Supabase real:**
+`supabase/migrations/0002_decision_matrix.sql` (agrega `method`/`decision_matrix` a `projects`, actualiza
+`expert_get`/`public_get`) y `0003_more_methods.sql` (amplía el `check` de `method` a los 5). Sin correrlas, la app no
+truena (se degrada a comportarse como AHP), pero el selector de método no puede guardar los 4 nuevos. Desde el 20 sep
+2026 la integración GitHub↔Supabase del proyecto (Settings → Integrations → GitHub, Working directory = `plataforma`,
+Deploy to production activado, rama `main`) las aplica sola al hacer push — no hace falta pegarlas a mano en el SQL
+Editor.
 
 El resto de esta sección (S3-S6, familias de métodos, Fuzzy) sigue siendo el mapa completo de lo que falta:
 
@@ -193,16 +209,17 @@ TOPSIS/VIKOR/ELECTRE/PROMETHEE. ANP es la pieza más distinta (generaliza el pas
 no una jerarquía simple), sería la de mayor esfuerzo.
 
 **Roadmap** (orden decidido con el docente 20 sep 2026):
-1. ~~TOPSIS (S3)~~ **hecho** — ver nota arriba.
-2. VIKOR (S3): mismo input que TOPSIS (matriz + pesos + tipo), fórmula distinta — incremental ahora que ya existe la UI
-   de matriz de decisión.
-3. ELECTRE y PROMETHEE (S4): mismo input base + parámetros extra (umbrales de concordancia/discordancia en ELECTRE;
-   función de preferencia Q/S/P por criterio en PROMETHEE) → más superficie de UI.
+1. ~~TOPSIS (S3)~~ **hecho**.
+2. ~~VIKOR (S3)~~ **hecho**.
+3. ~~ELECTRE y PROMETHEE (S4)~~ **hechos** — ELECTRE con umbrales c*=0.65/d*=0.30 (convención del curso, no
+   configurables en la UI todavía); PROMETHEE con función de preferencia Tipo III (la única que enseña el curso), Q=0
+   y P=rango de cada criterio (se calculan solos, sin UI extra).
 4. ANP (S6): generaliza el paso de pesos a supermatriz con dependencias — la pieza más grande, tocaría el modelo de
-   datos de verdad (`criteria`/`alternatives` ya no alcanzan, hace falta modelar clusters y relaciones).
+   datos de verdad (`criteria`/`alternatives` ya no alcanzan, hace falta modelar clusters y relaciones). Pendiente de
+   una conversación de diseño aparte, no encaja en el patrón de matriz de decisión de los otros 4.
 5. Extensión Fuzzy (opcional, "enriquecimiento" según el propio curso): modificador sobre cualquiera de los anteriores,
    no un método nuevo.
-6. ~~Asistente "¿qué método uso?"~~ **hecho** (`/metodo`) — ver nota arriba; crece con cada método nuevo.
+6. ~~Asistente "¿qué método uso?"~~ **hecho** (`/metodo`, ahora árbol de 3 preguntas entre los 5 métodos).
 
 **Decidido con el docente (20 sep 2026):**
 - **Un método por proyecto**, pero con un ojo puesto en poder comparar varios métodos sobre los MISMOS datos más

@@ -15,7 +15,14 @@ import Results from './Results';
 type Props = { initialProject: ProjectRow; initialExperts: ExpertRow[]; initialJudgments: JudgmentRow[] };
 type Patch = Partial<Pick<ProjectRow, 'title' | 'objective' | 'method' | 'criteria' | 'alternatives' | 'decision_matrix' | 'prioritization' | 'is_public' | 'public_token'>>;
 const TABS_AHP = ['Proyecto', 'Priorización (A)', 'Expertos', 'Resultados', 'Compartir'];
-const TABS_TOPSIS = ['Proyecto', 'Priorización (A)', 'Expertos', 'Matriz de decisión', 'Resultados', 'Compartir'];
+const TABS_MATRIX = ['Proyecto', 'Priorización (A)', 'Expertos', 'Matriz de decisión', 'Resultados', 'Compartir'];
+const METHOD_OPTIONS: { key: Method; label: string; desc: string }[] = [
+  { key: 'ahp', label: 'AHP', desc: 'Tus expertos comparan las alternativas de a pares, un criterio a la vez.' },
+  { key: 'topsis', label: 'TOPSIS', desc: 'Escribes el valor real de cada alternativa por criterio; ranquea por cercanía a la solución ideal.' },
+  { key: 'vikor', label: 'VIKOR', desc: 'Misma matriz que TOPSIS; ranquea buscando la mejor solución de compromiso (menor Q es mejor).' },
+  { key: 'promethee', label: 'PROMETHEE', desc: 'Misma matriz; compara cada par de alternativas criterio por criterio y suma flujos netos.' },
+  { key: 'electre', label: 'ELECTRE', desc: 'Misma matriz; no siempre da un ganador único — puede dejar alternativas incomparables entre sí.' },
+];
 
 const expertLabel = (e: ExpertRow) => (e.role_desc ? `${e.name} · ${e.role_desc}` : e.name);
 const origin = () => (typeof window === 'undefined' ? '' : window.location.origin);
@@ -38,7 +45,7 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
   const prio = useMemo(() => normalizePrio(project.prioritization), [project.prioritization]);
   const idx = useMemo(() => indexJudgments(judgments), [judgments]);
   const dm = useMemo(() => normalizeMatrix(project.decision_matrix), [project.decision_matrix]);
-  const TABS = project.method === 'topsis' ? TABS_TOPSIS : TABS_AHP;
+  const TABS = project.method === 'ahp' ? TABS_AHP : TABS_MATRIX;
 
   const flush = useCallback(async () => {
     const p = pending.current;
@@ -185,14 +192,13 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
           <div className="card form">
             <label className="lbl">Cómo comparar las alternativas (el peso de los criterios siempre sale de la pestaña Expertos)</label>
             <div className="seg" role="group" aria-label="Método">
-              <button type="button" aria-pressed={project.method !== 'topsis'} onClick={() => patch({ method: 'ahp' as Method }, true)}>AHP · juicios por pares</button>
-              <button type="button" aria-pressed={project.method === 'topsis'} onClick={() => patch({ method: 'topsis' as Method }, true)}>TOPSIS · matriz de datos</button>
+              {METHOD_OPTIONS.map((m) => (
+                <button key={m.key} type="button" aria-pressed={project.method === m.key} onClick={() => patch({ method: m.key }, true)}>{m.label}</button>
+              ))}
             </div>
             <p className="muted" style={{ fontSize: 13 }}>
-              {project.method === 'topsis'
-                ? 'Vas a escribir el valor real de cada alternativa en cada criterio (pestaña «Matriz de decisión») en vez de comparar de a pares.'
-                : 'Tus expertos comparan las alternativas de a pares, un criterio a la vez (como hasta ahora).'}
-              {' '}¿No sabes cuál te conviene? <a href="/metodo" target="_blank" rel="noreferrer">Compara los dos</a>.
+              {METHOD_OPTIONS.find((m) => m.key === project.method)?.desc}
+              {' '}¿No sabes cuál te conviene? <a href="/metodo" target="_blank" rel="noreferrer">Compáralos</a>.
             </p>
           </div>
           <div className="card form">
@@ -243,7 +249,7 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
           ) : (
             <>
               <p className="muted" style={{ maxWidth: '70ch' }}>Cada experto tiene su propio enlace: lo abre sin crear cuenta y solo ve sus preguntas. También puedes llenar los juicios tú mismo por él o ella (por ejemplo tras una entrevista).
-                {project.method === 'topsis' && ' Con TOPSIS, tus expertos solo pesan los criterios (hoja «Criterios»); las alternativas se comparan con la matriz de datos de la pestaña «Matriz de decisión», no de a pares.'}
+                {project.method !== 'ahp' && ` Con ${METHOD_OPTIONS.find((m) => m.key === project.method)?.label}, tus expertos solo pesan los criterios (hoja «Criterios»); las alternativas se comparan con la matriz de datos de la pestaña «Matriz de decisión», no de a pares.`}
               </p>
               <div className="plist">
                 {experts.map((e) => {
@@ -291,7 +297,7 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
       {tab === 'Resultados' && (
         <div className="panel">
           <div className="acts"><button className="btn primary" type="button" onClick={exportExcel}>Descargar Excel</button></div>
-          {project.method === 'topsis' && <p className="muted" style={{ fontSize: 13 }}>El Excel exportado todavía solo arma hojas AHP; para TOPSIS los resultados de aquí abajo son la referencia por ahora.</p>}
+          {project.method !== 'ahp' && <p className="muted" style={{ fontSize: 13 }}>El Excel exportado todavía solo arma hojas AHP; para {METHOD_OPTIONS.find((m) => m.key === project.method)?.label} los resultados de aquí abajo son la referencia por ahora.</p>}
           <Results criteria={project.criteria} alternatives={project.alternatives} experts={experts.map((e) => ({ id: e.id, label: expertLabel(e) }))} judgments={judgments} method={project.method} decisionMatrix={project.decision_matrix} showPerExpert />
         </div>
       )}
@@ -314,7 +320,7 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
           <div className="card form">
             <h3>Exportar</h3>
             <p className="muted">Excel con la misma estructura del ejercicio del curso: Notas, Criterios, una hoja por criterio y Síntesis, más las 5 hojas de priorización.
-              {project.method === 'topsis' && ' Con TOPSIS, por ahora arma igual la estructura AHP (no representa todavía la matriz de decisión): usa la pestaña Resultados como referencia.'}
+              {project.method !== 'ahp' && ` Con ${METHOD_OPTIONS.find((m) => m.key === project.method)?.label}, por ahora arma igual la estructura AHP (no representa todavía la matriz de decisión): usa la pestaña Resultados como referencia.`}
             </p>
             <div className="acts"><button className="btn primary" type="button" onClick={exportExcel}>Descargar Excel</button></div>
           </div>
