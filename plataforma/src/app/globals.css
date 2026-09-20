@@ -220,6 +220,17 @@ a{color:var(--accent)}
 .plist{display:grid;gap:10px}
 .prow{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;justify-content:space-between;padding:12px 16px;background:var(--surface);border:1px solid var(--line);border-radius:6px;text-decoration:none;color:var(--ink)}
 .prow:hover{border-color:var(--accent)}
+.prow .del{color:var(--muted)}
+.prow .del:hover{border-color:var(--warn);color:var(--warn)}
+
+/* ---- modal ---- */
+.modal-overlay{position:fixed;inset:0;background:rgba(8,14,13,.55);display:flex;align-items:center;justify-content:center;padding:20px;z-index:100}
+.modal{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:22px;max-width:420px;width:100%;display:grid;gap:6px;box-shadow:0 24px 60px rgba(0,0,0,.35)}
+.modal .warn-icon{width:38px;height:38px;border-radius:99px;background:var(--warn-soft);color:var(--warn);display:flex;align-items:center;justify-content:center;margin-bottom:6px}
+.modal h3{margin:0;font-size:17px}
+.modal p{margin:0 0 4px;color:var(--muted);font-size:14px}
+.modal .confirm-field{margin-top:6px}
+.modal .acts{justify-content:flex-end;margin-top:10px}
 .err{color:var(--warn);font-size:14px}
 .ok{color:var(--pass)}
 .savest{font:500 12px var(--f-mono);color:var(--muted)}
