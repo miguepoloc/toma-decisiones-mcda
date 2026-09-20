@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { hexToken, uid, type Alternative, type Criterion, type ExpertRow, type JudgmentRow, type Method, type ProjectRow } from '@/lib/types';
+import { hexToken, uid, type Alternative, type Criterion, type ExpertRow, type JudgmentRow, type Method, type WeightingMethod, type ProjectRow } from '@/lib/types';
 import { indexJudgments, type JMap } from '@/lib/ahp';
 import { finalists, normalizePrio, type PrioState } from '@/lib/prio';
 import { downloadExcel, downloadPrioExcel } from '@/lib/excel';
@@ -13,7 +13,7 @@ import DecisionMatrixEditor from './DecisionMatrixEditor';
 import Results from './Results';
 
 type Props = { initialProject: ProjectRow; initialExperts: ExpertRow[]; initialJudgments: JudgmentRow[] };
-type Patch = Partial<Pick<ProjectRow, 'title' | 'objective' | 'method' | 'criteria' | 'alternatives' | 'decision_matrix' | 'prioritization' | 'is_public' | 'public_token'>>;
+type Patch = Partial<Pick<ProjectRow, 'title' | 'objective' | 'method' | 'weighting_method' | 'criteria' | 'alternatives' | 'decision_matrix' | 'prioritization' | 'is_public' | 'public_token'>>;
 const TABS_AHP = ['Proyecto', 'Priorización (A)', 'Expertos', 'Resultados', 'Compartir'];
 const TABS_MATRIX = ['Proyecto', 'Priorización (A)', 'Expertos', 'Matriz de decisión', 'Resultados', 'Compartir'];
 const METHOD_OPTIONS: { key: Method; label: string; desc: string }[] = [
@@ -22,6 +22,13 @@ const METHOD_OPTIONS: { key: Method; label: string; desc: string }[] = [
   { key: 'vikor', label: 'VIKOR', desc: 'Misma matriz que TOPSIS; ranquea buscando la mejor solución de compromiso (menor Q es mejor).' },
   { key: 'promethee', label: 'PROMETHEE', desc: 'Misma matriz; compara cada par de alternativas criterio por criterio y suma flujos netos.' },
   { key: 'electre', label: 'ELECTRE', desc: 'Misma matriz; no siempre da un ganador único — puede dejar alternativas incomparables entre sí.' },
+  { key: 'saw', label: 'SAW', desc: 'Suma ponderada simple (Simple Additive Weighting): normalización Min-Max + suma con pesos.' },
+  { key: 'fuzzy_topsis', label: 'Fuzzy TOPSIS', desc: 'TOPSIS con evaluaciones lingüísticas (Muy mala → Muy buena) representadas como números difusos triangulares.' },
+];
+const WEIGHTING_OPTIONS: { key: WeightingMethod; label: string; desc: string }[] = [
+  { key: 'ahp', label: 'AHP (expertos)', desc: 'Pesos derivados de los juicios por pares de los expertos en la pestaña Expertos.' },
+  { key: 'critic', label: 'CRITIC (objetivo)', desc: 'Pesos calculados automáticamente a partir de la varianza y correlación entre criterios en la matriz de datos.' },
+  { key: 'entropy', label: 'Entropía (objetivo)', desc: 'Pesos calculados automáticamente: menor entropía (mayor dispersión) significa criterio más informativo.' },
 ];
 
 const expertLabel = (e: ExpertRow) => (e.role_desc ? `${e.name} · ${e.role_desc}` : e.name);
@@ -146,9 +153,13 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
     });
   }
 
-  /* ---- matriz de decisión (TOPSIS y, a futuro, VIKOR/ELECTRE/PROMETHEE sobre los mismos datos) ---- */
+  /* ---- matriz de decisión ---- */
   function setDMCell(altId: string, critId: string, value: number | null) {
     patch({ decision_matrix: setMatrixCell(dm, altId, critId, value) });
+  }
+  function setDMFuzzyCell(altId: string, critId: string, label: string) {
+    const row = { ...dm.values[altId], [critId]: label };
+    patch({ decision_matrix: { ...dm, values: { ...dm.values, [altId]: row } } });
   }
   function setDMType(critId: string, type: MatrixType) {
     patch({ decision_matrix: setMatrixType(dm, critId, type) }, true);
@@ -197,7 +208,7 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
             <div><label className="lbl" htmlFor="o">Objetivo de decisión</label><textarea id="o" value={project.objective} onChange={(e) => patch({ objective: e.target.value })} placeholder="Ej.: seleccionar la alternativa X que mejor cumpla Y en el contexto Z" /></div>
           </div>
           <div className="card form">
-            <label className="lbl">Cómo comparar las alternativas (el peso de los criterios siempre sale de la pestaña Expertos)</label>
+            <label className="lbl">Cómo comparar las alternativas</label>
             <div className="seg" role="group" aria-label="Método">
               {METHOD_OPTIONS.map((m) => (
                 <button key={m.key} type="button" aria-pressed={project.method === m.key} onClick={() => patch({ method: m.key }, true)}>{m.label}</button>
@@ -207,6 +218,19 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
               {METHOD_OPTIONS.find((m) => m.key === project.method)?.desc}
               {' '}¿No sabes cuál te conviene? <a href="/metodo" target="_blank" rel="noreferrer">Compáralos</a>.
             </p>
+            {project.method !== 'ahp' && (
+              <>
+                <label className="lbl" style={{ marginTop: 12 }}>Método de ponderación de criterios</label>
+                <div className="seg" role="group" aria-label="Ponderación">
+                  {WEIGHTING_OPTIONS.map((o) => (
+                    <button key={o.key} type="button" aria-pressed={(project.weighting_method ?? 'ahp') === o.key} onClick={() => patch({ weighting_method: o.key }, true)}>{o.label}</button>
+                  ))}
+                </div>
+                <p className="muted" style={{ fontSize: 13 }}>
+                  {WEIGHTING_OPTIONS.find((o) => o.key === (project.weighting_method ?? 'ahp'))?.desc}
+                </p>
+              </>
+            )}
           </div>
           <div className="card form">
             <div className="fgrp">
@@ -298,7 +322,15 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
       )}
 
       {tab === 'Matriz de decisión' && (
-        <DecisionMatrixEditor criteria={project.criteria} alternatives={project.alternatives} matrix={dm} onSetCell={setDMCell} onSetType={setDMType} />
+        <DecisionMatrixEditor
+          criteria={project.criteria}
+          alternatives={project.alternatives}
+          matrix={dm}
+          method={project.method}
+          onSetCell={setDMCell}
+          onSetFuzzyCell={setDMFuzzyCell}
+          onSetType={setDMType}
+        />
       )}
 
       {tab === 'Resultados' && (
@@ -307,7 +339,16 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
             <button className="btn primary" type="button" onClick={exportExcel}>Descargar Excel</button>
             <button className="btn" type="button" onClick={exportPrioExcel}>Descargar Excel de priorización</button>
           </div>
-          <Results criteria={project.criteria} alternatives={project.alternatives} experts={experts.map((e) => ({ id: e.id, label: expertLabel(e) }))} judgments={judgments} method={project.method} decisionMatrix={project.decision_matrix} showPerExpert />
+          <Results
+            criteria={project.criteria}
+            alternatives={project.alternatives}
+            experts={experts.map((e) => ({ id: e.id, label: expertLabel(e) }))}
+            judgments={judgments}
+            method={project.method}
+            weightingMethod={project.weighting_method ?? 'ahp'}
+            decisionMatrix={project.decision_matrix}
+            showPerExpert
+          />
         </div>
       )}
 

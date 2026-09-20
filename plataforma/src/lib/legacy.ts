@@ -69,7 +69,7 @@ export function isLegacy(x: unknown): x is LegacyState {
   return !!s && s.v === 2 && Array.isArray(s.crit) && Array.isArray(s.alt) && Array.isArray(s.experts) && !!s.J && !!s.A;
 }
 
-const METHODS: Method[] = ['ahp', 'topsis', 'vikor', 'electre', 'promethee'];
+const METHODS: Method[] = ['ahp', 'topsis', 'vikor', 'electre', 'promethee', 'saw', 'fuzzy_topsis'];
 
 export function fromLegacy(s: LegacyState): Imported {
   const judgments: Imported['judgments'] = [];

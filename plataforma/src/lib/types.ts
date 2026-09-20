@@ -6,12 +6,19 @@ export type ExpertStatus = 'pending' | 'in_progress' | 'submitted';
 /** 'ahp' = alternativas comparadas de a pares (como hasta ahora); los demás usan una matriz de
  * decisión cuantitativa + los mismos pesos de la hoja Criterios ('electre' NO da un ranking total,
  * da relaciones de superación con incomparabilidad posible). Ver plataforma/README.md § "Visión". */
-export type Method = 'ahp' | 'topsis' | 'vikor' | 'electre' | 'promethee';
+export type Method = 'ahp' | 'topsis' | 'vikor' | 'electre' | 'promethee' | 'saw' | 'fuzzy_topsis';
+/** Método para calcular los pesos de los criterios:
+ * - 'ahp': pesos derivados de los juicios por pares de los expertos (comportamiento histórico).
+ * - 'critic': pesos objetivos basados en correlación entre criterios (Diakoulaki et al., 1995).
+ * - 'entropy': pesos objetivos basados en la entropía de Shannon de cada criterio.
+ * Solo aplica cuando method !== 'ahp'; AHP siempre deriva sus propios pesos. */
+export type WeightingMethod = 'ahp' | 'critic' | 'entropy';
 export type MatrixType = 'max' | 'min';
-/** { values: { <altId>: { <critId>: number } }, types: { <critId>: 'max'|'min' } }, referenciado
- * por id igual que los juicios de AHP (no por posición). */
+/** { values: { <altId>: { <critId>: number | string } }, types: { <critId>: 'max'|'min' } }.
+ * Para fuzzy_topsis los valores son etiquetas lingüísticas ('VP'|'P'|'F'|'G'|'VG').
+ * Para todos los demás métodos los valores son number. */
 export type DecisionMatrix = {
-  values: Record<string, Record<string, number>>;
+  values: Record<string, Record<string, number | string>>;
   types: Record<string, MatrixType>;
 };
 
@@ -21,6 +28,8 @@ export type ProjectRow = {
   title: string;
   objective: string;
   method: Method;
+  /** Cómo se calculan los pesos de criterios. Default 'ahp'. Solo relevante cuando method !== 'ahp'. */
+  weighting_method: WeightingMethod;
   criteria: Criterion[];
   alternatives: Alternative[];
   decision_matrix: DecisionMatrix | Record<string, never>;

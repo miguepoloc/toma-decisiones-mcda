@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import type { Alternative, Criterion, DecisionMatrix, JudgmentRow, Method } from '@/lib/types';
+import type { Alternative, Criterion, DecisionMatrix, JudgmentRow, Method, WeightingMethod } from '@/lib/types';
 import {
   CRIT_SHEET, altSheet, aggMatrix, fmt, getV, indexJudgments, pairsOf, phrase, sheetItems, sheetResult, synthesis,
 } from '@/lib/ahp';
@@ -9,6 +9,9 @@ import { getCell, getType, normalizeMatrix, topsisSynthesis } from '@/lib/topsis
 import { vikorSynthesis } from '@/lib/vikor';
 import { prometheeSynthesis } from '@/lib/promethee';
 import { electreSynthesis } from '@/lib/electre';
+import { sawSynthesis } from '@/lib/saw';
+import { fuzzyTopsisSynthesis } from '@/lib/fuzzy_topsis';
+import { criticWeights, entropyWeights } from '@/lib/weights';
 
 export type ExpertLite = { id: string; label: string };
 
@@ -17,9 +20,10 @@ type Props = {
   alternatives: Alternative[];
   experts: ExpertLite[];
   judgments: Pick<JudgmentRow, 'expert_id' | 'sheet' | 'pair_key' | 'value'>[];
-  /** Cualquier método distinto de 'ahp' ranquea las alternativas con una matriz de decisión
-   * cuantitativa y los pesos de la hoja Criterios, no con matrices AHP por alternativa. Default 'ahp'. */
+  /** Método de ranking. Default 'ahp'. */
   method?: Method;
+  /** Método de ponderación de criterios. Solo aplica cuando method !== 'ahp'. Default 'ahp'. */
+  weightingMethod?: WeightingMethod;
   decisionMatrix?: DecisionMatrix | Record<string, never>;
   /** Si true, muestra el detalle de lo que respondió cada experto (vista del dueño). */
   showPerExpert?: boolean;
@@ -27,6 +31,7 @@ type Props = {
 
 const METHOD_LABEL: Record<Method, string> = {
   ahp: 'AHP', topsis: 'TOPSIS', vikor: 'VIKOR', electre: 'ELECTRE', promethee: 'PROMETHEE',
+  saw: 'SAW', fuzzy_topsis: 'Fuzzy TOPSIS',
 };
 
 function Table({ names, M, f }: { names: string[]; M: number[][]; f: (x: number) => string }) {
@@ -40,7 +45,7 @@ function Table({ names, M, f }: { names: string[]; M: number[][]; f: (x: number)
   );
 }
 
-export default function Results({ criteria, alternatives, experts, judgments, method = 'ahp', decisionMatrix, showPerExpert }: Props) {
+export default function Results({ criteria, alternatives, experts, judgments, method = 'ahp', weightingMethod = 'ahp', decisionMatrix, showPerExpert }: Props) {
   const idx = useMemo(() => indexJudgments(judgments), [judgments]);
   const withData = useMemo(() => experts.filter((e) => Object.keys(idx[e.id] ?? {}).length > 0).map((e) => e.id), [experts, idx]);
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
@@ -48,15 +53,28 @@ export default function Results({ criteria, alternatives, experts, judgments, me
   const [view, setView] = useState('agg');
 
   const used = withData.filter((id) => !excluded.has(id));
-  const critWeights = useMemo(() => sheetResult(CRIT_SHEET, criteria, used, idx).agg.w, [criteria, used, idx]);
-  const syn = useMemo(() => synthesis(criteria, alternatives, used, idx), [criteria, alternatives, used, idx]);
+  // Pesos de AHP (siempre calculados para la pestaña de detalle por hoja)
+  const ahpWeights = useMemo(() => sheetResult(CRIT_SHEET, criteria, used, idx).agg.w, [criteria, used, idx]);
+  // Pesos efectivos para los métodos de ranking: CRITIC, Entropía o AHP según weighting_method
   const dm = useMemo(() => normalizeMatrix(decisionMatrix), [decisionMatrix]);
+  const critWeights = useMemo(() => {
+    if (method === 'ahp') return ahpWeights;
+    if (weightingMethod === 'critic') return criticWeights(criteria, alternatives, dm);
+    if (weightingMethod === 'entropy') return entropyWeights(criteria, alternatives, dm);
+    return ahpWeights; // 'ahp' (default)
+  }, [method, weightingMethod, ahpWeights, criteria, alternatives, dm]);
 
   const topSyn = useMemo(() => topsisSynthesis(criteria, alternatives, dm, critWeights), [criteria, alternatives, dm, critWeights]);
   const vikSyn = useMemo(() => vikorSynthesis(criteria, alternatives, dm, critWeights), [criteria, alternatives, dm, critWeights]);
   const promSyn = useMemo(() => prometheeSynthesis(criteria, alternatives, dm, critWeights), [criteria, alternatives, dm, critWeights]);
   const elecSyn = useMemo(() => electreSynthesis(criteria, alternatives, dm, critWeights), [criteria, alternatives, dm, critWeights]);
-  const dmFilled = alternatives.some((a) => criteria.some((c) => getCell(dm, a.id, c.id) != null));
+  const sawSyn  = useMemo(() => sawSynthesis(criteria, alternatives, dm, critWeights), [criteria, alternatives, dm, critWeights]);
+  const fuzzyTopSyn = useMemo(() => fuzzyTopsisSynthesis(criteria, alternatives, dm, critWeights), [criteria, alternatives, dm, critWeights]);
+  const syn = useMemo(() => synthesis(criteria, alternatives, used, idx), [criteria, alternatives, used, idx]);
+  // dmFilled: para fuzzy_topsis se verifica que haya etiquetas lingüísticas; para el resto, valores numéricos.
+  const dmFilled = method === 'fuzzy_topsis'
+    ? alternatives.some((a) => criteria.some((c) => typeof dm.values[a.id]?.[c.id] === 'string'))
+    : alternatives.some((a) => criteria.some((c) => getCell(dm, a.id, c.id) != null));
 
   // Filas normalizadas para los 3 métodos de "ranking numérico" (TOPSIS/VIKOR/PROMETHEE): cada uno
   // define su propio valor, si mayor-es-mejor, y cómo mostrarlo — el resto de la UI es compartida.
@@ -73,6 +91,18 @@ export default function Results({ criteria, alternatives, experts, judgments, me
         higherBetter: false, bar: (v: number) => (1 - v) * 100, fmt: (v: number) => 'Q ' + v.toFixed(4), unit: 'Q (0 a 1, MENOR es mejor)',
       };
     }
+    if (method === 'saw') {
+      return {
+        rows: sawSyn.rows, order: sawSyn.order, tie: sawSyn.tie,
+        higherBetter: true, bar: (v: number) => v * 100, fmt: (v: number) => v.toFixed(4), unit: 'puntaje SAW (0 a 1, mayor es mejor)',
+      };
+    }
+    if (method === 'fuzzy_topsis') {
+      return {
+        rows: fuzzyTopSyn.rows, order: fuzzyTopSyn.order, tie: fuzzyTopSyn.tie,
+        higherBetter: true, bar: (v: number) => v * 100, fmt: (v: number) => 'CC ' + v.toFixed(4), unit: 'coef. de cercanía CC (0 a 1, mayor es mejor)',
+      };
+    }
     // promethee
     const phis = promSyn.rows.map((r) => r.phi);
     const lo = Math.min(...phis, 0), hi = Math.max(...phis, 0);
@@ -81,7 +111,7 @@ export default function Results({ criteria, alternatives, experts, judgments, me
       rows: promSyn.rows.map((r) => ({ name: r.name, value: r.phi, rank: r.rank })), order: promSyn.order, tie: promSyn.tie,
       higherBetter: true, bar: (v: number) => ((v - lo) / span) * 100, fmt: (v: number) => (v >= 0 ? '+' : '') + v.toFixed(3), unit: 'flujo neto φ (mayor es mejor)',
     };
-  }, [method, topSyn, vikSyn, promSyn]);
+  }, [method, topSyn, vikSyn, promSyn, sawSyn, fuzzyTopSyn]);
 
   const sheets = method === 'ahp'
     ? [{ key: CRIT_SHEET, label: 'Criterios' }, ...criteria.map((c) => ({ key: altSheet(c.id), label: c.name }))]

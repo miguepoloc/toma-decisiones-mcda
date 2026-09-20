@@ -32,8 +32,9 @@ export default async function Home() {
             <div className="eyebrow">Toma de Decisiones Multicriterio</div>
             <h1>Pesa lo que importa. Decide con números, no con corazonadas.</h1>
             <p className="lead">
-              Crea un proyecto, pesa tus criterios con juicios de expertos por pares y elige cómo comparar tus
-              alternativas: con más juicios por pares (AHP) o con datos reales en TOPSIS, VIKOR, PROMETHEE o ELECTRE.
+              Crea un proyecto, pesa tus criterios con juicios de expertos por pares (o déjale los pesos al método
+              con CRITIC o Entropía) y elige cómo comparar tus alternativas: con juicios por pares (AHP), con datos
+              reales (TOPSIS, VIKOR, SAW, PROMETHEE, ELECTRE) o con evaluaciones lingüísticas difusas (Fuzzy TOPSIS).
               Cada experto responde por un enlace propio, sin necesitar cuenta. Tú ves los pesos, qué tan
               consistentes son los juicios y el resultado final — listo para exportar o compartir.
             </p>
@@ -42,11 +43,11 @@ export default async function Home() {
               <Link className="btn" href="/tutorial">Ver el paso a paso</Link>
             </div>
             <p className="muted lnote">¿Eres experto y te compartieron un enlace? No necesitas cuenta: ábrelo y responde directamente.</p>
-            <div className="lstrip">
-              <div className="fact"><b>5 métodos</b><span>AHP, TOPSIS, VIKOR, PROMETHEE, ELECTRE</span></div>
-              <div className="fact"><b>0 cuentas</b><span>para que un experto responda</span></div>
-              <div className="fact"><b>Sin límite fijo</b><span>de criterios ni alternativas</span></div>
-            </div>
+              <div className="lstrip">
+                <div className="fact"><b>7 métodos</b><span>AHP, TOPSIS, VIKOR, PROMETHEE, ELECTRE, SAW, Fuzzy TOPSIS</span></div>
+                <div className="fact"><b>3 formas</b><span>de calcular los pesos de criterios</span></div>
+                <div className="fact"><b>0 cuentas</b><span>para que un experto responda</span></div>
+              </div>
           </div>
 
           <div className="lmock" aria-hidden="true">
@@ -118,9 +119,9 @@ export default async function Home() {
       <section className="lsection alt">
         <div className="wrap">
           <div className="lhead">
-            <div className="eyebrow">5 métodos</div>
-            <h2>Un mismo panel de expertos, cinco formas de comparar</h2>
-            <p>Los pesos de los criterios siempre salen de juicios por pares. Lo que elige el método es cómo se comparan después las alternativas.</p>
+            <div className="eyebrow">7 métodos</div>
+            <h2>Un mismo panel de expertos, siete formas de comparar</h2>
+            <p>Los pesos de los criterios salen de juicios por pares o, si lo prefieres, se calculan solos con CRITIC o Entropía. Lo que elige el método es cómo comparan las alternativas.</p>
           </div>
           <div className="lmethods">
             <div className="lmethod" style={famVar('var(--fam-pares)')}>
@@ -148,10 +149,20 @@ export default async function Home() {
               <b>ELECTRE</b>
               <span>Construye una relación de superación entre alternativas y puede decir honestamente que dos no son comparables, en vez de forzar un orden.</span>
             </div>
+            <div className="lmethod" style={famVar('var(--fam-saw)')}>
+              <span className="fam">Suma ponderada</span>
+              <b>SAW</b>
+              <span>El método más simple: normaliza los datos y suma criterio a criterio con sus pesos. Transparente, rápido y fácil de explicar.</span>
+            </div>
+            <div className="lmethod" style={famVar('var(--fam-fuzzy)')}>
+              <span className="fam">Distancia difusa al ideal</span>
+              <b>Fuzzy TOPSIS</b>
+              <span>Cuando los datos son inciertos o subjetivos, evalúas con etiquetas lingüísticas (Muy mala → Muy buena); el método maneja la imprecisión con lógica difusa triangular.</span>
+            </div>
           </div>
           <p className="lmethods-note">
-            Colores por familia — los mismos del curso: violeta para comparación por pares, verde-azulado para
-            distancia al ideal, magenta para sobreclasificación. ¿No sabes cuál te conviene?{' '}
+            Colores por familia: violeta para comparación por pares, verde-azulado para distancia al ideal,
+            magenta para sobreclasificación, naranja para suma ponderada, cian para lógica difusa.{' '}
             <Link href="/metodo">Respóndelo en tres preguntas</Link>.
           </p>
         </div>

@@ -8,6 +8,8 @@ import { getCell, getType, topsis } from './topsis.ts';
 import { vikor } from './vikor.ts';
 import { promethee } from './promethee.ts';
 import { electre, electreSynthesis } from './electre.ts';
+import { saw } from './saw.ts';
+import { fuzzyTopsisSynthesis, LINGUISTIC_ALT, LINGUISTIC_LABELS, type LinguisticLabel } from './fuzzy_topsis.ts';
 import type { Alternative, Criterion, DecisionMatrix, Method } from './types.ts';
 
 // Un color de acento por método (mismas familias que la landing/`sesiones/pptx_theme.py` del curso:
@@ -17,6 +19,7 @@ import type { Alternative, Criterion, DecisionMatrix, Method } from './types.ts'
 const NEUTRAL = '7F869C';
 const METHOD_COLOR: Record<Method, string> = {
   ahp: '8B6CFF', topsis: '1FA69B', vikor: '2E6FD6', promethee: 'E23F86', electre: '9B3FB0',
+  saw: 'C47A35', fuzzy_topsis: '1A9E94',
 };
 const C_G = 'D8F5E3', C_GR = '666666';
 function darken(hex: string, factor = 0.32): string {
@@ -466,6 +469,270 @@ function electreSheet(criteria: Criterion[], alternatives: Alternative[], dm: De
   return fin(colsW, [{ hpt: 30 }], [{ s: { r: 0, c: 1 }, e: { r: 0, c: Math.max(m, n) } }]);
 }
 
+/** SAW — Simple Additive Weighting con fórmulas vivas.
+ * Normalización Min-Max por columna (beneficio: (x-min)/(max-min); costo: (max-x)/(max-min)).
+ * Puntaje = SUMPRODUCT(peso, rij). Mayor puntaje es mejor. Verificado en check-saw.ts. */
+function sawSheet(criteria: Criterion[], alternatives: Alternative[], dm: DecisionMatrix, weights: number[], matInfo: MatInfo, matName: string, critInfo: { rN0: number; vc: number }) {
+  const m = criteria.length, n = alternatives.length, { put, fin } = W();
+  const matrix = alternatives.map((a) => criteria.map((c) => getCell(dm, a.id, c.id) ?? 0));
+  const types = criteria.map((c) => getType(dm, c.id));
+  const r = saw(matrix, weights, types);
+  const MN = qs(matName);
+  const rHead = 2, rW = 3, rLo = 4, rHi = 5, rN0 = 6, rV0 = rN0 + n + 1, cScore = m + 1, cRk = m + 2;
+  const lastCrit = colL(m);
+  put(1, 0, 'SAW — Suma Aditiva Ponderada (Simple Additive Weighting)', { s: stl.title });
+  put(1, 1, 'Normalización Min-Max por criterio (beneficio: (x-min)/(max-min); costo: (max-x)/(max-min)). Puntaje = SUMPRODUCT(peso × r_ij). Mayor puntaje es mejor. Pesos de la hoja Criterios.', { s: stl.note });
+  // --- Encabezados ---
+  put(rHead, 0, 'Alternativa', { s: stl.hdrL });
+  criteria.forEach((c, j) => put(rHead, 1 + j, c.name, { s: stl.hdr }));
+  put(rHead, cScore, 'Puntaje SAW', { s: stl.hdr });
+  put(rHead, cRk, 'Ranking', { s: stl.hdr });
+  // --- Pesos, mínimos y máximos ---
+  put(rW, 0, 'Peso (hoja Criterios)', { s: stl.b });
+  put(rLo, 0, 'Mínimo de la columna', { s: stl.b });
+  put(rHi, 0, 'Máximo de la columna', { s: stl.b });
+  criteria.forEach((_, j) => {
+    const L = colL(1 + j);
+    const rng = `${MN}${L}${matInfo.rData0}:${L}${matInfo.rData0 + n - 1}`;
+    put(rW, 1 + j, r.weights[j], { f: `Criterios!${colL(critInfo.vc)}${critInfo.rN0 + j}`, z: '0.0000' });
+    put(rLo, 1 + j, Math.min(...matrix.map((row) => row[j])), { f: `MIN(${rng})`, z: '0.0000' });
+    put(rHi, 1 + j, Math.max(...matrix.map((row) => row[j])), { f: `MAX(${rng})`, z: '0.0000' });
+  });
+  // --- Sección: Valores originales (referencia) ---
+  put(rN0 - 1, 0, 'Valores originales (de «Matriz de decisión»)', { s: stl.sub });
+  alternatives.forEach((a, i) => {
+    put(rN0 + i, 0, a.name, { s: stl.hdrL });
+    criteria.forEach((_, j) => {
+      const L = colL(1 + j);
+      put(rN0 + i, 1 + j, matrix[i][j], { f: `${MN}${L}${matInfo.rData0 + i}`, z: '0.0000' });
+    });
+  });
+  // --- Sección: Valores normalizados r_ij ---
+  put(rV0 - 1, 0, 'Valores normalizados r_ij (Min-Max)', { s: stl.sub });
+  alternatives.forEach((a, i) => {
+    const rr = rV0 + i;
+    put(rr, 0, a.name, { s: stl.hdrL });
+    criteria.forEach((_, j) => {
+      const L = colL(1 + j), typeCell = `${MN}${L}$${matInfo.rType}`;
+      const loCell = `${L}$${rLo}`, hiCell = `${L}$${rHi}`;
+      const span = `IFERROR(${hiCell}-${loCell},1)`;
+      // Beneficio: (x-min)/(max-min); Costo: (max-x)/(max-min)
+      put(rr, 1 + j, r.normalized[i][j], {
+        f: `IF(${typeCell}="Costo",IFERROR((${hiCell}-${L}${rN0 + i})/${span},0),IFERROR((${L}${rN0 + i}-${loCell})/${span},0))`,
+        z: '0.0000',
+      });
+    });
+    put(rr, cScore, r.scores[i], { f: `SUMPRODUCT(B$${rW}:${lastCrit}$${rW},B${rr}:${lastCrit}${rr})`, s: stl.key, z: '0.0000' });
+    put(rr, cRk, 1 + r.order.indexOf(i), { f: `RANK(${colL(cScore)}${rr},${colL(cScore)}$${rV0}:${colL(cScore)}$${rV0 + n - 1})`, s: stl.c });
+  });
+  const g = rV0 + n + 1, top = alternatives[r.order[0]], tie = n < 2 || Math.max(...r.scores) - Math.min(...r.scores) < 1e-9;
+  put(g, 0, 'Ganador', { s: stl.gain });
+  put(g, 1, tie ? 'Empate (sin datos)' : top?.name ?? '', {
+    f: `INDEX(A${rV0}:A${rV0 + n - 1},MATCH(MAX(${colL(cScore)}${rV0}:${colL(cScore)}${rV0 + n - 1}),${colL(cScore)}${rV0}:${colL(cScore)}${rV0 + n - 1},0))`,
+    s: stl.gkey,
+  });
+  put(g, 2, 'con puntaje SAW de');
+  put(g, 3, r.scores[r.order[0]] ?? 0, { f: `MAX(${colL(cScore)}${rV0}:${colL(cScore)}${rV0 + n - 1})`, z: '0.0000' });
+  const colsW = [30, ...Array.from({ length: Math.max(m, 1) }, () => 16), 14, 12];
+  return fin(colsW, [{ hpt: 30 }], [{ s: { r: 0, c: 1 }, e: { r: 0, c: cRk } }]);
+}
+
+/** Fuzzy TOPSIS con fórmulas vivas.
+ * Referencia: Chen (2000). Evaluaciones lingüísticas VP/P/F/G/VG → TFN (l,m,u).
+ * Estructura:
+ *   1. Tabla de escala lingüística.
+ *   2. Matriz de etiquetas lingüísticas (texto: VP, P, F, G, VG).
+ *   3. TFN expandida: cada criterio ocupa 3 columnas (l, m, u).
+ *   4. Normalización difusa (max u* para beneficio; min l* para costo).
+ *   5. Matriz ponderada v_ij = w_j × r_ij (por columna-triple).
+ *   6. Distancias d+ y d- (Vertex Method: √((l1-l2)²+(m1-m2)²+(u1-u2)²)/3).
+ *   7. CC_i = d- / (d+ + d-). Mayor CC es mejor.
+ * Nota: dado que cada TFN ocupa 3 columnas en Excel, las fórmulas referencian celdas reales
+ * (cacheadas) en vez de rangos compuestos, lo que garantiza compatibilidad sin fórmulas matriciales. */
+function fuzzyTopsisSheet(criteria: Criterion[], alternatives: Alternative[], dm: DecisionMatrix, weights: number[], critInfo: { rN0: number; vc: number }) {
+  const m = criteria.length, n = alternatives.length, { put, fin } = W();
+  const r = fuzzyTopsisSynthesis(criteria, alternatives, dm, weights);
+  // Carga TFNs de cada celda (etiqueta → TFN)
+  function getLbl(altId: string, critId: string): LinguisticLabel {
+    const v = dm.values[altId]?.[critId];
+    return (typeof v === 'string' && LINGUISTIC_LABELS.includes(v as LinguisticLabel)) ? (v as LinguisticLabel) : 'F';
+  }
+  const wSum = weights.reduce((a, b) => a + b, 0) || 1;
+  const w = weights.map((x) => x / wSum);
+  const fdm = alternatives.map((a) => criteria.map((c) => LINGUISTIC_ALT[getLbl(a.id, c.id)]));
+  const types = criteria.map((c) => getType(dm, c.id));
+  // Columnas TFN: cada criterio j ocupa columnas 1+3j, 2+3j, 3+3j
+  const cL = (j: number) => 1 + 3 * j;  // columna l del criterio j
+  const cM = (j: number) => 2 + 3 * j;  // columna m
+  const cU = (j: number) => 3 + 3 * j;  // columna u
+  const totalCritCols = 3 * m;
+  const cDp = totalCritCols + 1, cDm = totalCritCols + 2, cCC = totalCritCols + 3, cRk = totalCritCols + 4;
+  // Filas del layout
+  const rScaleHead = 1, rScale0 = rScaleHead + 1; // tabla de escala: 1+5 filas
+  const rW = rScale0 + LINGUISTIC_LABELS.length + 1; // pesos
+  const rHead = rW + 1; // encabezados TFN
+  const rLblHead = rHead + 1; // etiquetas lingüísticas (texto)
+  const rLbl0 = rLblHead + 1; // datos de etiquetas
+  const rFDMHead = rLbl0 + n + 1; // TFN cruda
+  const rFDM0 = rFDMHead + 1;
+  const rNHead = rFDM0 + n + 1; // normalizada
+  const rN0 = rNHead + 1;
+  const rVHead = rN0 + n + 1; // ponderada
+  const rV0 = rVHead + 1;
+  const rFPIS = rV0 + n; // A+ = (1,1,1)
+  const rFNIS = rFPIS + 1; // A- = (0,0,0)
+  const rDistHead = rFNIS + 2;
+  const rDist0 = rDistHead + 1;
+
+  put(1, 0, 'Fuzzy TOPSIS — TOPSIS con evaluaciones lingüísticas (Chen, 2000)', { s: stl.title });
+  put(1, 1, 'Las evaluaciones son variables lingüísticas (VP=Muy mala … VG=Muy buena) representadas como Números Difusos Triangulares (l, m, u). Distancia = √((l1-l2)²+(m1-m2)²+(u1-u2)²)/3 (Vertex Method). CC cerca de 1 = mejor alternativa.', { s: stl.note });
+
+  // --- Tabla de escala lingüística ---
+  put(rScaleHead, 0, 'Escala lingüística de evaluación', { s: stl.b });
+  ['Etiqueta', 'Nombre', 'l', 'm', 'u'].forEach((h, j) => put(rScaleHead, j, h, { s: stl.hdr }));
+  const lngNames: Record<LinguisticLabel, string> = { VP: 'Muy mala (Very Poor)', P: 'Mala (Poor)', F: 'Regular (Fair)', G: 'Buena (Good)', VG: 'Muy buena (Very Good)' };
+  LINGUISTIC_LABELS.forEach((lbl, i) => {
+    const [l, mid, u] = LINGUISTIC_ALT[lbl];
+    put(rScale0 + i, 0, lbl, { s: stl.c });
+    put(rScale0 + i, 1, lngNames[lbl]);
+    put(rScale0 + i, 2, l, { z: '0.0' }); put(rScale0 + i, 3, mid, { z: '0.0' }); put(rScale0 + i, 4, u, { z: '0.0' });
+  });
+
+  // --- Pesos ---
+  put(rW, 0, 'Peso (hoja Criterios)', { s: stl.b });
+  criteria.forEach((_, j) => {
+    put(rW, cL(j), w[j], { f: `Criterios!${colL(critInfo.vc)}${critInfo.rN0 + j}`, z: '0.0000' });
+  });
+
+  // --- Encabezado TFN: nombre del criterio y (l, m, u) en las 3 columnas ---
+  criteria.forEach((c, j) => {
+    put(rHead, cL(j), c.name + ' (l)', { s: stl.hdr });
+    put(rHead, cM(j), c.name + ' (m)', { s: stl.hdr });
+    put(rHead, cU(j), c.name + ' (u)', { s: stl.hdr });
+  });
+  ['d+', 'd-', 'CC', 'Ranking'].forEach((h, k) => put(rHead, cDp + k, h, { s: stl.hdr }));
+
+  // --- Etiquetas lingüísticas (texto, no TFN) ---
+  put(rLblHead, 0, 'Evaluaciones lingüísticas', { s: stl.sub });
+  criteria.forEach((c, j) => put(rLblHead, cL(j), c.name, { s: stl.hdrL }));
+  alternatives.forEach((a, i) => {
+    put(rLbl0 + i, 0, a.name, { s: stl.hdrL });
+    criteria.forEach((c, j) => put(rLbl0 + i, cL(j), getLbl(a.id, c.id)));
+  });
+
+  // --- FDM: TFN cruda ---
+  put(rFDMHead, 0, 'Matriz difusa FDM (l, m, u)', { s: stl.sub });
+  criteria.forEach((_, j) => { put(rFDMHead, cL(j), 'l', { s: stl.hdr }); put(rFDMHead, cM(j), 'm', { s: stl.hdr }); put(rFDMHead, cU(j), 'u', { s: stl.hdr }); });
+  alternatives.forEach((a, i) => {
+    put(rFDM0 + i, 0, a.name, { s: stl.hdrL });
+    criteria.forEach((c, j) => {
+      const [l, mid, u] = fdm[i][j];
+      put(rFDM0 + i, cL(j), l, { z: '0.0' });
+      put(rFDM0 + i, cM(j), mid, { z: '0.0' });
+      put(rFDM0 + i, cU(j), u, { z: '0.0' });
+    });
+  });
+
+  // --- Normalización ---
+  put(rNHead, 0, 'Matriz normalizada r_ij', { s: stl.sub });
+  criteria.forEach((_, j) => { put(rNHead, cL(j), 'l', { s: stl.hdr }); put(rNHead, cM(j), 'm', { s: stl.hdr }); put(rNHead, cU(j), 'u', { s: stl.hdr }); });
+  // Máximo u* (para beneficio) o mínimo l* (para costo) de toda la columna
+  const uStar = criteria.map((_, j) => {
+    if (types[j] === 'max') return Math.max(...fdm.map((row) => row[j][2]));
+    return Math.min(...fdm.map((row) => row[j][0]));
+  });
+  alternatives.forEach((a, i) => {
+    put(rN0 + i, 0, a.name, { s: stl.hdrL });
+    criteria.forEach((c, j) => {
+      const [l, mid, u] = fdm[i][j];
+      const us = uStar[j] || 1;
+      if (types[j] === 'max') {
+        put(rN0 + i, cL(j), l / us, { f: `${colL(cL(j))}${rFDM0 + i}/MAX(${colL(cU(j))}${rFDM0}:${colL(cU(j))}${rFDM0 + n - 1})`, z: '0.0000' });
+        put(rN0 + i, cM(j), mid / us, { f: `${colL(cM(j))}${rFDM0 + i}/MAX(${colL(cU(j))}${rFDM0}:${colL(cU(j))}${rFDM0 + n - 1})`, z: '0.0000' });
+        put(rN0 + i, cU(j), u / us, { f: `${colL(cU(j))}${rFDM0 + i}/MAX(${colL(cU(j))}${rFDM0}:${colL(cU(j))}${rFDM0 + n - 1})`, z: '0.0000' });
+      } else {
+        const ls = us; // para costo, uStar es el mínimo l*
+        put(rN0 + i, cL(j), u === 0 ? 0 : ls / u, { f: `IFERROR(MIN(${colL(cL(j))}${rFDM0}:${colL(cL(j))}${rFDM0 + n - 1})/${colL(cU(j))}${rFDM0 + i},0)`, z: '0.0000' });
+        put(rN0 + i, cM(j), mid === 0 ? 0 : ls / mid, { f: `IFERROR(MIN(${colL(cL(j))}${rFDM0}:${colL(cL(j))}${rFDM0 + n - 1})/${colL(cM(j))}${rFDM0 + i},0)`, z: '0.0000' });
+        put(rN0 + i, cU(j), l === 0 ? 0 : ls / l, { f: `IFERROR(MIN(${colL(cL(j))}${rFDM0}:${colL(cL(j))}${rFDM0 + n - 1})/${colL(cL(j))}${rFDM0 + i},0)`, z: '0.0000' });
+      }
+    });
+  });
+
+  // --- Matriz ponderada v_ij = w_j × r_ij ---
+  put(rVHead, 0, 'Matriz ponderada v_ij = w_j × r_ij', { s: stl.sub });
+  criteria.forEach((_, j) => { put(rVHead, cL(j), 'l', { s: stl.hdr }); put(rVHead, cM(j), 'm', { s: stl.hdr }); put(rVHead, cU(j), 'u', { s: stl.hdr }); });
+  put(rFPIS, 0, 'FPIS A+ = (1,1,1)', { s: stl.b });
+  put(rFNIS, 0, 'FNIS A- = (0,0,0)', { s: stl.b });
+  alternatives.forEach((a, i) => {
+    const rr = rV0 + i;
+    put(rr, 0, a.name, { s: stl.hdrL });
+    criteria.forEach((_, j) => {
+      const wCell = `${colL(cL(j))}$${rW}`;
+      put(rr, cL(j), r.detail?.dPlus ? undefined : 0, {  // valores cacheados del cálculo real
+        f: `${colL(cL(j))}${rN0 + i}*${wCell}`, z: '0.0000',
+      });
+      put(rr, cM(j), undefined, { f: `${colL(cM(j))}${rN0 + i}*${wCell}`, z: '0.0000' });
+      put(rr, cU(j), undefined, { f: `${colL(cU(j))}${rN0 + i}*${wCell}`, z: '0.0000' });
+    });
+  });
+  // Cachear los valores de V reales desde fuzzyTopsisSynthesis (la función ya los calculó internamente)
+  // Re-calculamos para caché usando los mismos pasos que fuzzy_topsis.ts:
+  const ww = criteria.map((_, j) => w[j]);
+  const us2 = uStar;
+  alternatives.forEach((a, i) => {
+    const rr = rV0 + i;
+    criteria.forEach((c, j) => {
+      const [l, mid, u] = fdm[i][j];
+      const us = us2[j] || 1;
+      let rl: number, rm: number, ru: number;
+      if (types[j] === 'max') { rl = l / us; rm = mid / us; ru = u / us; }
+      else { rl = u === 0 ? 0 : us / u; rm = mid === 0 ? 0 : us / mid; ru = l === 0 ? 0 : us / l; }
+      const vl = ww[j] * rl, vm = ww[j] * rm, vu = ww[j] * ru;
+      put(rr, cL(j), vl, { f: `${colL(cL(j))}${rN0 + i}*${colL(cL(j))}$${rW}`, z: '0.0000' });
+      put(rr, cM(j), vm, { f: `${colL(cM(j))}${rN0 + i}*${colL(cL(j))}$${rW}`, z: '0.0000' });
+      put(rr, cU(j), vu, { f: `${colL(cU(j))}${rN0 + i}*${colL(cL(j))}$${rW}`, z: '0.0000' });
+    });
+  });
+  criteria.forEach((_, j) => { put(rFPIS, cL(j), 1, { z: '0.0' }); put(rFPIS, cM(j), 1, { z: '0.0' }); put(rFPIS, cU(j), 1, { z: '0.0' }); });
+  criteria.forEach((_, j) => { put(rFNIS, cL(j), 0, { z: '0.0' }); put(rFNIS, cM(j), 0, { z: '0.0' }); put(rFNIS, cU(j), 0, { z: '0.0' }); });
+
+  // --- Distancias y CC ---
+  put(rDistHead, 0, 'Alternativa', { s: stl.hdrL });
+  put(rDistHead, cDp, 'd+', { s: stl.hdr }); put(rDistHead, cDm, 'd-', { s: stl.hdr });
+  put(rDistHead, cCC, 'CC', { s: stl.hdr }); put(rDistHead, cRk, 'Ranking', { s: stl.hdr });
+  alternatives.forEach((a, i) => {
+    const rr = rDist0 + i;
+    put(rr, 0, a.name, { s: stl.hdrL });
+    // d+ = Σ_j √((l_ij - 1)² + (m_ij - 1)² + (u_ij - 1)²) / 3
+    const dpTerms = criteria.map((_, j) => {
+      const Ll = colL(cL(j)), Lm = colL(cM(j)), Lu = colL(cU(j));
+      return `SQRT((${Ll}${rV0 + i}-${Ll}$${rFPIS})^2+(${Lm}${rV0 + i}-${Lm}$${rFPIS})^2+(${Lu}${rV0 + i}-${Lu}$${rFPIS})^2)/SQRT(3)`;
+    });
+    const dmTerms = criteria.map((_, j) => {
+      const Ll = colL(cL(j)), Lm = colL(cM(j)), Lu = colL(cU(j));
+      return `SQRT((${Ll}${rV0 + i}-${Ll}$${rFNIS})^2+(${Lm}${rV0 + i}-${Lm}$${rFNIS})^2+(${Lu}${rV0 + i}-${Lu}$${rFNIS})^2)/SQRT(3)`;
+    });
+    put(rr, cDp, r.detail.dPlus[i], { f: dpTerms.join('+'), z: '0.0000' });
+    put(rr, cDm, r.detail.dMinus[i], { f: dmTerms.join('+'), z: '0.0000' });
+    put(rr, cCC, r.rows[i].value, {
+      f: `IFERROR(${colL(cDm)}${rr}/(${colL(cDp)}${rr}+${colL(cDm)}${rr}),0)`,
+      s: stl.key, z: '0.0000',
+    });
+    put(rr, cRk, r.rows[i].rank, { f: `RANK(${colL(cCC)}${rr},${colL(cCC)}$${rDist0}:${colL(cCC)}$${rDist0 + n - 1})`, s: stl.c });
+  });
+  const g = rDist0 + n + 1, top = r.rows[r.order[0]], tie = r.tie;
+  put(g, 0, 'Ganador', { s: stl.gain });
+  put(g, 1, tie ? 'Empate (sin datos)' : top?.name ?? '', {
+    f: `INDEX(A${rDist0}:A${rDist0 + n - 1},MATCH(MAX(${colL(cCC)}${rDist0}:${colL(cCC)}${rDist0 + n - 1}),${colL(cCC)}${rDist0}:${colL(cCC)}${rDist0 + n - 1},0))`,
+    s: stl.gkey,
+  });
+  put(g, 2, 'con coeficiente CC de');
+  put(g, 3, top?.value ?? 0, { f: `MAX(${colL(cCC)}${rDist0}:${colL(cCC)}${rDist0 + n - 1})`, z: '0.0000' });
+  const colsW = [30, ...Array.from({ length: Math.max(totalCritCols, 1) }, () => 10), 12, 12, 12, 12];
+  return fin(colsW, [{ hpt: 30 }], [{ s: { r: 0, c: 1 }, e: { r: 0, c: totalCritCols } }]);
+}
+
 /** Excel principal del estudio: Notas, Criterios y las hojas del método elegido, más el respaldo
  * oculto `_datos`. La priorización de criterios (Sesión 1) vive en un .xlsx aparte — buildPrioWorkbook()
  * más abajo — para no forzar su descarga cada vez que solo hace falta el método. */
@@ -475,7 +742,7 @@ export function buildWorkbook(XLSX: any, study: Study) {
   const ex = study.experts.map((e) => e.role_desc || e.name);
   const expertIds = study.experts.map((e) => e.id);
   const S = study;
-  const res = ['Notas', 'Criterios', 'Síntesis', 'Matriz de decisión', 'TOPSIS', 'VIKOR', 'PROMETHEE', 'ELECTRE', '_datos'];
+  const res = ['Notas', 'Criterios', 'Síntesis', 'Matriz de decisión', 'TOPSIS', 'VIKOR', 'PROMETHEE', 'ELECTRE', 'SAW', 'Fuzzy TOPSIS', '_datos'];
   res.forEach((x) => used.add(x.toLowerCase()));
   const sname = (n: string) => {
     const b = String(n).replace(/[[\]:*?/\\]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 28) || 'Hoja';
@@ -486,7 +753,7 @@ export function buildWorkbook(XLSX: any, study: Study) {
   };
   const add = (name: string, ws: any) => XLSX.utils.book_append_sheet(wb, ws, name);
   const mapsFor = (sheet: string): JMap[] => expertIds.map((e) => S.idx[e]?.[sheet] ?? {});
-  const MATRIX_SHEET_NAME: Partial<Record<Method, string>> = { topsis: 'TOPSIS', vikor: 'VIKOR', promethee: 'PROMETHEE', electre: 'ELECTRE' };
+  const MATRIX_SHEET_NAME: Partial<Record<Method, string>> = { topsis: 'TOPSIS', vikor: 'VIKOR', promethee: 'PROMETHEE', electre: 'ELECTRE', saw: 'SAW', fuzzy_topsis: 'Fuzzy TOPSIS' };
   const isMatrixMethod = S.method in MATRIX_SHEET_NAME;
 
   { // Notas
@@ -516,14 +783,27 @@ export function buildWorkbook(XLSX: any, study: Study) {
   const critInfo = ahpSheet(S.criteria, mapsFor(CRIT_SHEET), ex, 'AHP, Criterios', 'Media geométrica de los expertos (Forman & Peniwati, 1998); ver juicios individuales más abajo. Objetivo: ' + S.objective);
   add('Criterios', critInfo.ws);
   if (isMatrixMethod) {
+    const isFuzzy = S.method === 'fuzzy_topsis';
     const matInfo = matrixSheet(S.criteria, S.alternatives, S.decisionMatrix, 'Matriz de decisión',
-      'Valores reales por alternativa y criterio, tal como los cargaste en la plataforma. "Tipo" indica si más es mejor (Beneficio) o menos es mejor (Costo).');
+      isFuzzy
+        ? 'Evaluaciones lingüísticas por alternativa y criterio (VP=Muy mala, P=Mala, F=Regular, G=Buena, VG=Muy buena). "Tipo" indica si más es mejor (Beneficio) o menos es mejor (Costo).'
+        : 'Valores reales por alternativa y criterio, tal como los cargaste en la plataforma. "Tipo" indica si más es mejor (Beneficio) o menos es mejor (Costo).');
     add('Matriz de decisión', matInfo.ws);
     const args = [S.criteria, S.alternatives, S.decisionMatrix, critInfo.w, matInfo, 'Matriz de decisión', critInfo] as const;
-    const sheet = S.method === 'topsis' ? topsisSheet(...args)
-      : S.method === 'vikor' ? vikorSheet(...args)
-        : S.method === 'promethee' ? prometheeSheet(...args)
-          : electreSheet(...args);
+    let sheet: ReturnType<typeof W>['ws'];
+    if (S.method === 'fuzzy_topsis') {
+      sheet = fuzzyTopsisSheet(S.criteria, S.alternatives, S.decisionMatrix, critInfo.w, critInfo);
+    } else if (S.method === 'saw') {
+      sheet = sawSheet(...args);
+    } else if (S.method === 'topsis') {
+      sheet = topsisSheet(...args);
+    } else if (S.method === 'vikor') {
+      sheet = vikorSheet(...args);
+    } else if (S.method === 'promethee') {
+      sheet = prometheeSheet(...args);
+    } else {
+      sheet = electreSheet(...args);
+    }
     add(MATRIX_SHEET_NAME[S.method]!, sheet);
   } else {
     const alts = S.criteria.map((c) => {
