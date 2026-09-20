@@ -1,6 +1,9 @@
 import Link from 'next/link';
+import type { CSSProperties } from 'react';
 import { createClient } from '@/lib/supabase/server';
 import Logo from '@/components/Logo';
+
+const famVar = (v: string): CSSProperties => ({ '--fam': v } as CSSProperties);
 
 export default async function Home() {
   const supabase = await createClient();
@@ -26,13 +29,13 @@ export default async function Home() {
 
         <div className="lhero">
           <div>
-            <div className="eyebrow">Toma de Decisiones Multicriterio · AHP</div>
-            <h1>Compara de a pares. Decide con números, no con corazonadas.</h1>
+            <div className="eyebrow">Toma de Decisiones Multicriterio</div>
+            <h1>Pesa lo que importa. Decide con números, no con corazonadas.</h1>
             <p className="lead">
-              Crea un proyecto, define tus criterios y alternativas, y comparte un enlace con cada experto para que
-              responda sus comparaciones sin necesitar cuenta. Tú ves lo que dijo cada uno, los pesos que resultan,
-              qué tan consistentes son sus juicios y el ranking final — y lo exportas a un Excel con las mismas
-              fórmulas que verías si lo hicieras a mano.
+              Crea un proyecto, pesa tus criterios con juicios de expertos por pares y elige cómo comparar tus
+              alternativas: con más juicios por pares (AHP) o con datos reales en TOPSIS, VIKOR, PROMETHEE o ELECTRE.
+              Cada experto responde por un enlace propio, sin necesitar cuenta. Tú ves los pesos, qué tan
+              consistentes son los juicios y el resultado final — listo para exportar o compartir.
             </p>
             <div className="acts" style={{ marginTop: 22 }}>
               <Link className="btn primary" href={primaryHref}>{primaryLabel}</Link>
@@ -40,9 +43,9 @@ export default async function Home() {
             </div>
             <p className="muted lnote">¿Eres experto y te compartieron un enlace? No necesitas cuenta: ábrelo y responde directamente.</p>
             <div className="lstrip">
-              <div className="fact"><b>Sin límite fijo</b><span>de criterios ni alternativas</span></div>
+              <div className="fact"><b>5 métodos</b><span>AHP, TOPSIS, VIKOR, PROMETHEE, ELECTRE</span></div>
               <div className="fact"><b>0 cuentas</b><span>para que un experto responda</span></div>
-              <div className="fact"><b>1 Excel</b><span>con fórmulas vivas, listo para el informe</span></div>
+              <div className="fact"><b>Sin límite fijo</b><span>de criterios ni alternativas</span></div>
             </div>
           </div>
 
@@ -72,7 +75,9 @@ export default async function Home() {
               Repartir puntajes a ojo entre varios criterios esconde una trampa: es fácil calificar dos cosas
               distintas con el mismo número sin darte cuenta de que una te importa mucho más que la otra. Comparar
               de a pares — «¿A o B? ¿cuánto más?» — obliga a esa decisión explícita una y otra vez, y de ahí salen
-              pesos que sí reflejan tu criterio real, con un número (CR) que te avisa si te contradijiste.
+              pesos que sí reflejan tu criterio real, con un número (CR) que te avisa si te contradijiste. Ese mismo
+              mecanismo de pesos alimenta los 5 métodos de la plataforma; lo que cambia entre ellos es solo cómo
+              comparan después las alternativas.
             </p>
           </div>
         </div>
@@ -82,14 +87,14 @@ export default async function Home() {
         <div className="wrap">
           <div className="lhead">
             <div className="eyebrow">Cómo funciona</div>
-            <h2>De la idea al ranking, en cuatro pasos</h2>
-            <p>El mismo flujo que verías en la sesión de AHP del curso, pero con base de datos, enlaces y cálculo en vivo.</p>
+            <h2>De la idea al resultado, en cuatro pasos</h2>
+            <p>El mismo flujo que verías en las sesiones de criterios y método del curso, pero con base de datos, enlaces y cálculo en vivo.</p>
           </div>
           <div className="lgrid4">
             <div className="lstep">
               <span className="no">01</span>
-              <h3>Define tu proyecto</h3>
-              <p>Objetivo de decisión, criterios y alternativas — los que tú necesites, no una plantilla fija de 4x4.</p>
+              <h3>Define tu proyecto y el método</h3>
+              <p>Objetivo de decisión, criterios y alternativas — los que tú necesites, no una plantilla fija de 4x4 — y cómo vas a comparar: por pares o con datos.</p>
             </div>
             <div className="lstep">
               <span className="no">02</span>
@@ -99,12 +104,12 @@ export default async function Home() {
             <div className="lstep">
               <span className="no">03</span>
               <h3>Mira los resultados</h3>
-              <p>Pesos, consistencia (CR) y ranking se recalculan solos con cada respuesta — agregados o por experto.</p>
+              <p>Pesos, consistencia (CR) y resultado final se recalculan solos con cada respuesta — agregados o por experto.</p>
             </div>
             <div className="lstep">
               <span className="no">04</span>
               <h3>Exporta o comparte</h3>
-              <p>Descarga el Excel con la misma estructura del ejercicio del curso, o publica un enlace de solo resultados.</p>
+              <p>Descarga el Excel con fórmulas vivas, o publica un enlace de solo resultados.</p>
             </div>
           </div>
         </div>
@@ -113,18 +118,60 @@ export default async function Home() {
       <section className="lsection alt">
         <div className="wrap">
           <div className="lhead">
+            <div className="eyebrow">5 métodos</div>
+            <h2>Un mismo panel de expertos, cinco formas de comparar</h2>
+            <p>Los pesos de los criterios siempre salen de juicios por pares. Lo que elige el método es cómo se comparan después las alternativas.</p>
+          </div>
+          <div className="lmethods">
+            <div className="lmethod" style={famVar('var(--fam-pares)')}>
+              <span className="fam">Comparación por pares</span>
+              <b>AHP</b>
+              <span>Comparas cada par de alternativas y cada par de criterios: cuánto más importa uno que el otro. El método deriva pesos y ranking, y te avisa si te contradijiste (CR).</span>
+            </div>
+            <div className="lmethod" style={famVar('var(--fam-dist)')}>
+              <span className="fam">Distancia al ideal</span>
+              <b>TOPSIS</b>
+              <span>Con datos reales por criterio, mide qué tan cerca está cada alternativa de una combinación ideal y qué tan lejos de la peor combinación posible.</span>
+            </div>
+            <div className="lmethod" style={famVar('var(--fam-dist)')}>
+              <span className="fam">Distancia al ideal</span>
+              <b>VIKOR</b>
+              <span>Como TOPSIS, pero prioriza una solución de compromiso: evita alternativas que queden muy mal en un solo criterio, aunque sumen bien en total.</span>
+            </div>
+            <div className="lmethod" style={famVar('var(--fam-out)')}>
+              <span className="fam">Sobreclasificación</span>
+              <b>PROMETHEE</b>
+              <span>Compara cada par de alternativas directamente, criterio por criterio, y construye el ranking a partir de esas preferencias netas.</span>
+            </div>
+            <div className="lmethod" style={famVar('var(--fam-out)')}>
+              <span className="fam">Sobreclasificación</span>
+              <b>ELECTRE</b>
+              <span>Construye una relación de superación entre alternativas y puede decir honestamente que dos no son comparables, en vez de forzar un orden.</span>
+            </div>
+          </div>
+          <p className="lmethods-note">
+            Colores por familia — los mismos del curso: violeta para comparación por pares, verde-azulado para
+            distancia al ideal, magenta para sobreclasificación. ¿No sabes cuál te conviene?{' '}
+            <Link href="/metodo">Respóndelo en tres preguntas</Link>.
+          </p>
+        </div>
+      </section>
+
+      <section className="lsection">
+        <div className="wrap">
+          <div className="lhead">
             <div className="eyebrow">Para quién</div>
             <h2>Pensado para decisiones con criterios en conflicto</h2>
           </div>
           <div className="laudience">
-            <div className="laud"><b>Estudiantes de tesis</b><span>que necesitan un modelo AHP propio con su número exacto de criterios y expertos, no el ejemplo fijo del curso.</span></div>
+            <div className="laud"><b>Estudiantes de tesis</b><span>que necesitan un modelo propio con su número exacto de criterios, alternativas y expertos — AHP, TOPSIS o el método que mejor encaje, no el ejemplo fijo del curso.</span></div>
             <div className="laud"><b>Investigadores</b><span>que consultan un panel de expertos y quieren agregar sus juicios con rigor (media geométrica), no promediarlos a mano.</span></div>
             <div className="laud"><b>Equipos y organizaciones</b><span>que eligen entre proveedores, tecnologías o estrategias y quieren dejar el porqué documentado, no solo el resultado.</span></div>
           </div>
         </div>
       </section>
 
-      <section className="lsection">
+      <section className="lsection alt">
         <div className="wrap">
           <div className="lhead">
             <div className="eyebrow">Privacidad por diseño</div>

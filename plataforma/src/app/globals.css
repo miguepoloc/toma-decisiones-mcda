@@ -6,6 +6,7 @@
   --pb:#0B7A85;--pb-soft:#D3ECEE;--pb-ink:#FFFFFF;
   --pass:#2B7A4B;--pass-soft:#DAF0E2;--warn:#B4530F;--warn-soft:#FBE6D3;--other:#8C9A98;
   --s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a;--s4:#eda100;--s5:#e87ba4;
+  --fam-pares:#8B6CFF;--fam-dist:#5FD4C7;--fam-out:#FF5DA2;
   --f-display:'Bricolage Grotesque','Segoe UI',system-ui,sans-serif;
   --f-body:'IBM Plex Sans','Segoe UI',system-ui,sans-serif;
   --f-mono:'IBM Plex Mono',ui-monospace,Menlo,monospace;
@@ -297,10 +298,18 @@ a{color:var(--accent)}
 .lfoot a{color:var(--muted)}
 
 @media(prefers-reduced-motion:no-preference){
-  .lstep,.laud{transition:transform .18s ease,border-color .18s ease}
-  .lstep:hover,.laud:hover{transform:translateY(-2px)}
+  .lstep,.laud,.lmethod{transition:transform .18s ease,border-color .18s ease}
+  .lstep:hover,.laud:hover,.lmethod:hover{transform:translateY(-2px)}
   .lstep:hover{border-color:var(--accent)}
 }
+
+.lmethods{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+.lmethod{border-left:3px solid var(--fam);padding-left:14px;display:grid;gap:6px}
+.lmethod .fam{display:flex;align-items:center;gap:7px;font:500 11px var(--f-mono);letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.lmethod .fam::before{content:'';width:8px;height:8px;border-radius:99px;background:var(--fam);flex:none}
+.lmethod b{font:700 17px var(--f-display)}
+.lmethod span{color:var(--muted);font-size:13.5px;line-height:1.5}
+.lmethods-note{margin-top:18px;font-size:13px;color:var(--muted)}
 
 /* ---- tutorial ---- */
 .ttl{max-width:640px}
