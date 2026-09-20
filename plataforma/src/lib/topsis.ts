@@ -51,6 +51,14 @@ export type TopsisResult = {
   distPlus: number[];
   distMinus: number[];
   order: number[]; // índices de `alternatives` ordenados de mejor a peor
+  /** Detalle intermedio (pesos renormalizados, normas, matriz ponderada-normalizada e ideales),
+   * expuesto para que excel.ts pueda cachear los mismos números que muestran las fórmulas vivas
+   * del .xlsx sin reimplementar la matemática. */
+  weights: number[];
+  norms: number[]; // uno por columna
+  v: number[][]; // matriz ponderada-normalizada, mismas filas/columnas que `matrix`
+  best: number[]; // A+ por columna
+  worst: number[]; // A- por columna
 };
 
 /** matrix: filas = alternativas, columnas = criterios, valores reales (no juicios de Saaty).
@@ -59,7 +67,9 @@ export type TopsisResult = {
 export function topsis(matrix: number[][], weights: number[], types: MatrixType[]): TopsisResult {
   const n = matrix.length;
   const m = weights.length;
-  if (n === 0 || m === 0) return { n, closeness: [], distPlus: [], distMinus: [], order: [] };
+  if (n === 0 || m === 0) {
+    return { n, closeness: [], distPlus: [], distMinus: [], order: [], weights: [], norms: [], v: [], best: [], worst: [] };
+  }
   const wsum = weights.reduce((a, b) => a + b, 0) || 1;
   const w = weights.map((x) => x / wsum);
 
@@ -86,7 +96,7 @@ export function topsis(matrix: number[][], weights: number[], types: MatrixType[
     return tot === 0 ? 0 : distMinus[i] / tot;
   });
   const order = closeness.map((_, i) => i).sort((a, b) => closeness[b] - closeness[a]);
-  return { n, closeness, distPlus, distMinus, order };
+  return { n, closeness, distPlus, distMinus, order, weights: w, norms, v, best, worst };
 }
 
 export type TopsisSynth = {

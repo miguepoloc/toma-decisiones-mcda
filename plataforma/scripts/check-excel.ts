@@ -20,7 +20,10 @@ for (const e of experts) {
   pairsOf(5).forEach(([i, j], n) => rows.push({ expert_id: e.id, sheet: 'crit', pair_key: `k${i}-k${j}`, value: ((n + Number(e.id[1])) % 5) - 2 }));
   criteria.forEach((c) => pairsOf(4).forEach(([i, j], n) => rows.push({ expert_id: e.id, sheet: 'alt:' + c.id, pair_key: `a${i}-a${j}`, value: ((n * 2 + Number(c.id[1])) % 7) - 3 })));
 }
-const study = { title: 'Proyecto de prueba', objective: seed.objective.replace(/\s+/g, ' '), criteria, alternatives, experts, idx: indexJudgments(rows), prio };
+const study = {
+  title: 'Proyecto de prueba', objective: seed.objective.replace(/\s+/g, ' '), criteria, alternatives, experts,
+  idx: indexJudgments(rows), prio, method: 'ahp' as const, decisionMatrix: { values: {}, types: {} },
+};
 const wb = buildWorkbook(XLSX, study);
 writeFileSync('/tmp/plataforma_test.xlsx', XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' }));
 console.log('Hojas:', wb.SheetNames.join(' | '));

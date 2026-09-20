@@ -1,6 +1,11 @@
 // Puente con la herramienta HTML (prototipos/): mismo formato de respaldo "v2" (.json y hoja oculta _datos del .xlsx).
-import type { Alternative, Criterion } from './types.ts';
+// La herramienta HTML solo conoce AHP + priorización (ver CLAUDE.md); `method`/`dm` son un agregado
+// de la plataforma, opcional en el formato v2, para que exportar/reimportar un proyecto TOPSIS (y a
+// futuro VIKOR/PROMETHEE/ELECTRE) no pierda la matriz de decisión. Un .json/.xlsx viejo de la
+// herramienta HTML (sin esos campos) sigue siendo válido: cae a method='ahp' con matriz vacía.
+import type { Alternative, Criterion, DecisionMatrix, Method } from './types.ts';
 import type { JIndex, JMap } from './ahp.ts';
+import { blankMatrix, normalizeMatrix } from './topsis.ts';
 import { blankPrio, normalizePrio, type PrioState } from './prio.ts';
 
 export type Study = {
@@ -11,6 +16,8 @@ export type Study = {
   experts: { id: string; name: string; role_desc: string }[];
   idx: JIndex;
   prio: PrioState;
+  method: Method;
+  decisionMatrix: DecisionMatrix;
 };
 
 type LegacyState = {
@@ -25,6 +32,8 @@ type LegacyState = {
   view?: string;
   nid?: number;
   exId?: string;
+  method?: Method;
+  dm?: DecisionMatrix;
 };
 
 export function toLegacy(s: Study): LegacyState {
@@ -40,6 +49,7 @@ export function toLegacy(s: Study): LegacyState {
     v: 2, obj: s.objective, A: s.prio, crit: s.criteria, alt: s.alternatives,
     experts: s.experts.map((e) => ({ id: e.id, name: e.role_desc || e.name })),
     J, demo: false, view: 'A1', nid: 100, exId: s.experts[0]?.id ?? 'e0',
+    method: s.method, dm: s.decisionMatrix,
   };
 }
 
@@ -50,12 +60,16 @@ export type Imported = {
   prio: PrioState;
   experts: { legacyId: string; name: string; role_desc: string }[];
   judgments: { legacyId: string; sheet: string; pair_key: string; value: number }[];
+  method: Method;
+  decisionMatrix: DecisionMatrix;
 };
 
 export function isLegacy(x: unknown): x is LegacyState {
   const s = x as LegacyState;
   return !!s && s.v === 2 && Array.isArray(s.crit) && Array.isArray(s.alt) && Array.isArray(s.experts) && !!s.J && !!s.A;
 }
+
+const METHODS: Method[] = ['ahp', 'topsis', 'vikor', 'electre', 'promethee'];
 
 export function fromLegacy(s: LegacyState): Imported {
   const judgments: Imported['judgments'] = [];
@@ -75,5 +89,7 @@ export function fromLegacy(s: LegacyState): Imported {
     prio: normalizePrio(s.A) ?? blankPrio(),
     experts: s.experts.map((e, i) => ({ legacyId: e.id, name: 'Experto ' + (i + 1), role_desc: e.name })),
     judgments,
+    method: s.method && METHODS.includes(s.method) ? s.method : 'ahp',
+    decisionMatrix: s.dm ? normalizeMatrix(s.dm) : blankMatrix(),
   };
 }

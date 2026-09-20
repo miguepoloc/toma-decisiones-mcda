@@ -37,6 +37,8 @@ export async function createFromImport(
       criteria: imp.criteria,
       alternatives: imp.alternatives,
       prioritization: imp.prio,
+      method: imp.method,
+      decision_matrix: imp.decisionMatrix,
     })
     .select('id')
     .single();

@@ -113,6 +113,32 @@ del SQL (políticas + funciones `SECURITY DEFINER`) se ve correcta, pero eso no 
 
 ## Historial de cambios
 
+**20 sep 2026 (tarde, grill-me):**
+- **Borrado de proyecto**: `ProjectList.tsx` pasó de un botón "✕" con confirmación de dos clics a un modal estilo
+  AWS (ícono de basurita, hay que **escribir el nombre exacto del proyecto** para habilitar "Eliminar proyecto") —
+  incluye el estado `:disabled` del botón en `globals.css`, que faltaba y hacía que se viera activo aunque no lo
+  fuera.
+- **Vercel conectado a GitHub**: antes cada deploy a producción era `vercel --prod` manual (y de hecho un deploy de
+  VIKOR/ELECTRE/PROMETHEE quedó pusheado pero sin desplegar por varias horas hasta notarlo). Ahora el proyecto
+  (renombrado `mcda` en el dashboard, Root Directory = `plataforma`) despliega solo con cada push a `main`.
+- **Landing (`/`) ya no habla solo de AHP**: eyebrow/H1/stats neutrales, sección nueva "5 métodos" con los colores
+  de familia reales del curso (`sesiones/pptx_theme.py` del docente: violeta `#8B6CFF` comparación por pares
+  AHP/ANP, verde-azulado `#5FD4C7` distancia al ideal TOPSIS/VIKOR, magenta `#FF5DA2` sobreclasificación
+  ELECTRE/PROMETHEE — mismos que usan las diapositivas de sesión, ver `--fam-pares`/`--fam-dist`/`--fam-out` en
+  `globals.css`).
+- **TOPSIS ya exporta a Excel con fórmulas vivas**: hojas nuevas "Matriz de decisión" (valores reales +
+  beneficio/costo por criterio) y "TOPSIS" (normalización vectorial, ponderación con el peso de la hoja Criterios,
+  ideal mejor/peor, distancias D+/D-, cercanía Ci, ranking — mismas fórmulas SUMSQ/SUMPRODUCT/RANK que el resto del
+  libro), en vez de la estructura AHP genérica que se usaba antes para cualquier método no-AHP
+  (`matrixSheet()`/`topsisSheet()` en `excel.ts`, verificado en `scripts/check-excel-topsis.ts` contra el mismo caso
+  IoT/Palmor que `check-topsis.ts`, valores cacheados exactos). VIKOR/PROMETHEE/ELECTRE siguen pendientes (ver
+  "Falta" en Visión, abajo) — se hizo TOPSIS primero para validar el patrón antes de replicarlo.
+- **Bug de fondo corregido de paso**: la hoja oculta `_datos` (el respaldo que permite reimportar un .xlsx) no
+  guardaba `method` ni `decision_matrix` — exportar un proyecto TOPSIS y reimportarlo perdía la matriz de decisión
+  en silencio. `legacy.ts` (`Study`/`LegacyState`/`Imported`) y `importer.ts` ahora los llevan, de forma opcional y
+  retrocompatible: un .json/.xlsx viejo de la herramienta HTML (que no conoce estos campos) sigue importando bien,
+  cae a `method: 'ahp'` con matriz vacía.
+
 **19-20 sep 2026 (grill-me + revisión en vivo):**
 - **Bug real corregido**: `scripts/check-excel.ts` y 4 archivos de `src/lib/` (`excel.ts`, `types.ts`, `importer.ts`,
   `legacy.ts`) importaban con rutas relativas sin extensión (`from './ahp'`). Next.js lo tolera al compilar, pero el
@@ -158,9 +184,10 @@ aparte (relaciones + tabla de concordancia/discordancia), no como una lista orde
 → ¿qué te importa más?) que termina en uno de los 5 métodos, más tabla comparativa. Enlazado desde landing, tutorial y
 el selector de método del proyecto.
 
-**Falta:** exportar los 4 métodos nuevos a Excel (el botón sigue generando solo hojas AHP, avisado en la propia UI),
-y ANP — la pieza que de verdad requiere un modelo de datos distinto (supermatriz/red de dependencias, no una matriz de
-decisión más), pendiente de una conversación de diseño aparte.
+**Falta:** exportar VIKOR/PROMETHEE/ELECTRE a Excel (el botón sigue generando solo hojas de AHP para esos tres,
+avisado en la propia UI y en el mensaje de la pestaña Compartir — **TOPSIS ya tiene su propia hoja**, ver
+"Historial de cambios"), y ANP — la pieza que de verdad requiere un modelo de datos distinto (supermatriz/red de
+dependencias, no una matriz de decisión más), pendiente de una conversación de diseño aparte.
 
 **Migraciones que hay que tener corridas contra Supabase real:**
 `supabase/migrations/0002_decision_matrix.sql` (agrega `method`/`decision_matrix` a `projects`, actualiza

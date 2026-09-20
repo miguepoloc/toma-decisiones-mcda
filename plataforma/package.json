@@ -8,7 +8,7 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-strip-types --no-warnings scripts/check-ahp.ts && node --experimental-strip-types --no-warnings scripts/check-topsis.ts && node --experimental-strip-types --no-warnings scripts/check-vikor.ts && node --experimental-strip-types --no-warnings scripts/check-promethee.ts && node --experimental-strip-types --no-warnings scripts/check-electre.ts",
-    "test:excel": "node --experimental-strip-types --no-warnings scripts/check-excel.ts"
+    "test:excel": "node --experimental-strip-types --no-warnings scripts/check-excel.ts && node --experimental-strip-types --no-warnings scripts/check-excel-topsis.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.6.1",

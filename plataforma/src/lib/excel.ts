@@ -4,6 +4,8 @@
 import { aggMatrix, altSheet, analyze, expertMatrix, CRIT_SHEET, synthesis, type Item, type JMap } from './ahp.ts';
 import { toLegacy, type Study } from './legacy.ts';
 import { alive, cols, f2, finalists, inIndep, mean, passes, ranked, scoreOf } from './prio.ts';
+import { getCell, getType, topsis } from './topsis.ts';
+import type { Alternative, Criterion, DecisionMatrix } from './types.ts';
 
 const C_P = '8B6CFF', C_P2 = '5B3FCC', C_G = 'D8F5E3', C_GR = '666666';
 const fillP = { patternType: 'solid', fgColor: { rgb: C_P } };
@@ -146,7 +148,83 @@ function ahpSheet(items: Item[], maps: JMap[], exNames: string[], title: string,
     });
   }
   const colsW = [34, ...Array.from({ length: Math.max(n, 4) + 1 }, () => 17)];
-  return { ws: fin(colsW, [{ hpt: 30 }], [{ s: { r: 0, c: 1 }, e: { r: 0, c: Math.max(n, 4) } }]), rN0, vc };
+  return { ws: fin(colsW, [{ hpt: 30 }], [{ s: { r: 0, c: 1 }, e: { r: 0, c: Math.max(n, 4) } }]), rN0, vc, w: an.w };
+}
+
+/** Matriz de decisión cruda (alternativas x criterios) + tipo (beneficio/costo) por columna.
+ * Compartida por todos los métodos que ranquean sobre datos reales en vez de juicios por pares
+ * (TOPSIS hoy; VIKOR/PROMETHEE/ELECTRE reusarán esta misma hoja). */
+function matrixSheet(criteria: Criterion[], alternatives: Alternative[], dm: DecisionMatrix, title: string, note: string) {
+  const m = criteria.length, n = alternatives.length, { put, fin } = W();
+  const rHead = 3, rType = 4, rData0 = 5;
+  put(1, 0, title, { s: stl.title });
+  put(1, 1, note, { s: stl.note });
+  put(rHead, 0, 'Alternativa', { s: stl.hdrL });
+  criteria.forEach((c, j) => put(rHead, 1 + j, c.name, { s: stl.hdr }));
+  put(rType, 0, 'Tipo (beneficio/costo)', { s: stl.b });
+  criteria.forEach((c, j) => put(rType, 1 + j, getType(dm, c.id) === 'min' ? 'Costo' : 'Beneficio', { s: stl.c }));
+  alternatives.forEach((a, i) => {
+    const r = rData0 + i;
+    put(r, 0, a.name, { s: stl.hdrL });
+    criteria.forEach((c, j) => put(r, 1 + j, getCell(dm, a.id, c.id) ?? 0, { s: stl.c, z: '0.0000' }));
+  });
+  const colsW = [30, ...Array.from({ length: Math.max(m, 1) }, () => 16)];
+  return { ws: fin(colsW, [{ hpt: 26 }], [{ s: { r: 0, c: 1 }, e: { r: 0, c: Math.max(m, 1) } }]), rHead, rType, rData0, m, n };
+}
+
+type MatInfo = ReturnType<typeof matrixSheet>;
+
+/** TOPSIS con fórmulas vivas: normalización vectorial, ponderación (peso de la hoja Criterios),
+ * ideal mejor/peor por columna según el tipo de la hoja de matriz, distancia euclidiana y cercanía
+ * relativa Ci. Misma matemática que topsis() en topsis.ts (ver check-topsis.ts para la verificación
+ * contra el notebook del curso); se recalcula aquí en JS solo para cachear el valor de cada celda. */
+function topsisSheet(criteria: Criterion[], alternatives: Alternative[], dm: DecisionMatrix, weights: number[], matInfo: MatInfo, matName: string, critInfo: { rN0: number; vc: number }) {
+  const m = criteria.length, n = alternatives.length, { put, fin } = W();
+  const matrix = alternatives.map((a) => criteria.map((c) => getCell(dm, a.id, c.id) ?? 0));
+  const types = criteria.map((c) => getType(dm, c.id));
+  const r = topsis(matrix, weights, types);
+  const rHead = 2, rW = 3, rNorm = 4, rV0 = 5, rAplus = rV0 + n, rAminus = rAplus + 1;
+  const cDp = m + 1, cDm = m + 2, cCi = m + 3, cRk = m + 4;
+  const MN = qs(matName);
+  put(1, 0, 'TOPSIS — cercanía relativa a la solución ideal', { s: stl.title });
+  put(1, 1, 'Distancia euclidiana a un ideal (A+) y a un anti-ideal (A-) tras normalizar y ponderar la matriz de decisión. Ci cerca de 1 = cerca del ideal. Peso de cada criterio: hoja Criterios.', { s: stl.note });
+  put(rHead, 0, 'Alternativa', { s: stl.hdrL });
+  criteria.forEach((c, j) => put(rHead, 1 + j, c.name, { s: stl.hdr }));
+  put(rHead, cDp, 'Distancia D+', { s: stl.hdr }); put(rHead, cDm, 'Distancia D-', { s: stl.hdr });
+  put(rHead, cCi, 'Cercanía Ci', { s: stl.hdr }); put(rHead, cRk, 'Ranking', { s: stl.hdr });
+  put(rW, 0, 'Peso (hoja Criterios)', { s: stl.b });
+  criteria.forEach((_, j) => put(rW, 1 + j, r.weights[j], { f: `Criterios!${colL(critInfo.vc)}${critInfo.rN0 + j}`, z: '0.0000' }));
+  put(rNorm, 0, 'Norma euclidiana de la columna', { s: stl.b });
+  criteria.forEach((_, j) => {
+    const L = colL(1 + j);
+    put(rNorm, 1 + j, r.norms[j], { f: `SQRT(SUMSQ(${MN}${L}${matInfo.rData0}:${L}${matInfo.rData0 + n - 1}))`, z: '0.0000' });
+  });
+  alternatives.forEach((a, i) => {
+    const rr = rV0 + i, last = colL(m);
+    put(rr, 0, a.name, { s: stl.hdrL });
+    criteria.forEach((_, j) => {
+      const L = colL(1 + j);
+      put(rr, 1 + j, r.v[i][j], { f: `(${MN}${L}${matInfo.rData0 + i}/${L}$${rNorm})*${L}$${rW}`, z: '0.0000' });
+    });
+    put(rr, cDp, r.distPlus[i], { f: `SQRT(SUMPRODUCT((B${rr}:${last}${rr}-B$${rAplus}:${last}$${rAplus})^2))`, z: '0.0000' });
+    put(rr, cDm, r.distMinus[i], { f: `SQRT(SUMPRODUCT((B${rr}:${last}${rr}-B$${rAminus}:${last}$${rAminus})^2))`, z: '0.0000' });
+    put(rr, cCi, r.closeness[i], { f: `IFERROR(${colL(cDm)}${rr}/(${colL(cDp)}${rr}+${colL(cDm)}${rr}),0)`, s: stl.key, z: '0.0000' });
+    put(rr, cRk, 1 + r.order.indexOf(i), { f: `RANK(${colL(cCi)}${rr},${colL(cCi)}$${rV0}:${colL(cCi)}$${rV0 + n - 1})`, s: stl.c });
+  });
+  put(rAplus, 0, 'Ideal mejor (A+)', { s: stl.b });
+  put(rAminus, 0, 'Ideal peor (A-)', { s: stl.b });
+  criteria.forEach((_, j) => {
+    const L = colL(1 + j), rng = `${L}${rV0}:${L}${rV0 + n - 1}`, typeCell = `${MN}${L}$${matInfo.rType}`;
+    put(rAplus, 1 + j, r.best[j], { f: `IF(${typeCell}="Costo",MIN(${rng}),MAX(${rng}))`, z: '0.0000' });
+    put(rAminus, 1 + j, r.worst[j], { f: `IF(${typeCell}="Costo",MAX(${rng}),MIN(${rng}))`, z: '0.0000' });
+  });
+  const g = rAminus + 2, top = alternatives[r.order[0]], tie = n < 2 || Math.max(...r.closeness) - Math.min(...r.closeness) < 1e-9;
+  put(g, 0, 'Ganador', { s: stl.gain });
+  put(g, 1, tie ? 'Empate (sin datos)' : top?.name ?? '', { f: `INDEX(A${rV0}:A${rV0 + n - 1},MATCH(MAX(${colL(cCi)}${rV0}:${colL(cCi)}${rV0 + n - 1}),${colL(cCi)}${rV0}:${colL(cCi)}${rV0 + n - 1},0))`, s: stl.gkey });
+  put(g, 2, 'con cercanía Ci de');
+  put(g, 3, r.closeness[r.order[0]] ?? 0, { f: `MAX(${colL(cCi)}${rV0}:${colL(cCi)}${rV0 + n - 1})`, z: '0.0000' });
+  const colsW = [30, ...Array.from({ length: Math.max(m, 1) }, () => 16), 15, 15, 14, 12];
+  return fin(colsW, [{ hpt: 30 }], [{ s: { r: 0, c: 1 }, e: { r: 0, c: cRk } }]);
 }
 
 export function buildWorkbook(XLSX: any, study: Study) {
@@ -154,7 +232,7 @@ export function buildWorkbook(XLSX: any, study: Study) {
   const ex = study.experts.map((e) => e.role_desc || e.name);
   const expertIds = study.experts.map((e) => e.id);
   const S = study, A = study.prio;
-  const res = ['Notas', 'Criterios', 'Síntesis', '_datos', 'Prior 1. Lluvia de ideas', 'Prior 2. Tamizaje', 'Prior 3. Independencia', 'Prior 4. Panel', 'Prior 5. Resultado final'];
+  const res = ['Notas', 'Criterios', 'Síntesis', 'Matriz de decisión', 'TOPSIS', '_datos', 'Prior 1. Lluvia de ideas', 'Prior 2. Tamizaje', 'Prior 3. Independencia', 'Prior 4. Panel', 'Prior 5. Resultado final'];
   res.forEach((x) => used.add(x.toLowerCase()));
   const sname = (n: string) => {
     const b = String(n).replace(/[[\]:*?/\\]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 28) || 'Hoja';
@@ -262,36 +340,44 @@ export function buildWorkbook(XLSX: any, study: Study) {
     });
     add('Prior 5. Resultado final', fin([46, 32, 80], [{ hpt: 24 }]));
   }
-  // AHP
+  // El peso de los criterios siempre sale de la hoja Criterios (juicios por pares), sea cual sea
+  // el método elegido para comparar las alternativas — ver CLAUDE.md § "Visión multicriterio".
   const critInfo = ahpSheet(S.criteria, mapsFor(CRIT_SHEET), ex, 'AHP, Criterios', 'Media geométrica de los expertos (Forman & Peniwati, 1998); ver juicios individuales más abajo. Objetivo: ' + S.objective, true);
   add('Criterios', critInfo.ws);
-  const alts = S.criteria.map((c) => {
-    const nm = sname(c.name);
-    const info = ahpSheet(S.alternatives, mapsFor(altSheet(c.id)), ex, 'AHP, ' + c.name, 'Media geométrica de los expertos. ' + (c.hint || ''), false);
-    add(nm, info.ws);
-    return { nm, info };
-  });
-  { // Síntesis
-    const { put, fin } = W(), d = synthesis(S.criteria, S.alternatives, expertIds, S.idx);
-    const nc = S.criteria.length, m = S.alternatives.length, lc = colL(nc), G = nc + 1, R = nc + 2;
-    put(1, 0, 'Estrategia', { s: stl.b });
-    S.criteria.forEach((c, j) => put(2, 1 + j, c.name, { s: stl.hdr }));
-    put(2, G, 'Prioridad global', { s: stl.hdr }); put(2, R, 'Ranking', { s: stl.hdr });
-    put(3, 0, 'Peso del criterio', { s: stl.b });
-    S.criteria.forEach((_, j) => put(3, 1 + j, d.wr[j], { f: `Criterios!${colL(critInfo.vc)}${critInfo.rN0 + j}`, z: '0.0000' }));
-    S.alternatives.forEach((a, i) => {
-      const r = 4 + i;
-      put(r, 0, a.name, { s: stl.b });
-      S.criteria.forEach((_, j) => put(r, 1 + j, d.rows[i].loc[j], { f: `${qs(alts[j].nm)}${colL(alts[j].info.vc)}${alts[j].info.rN0 + i}`, z: '0.0000' }));
-      put(r, G, d.rows[i].g, { f: `SUMPRODUCT(B${r}:${lc}${r},B$3:${lc}$3)`, s: stl.key, z: '0.0000' });
-      put(r, R, d.rows[i].rank, { f: `RANK(${colL(G)}${r},${colL(G)}$4:${colL(G)}$${3 + m})`, s: stl.c });
+  if (S.method === 'topsis') {
+    const matInfo = matrixSheet(S.criteria, S.alternatives, S.decisionMatrix, 'Matriz de decisión',
+      'Valores reales por alternativa y criterio, tal como los cargaste en la plataforma. "Tipo" indica si más es mejor (Beneficio) o menos es mejor (Costo).');
+    add('Matriz de decisión', matInfo.ws);
+    add('TOPSIS', topsisSheet(S.criteria, S.alternatives, S.decisionMatrix, critInfo.w, matInfo, 'Matriz de decisión', critInfo));
+  } else {
+    const alts = S.criteria.map((c) => {
+      const nm = sname(c.name);
+      const info = ahpSheet(S.alternatives, mapsFor(altSheet(c.id)), ex, 'AHP, ' + c.name, 'Media geométrica de los expertos. ' + (c.hint || ''), false);
+      add(nm, info.ws);
+      return { nm, info };
     });
-    const g = 4 + m + 1, top = d.rows[d.order[0]];
-    put(g, 0, 'Ganador', { s: stl.gain });
-    put(g, 1, d.tie ? 'Empate (sin juicios)' : top.name, { f: `INDEX(A4:A${3 + m},MATCH(MAX(${colL(G)}4:${colL(G)}${3 + m}),${colL(G)}4:${colL(G)}${3 + m},0))`, s: stl.gkey });
-    put(g, 2, 'con prioridad global de');
-    put(g, 3, top.g, { f: `MAX(${colL(G)}4:${colL(G)}${3 + m})`, z: '0.0%' });
-    add('Síntesis', fin([26, ...Array.from({ length: nc + 2 }, () => 16)], [{ hpt: 20 }, { hpt: 34 }]));
+    { // Síntesis
+      const { put, fin } = W(), d = synthesis(S.criteria, S.alternatives, expertIds, S.idx);
+      const nc = S.criteria.length, m = S.alternatives.length, lc = colL(nc), G = nc + 1, R = nc + 2;
+      put(1, 0, 'Estrategia', { s: stl.b });
+      S.criteria.forEach((c, j) => put(2, 1 + j, c.name, { s: stl.hdr }));
+      put(2, G, 'Prioridad global', { s: stl.hdr }); put(2, R, 'Ranking', { s: stl.hdr });
+      put(3, 0, 'Peso del criterio', { s: stl.b });
+      S.criteria.forEach((_, j) => put(3, 1 + j, d.wr[j], { f: `Criterios!${colL(critInfo.vc)}${critInfo.rN0 + j}`, z: '0.0000' }));
+      S.alternatives.forEach((a, i) => {
+        const r = 4 + i;
+        put(r, 0, a.name, { s: stl.b });
+        S.criteria.forEach((_, j) => put(r, 1 + j, d.rows[i].loc[j], { f: `${qs(alts[j].nm)}${colL(alts[j].info.vc)}${alts[j].info.rN0 + i}`, z: '0.0000' }));
+        put(r, G, d.rows[i].g, { f: `SUMPRODUCT(B${r}:${lc}${r},B$3:${lc}$3)`, s: stl.key, z: '0.0000' });
+        put(r, R, d.rows[i].rank, { f: `RANK(${colL(G)}${r},${colL(G)}$4:${colL(G)}$${3 + m})`, s: stl.c });
+      });
+      const g = 4 + m + 1, top = d.rows[d.order[0]];
+      put(g, 0, 'Ganador', { s: stl.gain });
+      put(g, 1, d.tie ? 'Empate (sin juicios)' : top.name, { f: `INDEX(A4:A${3 + m},MATCH(MAX(${colL(G)}4:${colL(G)}${3 + m}),${colL(G)}4:${colL(G)}${3 + m},0))`, s: stl.gkey });
+      put(g, 2, 'con prioridad global de');
+      put(g, 3, top.g, { f: `MAX(${colL(G)}4:${colL(G)}${3 + m})`, z: '0.0%' });
+      add('Síntesis', fin([26, ...Array.from({ length: nc + 2 }, () => 16)], [{ hpt: 20 }, { hpt: 34 }]));
+    }
   }
   { // datos ocultos (formato de respaldo de la herramienta HTML)
     const { put, fin } = W(), txt = JSON.stringify(toLegacy(S));

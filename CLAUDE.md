@@ -80,9 +80,13 @@ propia UI, no como lista ordenada. Nada persiste resultados calculados: cada mé
 navegador desde los datos guardados (`decision_matrix` en `projects`, migraciones `0002_decision_matrix.sql` +
 `0003_more_methods.sql` — desde hoy la integración GitHub↔Supabase del proyecto las aplica sola al hacer push a
 `main`, Working directory `plataforma` + Deploy to production activado, ya no hace falta pegarlas a mano). Asistente
-"¿qué método uso?" en `/metodo` (árbol de 3 preguntas). Falta: **ANP** (Sesión 6 — generaliza el paso de PESOS a una
-red con dependencias, no encaja en el patrón de matriz de decisión de los otros 4, necesita su propia conversación de
-diseño antes de tocar código), exportar los 4 métodos nuevos a Excel, y la extensión Fuzzy (el temario la trata como
+"¿qué método uso?" en `/metodo` (árbol de 3 preguntas, con los colores de familia reales del curso — violeta
+comparación por pares, verde-azulado distancia al ideal, magenta sobreclasificación — tomados de
+`sesiones/pptx_theme.py` del docente). **Excel**: AHP y, desde el 20 sep 2026 (tarde), TOPSIS tienen hojas propias con
+fórmulas vivas (`matrixSheet()`/`topsisSheet()` en `excel.ts`); VIKOR/PROMETHEE/ELECTRE todavía arman la estructura
+de AHP como referencia, avisado en la UI. Falta: **ANP** (Sesión 6 — generaliza el paso de PESOS a una red con
+dependencias, no encaja en el patrón de matriz de decisión de los otros 4, necesita su propia conversación de diseño
+antes de tocar código), exportar VIKOR/PROMETHEE/ELECTRE a Excel, y la extensión Fuzzy (el temario la trata como
 "enriquecimiento" sobre cualquier método, no un método aparte). Detalle completo en `plataforma/README.md` § "Visión:
 plataforma multicriterio completa".
 
