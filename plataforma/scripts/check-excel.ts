@@ -1,10 +1,10 @@
 // Genera un .xlsx de prueba con datos de ejemplo y verifica el viaje de ida y vuelta con el formato de la herramienta HTML.
 import { writeFileSync, readFileSync } from 'node:fs';
 import XLSX from 'xlsx-js-style';
-import { buildWorkbook } from '../src/lib/excel';
-import { fromLegacy, isLegacy } from '../src/lib/legacy';
-import { indexJudgments, pairsOf } from '../src/lib/ahp';
-import { normalizePrio } from '../src/lib/prio';
+import { buildWorkbook } from '../src/lib/excel.ts';
+import { fromLegacy, isLegacy } from '../src/lib/legacy.ts';
+import { indexJudgments, pairsOf } from '../src/lib/ahp.ts';
+import { normalizePrio } from '../src/lib/prio.ts';
 
 const seed = JSON.parse(readFileSync('prototipos/semilla_priorizacion_ASR.json', 'utf8'));
 const evs = [1, 2, 3, 4].map((i) => ({ id: 'v' + i, name: 'Evaluador ' + i }));

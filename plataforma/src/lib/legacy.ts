@@ -1,7 +1,7 @@
 // Puente con la herramienta HTML (prototipos/): mismo formato de respaldo "v2" (.json y hoja oculta _datos del .xlsx).
-import type { Alternative, Criterion } from './types';
-import type { JIndex, JMap } from './ahp';
-import { blankPrio, normalizePrio, type PrioState } from './prio';
+import type { Alternative, Criterion } from './types.ts';
+import type { JIndex, JMap } from './ahp.ts';
+import { blankPrio, normalizePrio, type PrioState } from './prio.ts';
 
 export type Study = {
   title: string;

@@ -1,4 +1,4 @@
-import type { PrioState } from './prio';
+import type { PrioState } from './prio.ts';
 
 export type Criterion = { id: string; name: string; hint: string; src?: string | null };
 export type Alternative = { id: string; name: string };

@@ -1,9 +1,9 @@
 // Exporta el estudio a un .xlsx con la misma estructura que Ejercicio.xlsx (Notas, Criterios, una hoja por criterio,
 // Síntesis) más las 5 hojas de priorización. Las celdas son fórmulas vivas (GEOMEAN, SUM, AVERAGE, SUMPRODUCT, RANK).
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { aggMatrix, altSheet, analyze, expertMatrix, CRIT_SHEET, synthesis, type Item, type JMap } from './ahp';
-import { toLegacy, type Study } from './legacy';
-import { alive, cols, f2, finalists, inIndep, mean, passes, ranked, scoreOf } from './prio';
+import { aggMatrix, altSheet, analyze, expertMatrix, CRIT_SHEET, synthesis, type Item, type JMap } from './ahp.ts';
+import { toLegacy, type Study } from './legacy.ts';
+import { alive, cols, f2, finalists, inIndep, mean, passes, ranked, scoreOf } from './prio.ts';
 
 const C_P = '8B6CFF', C_P2 = '5B3FCC', C_G = 'D8F5E3', C_GR = '666666';
 const fillP = { patternType: 'solid', fgColor: { rgb: C_P } };

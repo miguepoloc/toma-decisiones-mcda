@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { fromLegacy, isLegacy, type Imported } from './legacy';
+import { fromLegacy, isLegacy, type Imported } from './legacy.ts';
 
 /** Lee un respaldo de la herramienta HTML: .json o el .xlsx descargado (hoja oculta _datos). */
 export async function parseLegacyFile(file: File): Promise<Imported | null> {
