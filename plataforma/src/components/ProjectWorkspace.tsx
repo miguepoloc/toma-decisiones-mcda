@@ -23,8 +23,6 @@ const METHOD_OPTIONS: { key: Method; label: string; desc: string }[] = [
   { key: 'promethee', label: 'PROMETHEE', desc: 'Misma matriz; compara cada par de alternativas criterio por criterio y suma flujos netos.' },
   { key: 'electre', label: 'ELECTRE', desc: 'Misma matriz; no siempre da un ganador único — puede dejar alternativas incomparables entre sí.' },
 ];
-/** Métodos cuyo Excel todavía no tiene hojas propias (arma la estructura de AHP como referencia). */
-const NO_EXCEL_YET: Method[] = ['vikor', 'promethee', 'electre'];
 
 const expertLabel = (e: ExpertRow) => (e.role_desc ? `${e.name} · ${e.role_desc}` : e.name);
 const origin = () => (typeof window === 'undefined' ? '' : window.location.origin);
@@ -309,7 +307,6 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
             <button className="btn primary" type="button" onClick={exportExcel}>Descargar Excel</button>
             <button className="btn" type="button" onClick={exportPrioExcel}>Descargar Excel de priorización</button>
           </div>
-          {NO_EXCEL_YET.includes(project.method) && <p className="muted" style={{ fontSize: 13 }}>El Excel exportado todavía solo arma hojas de AHP y TOPSIS; para {METHOD_OPTIONS.find((m) => m.key === project.method)?.label} los resultados de aquí abajo son la referencia por ahora.</p>}
           <Results criteria={project.criteria} alternatives={project.alternatives} experts={experts.map((e) => ({ id: e.id, label: expertLabel(e) }))} judgments={judgments} method={project.method} decisionMatrix={project.decision_matrix} showPerExpert />
         </div>
       )}
@@ -334,9 +331,7 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
             <p className="muted">
               {project.method === 'ahp'
                 ? 'Excel con la misma estructura del ejercicio del curso: Notas, Criterios, una hoja por criterio y Síntesis.'
-                : project.method === 'topsis'
-                  ? 'Excel con Notas, Criterios, Matriz de decisión y TOPSIS (fórmulas vivas).'
-                  : `Con ${METHOD_OPTIONS.find((m) => m.key === project.method)?.label} el Excel todavía arma la estructura de AHP (no representa la matriz de decisión): usa la pestaña Resultados como referencia mientras se agrega.`}
+                : `Excel con Notas, Criterios, Matriz de decisión y ${METHOD_OPTIONS.find((m) => m.key === project.method)?.label} (fórmulas vivas, con su propio color de acento).`}
               {' '}La priorización de criterios (Sesión 1) es un Excel aparte, para no descargarla siempre que solo hace falta el método.
             </p>
             <div className="acts">

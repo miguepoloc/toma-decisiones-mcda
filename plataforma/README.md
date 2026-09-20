@@ -96,10 +96,13 @@ plataforma/
   la intensidad de Saaty es `|value| + 1`. `sheet` es `crit` o `alt:<id del criterio>`.
 
 ## Qué está verificado y qué no
-Verificado aquí: compila (`next build`), el chequeo de tipos pasa, la matemática AHP da los mismos números que el Excel y la herramienta HTML
-(`npm test`), el Excel exportado tiene las fórmulas y se recalcula igual (`node --experimental-strip-types --no-warnings scripts/check-excel.ts`,
-no estaba enganchado a `npm test` y sus imports relativos rotos hacían que nunca hubiera corrido de verdad hasta el 19-20 sep 2026, ver
-Historial abajo), y la ida y vuelta con el formato de la herramienta HTML funciona. Las rutas protegidas redirigen a `/login`.
+Verificado aquí: compila (`next build`), el chequeo de tipos pasa, la matemática de los 5 métodos da los mismos
+números que sus notebooks de referencia (`npm test`), el Excel de cada método tiene las fórmulas correctas y sus
+valores cacheados coinciden con esa misma matemática (`npm run test:excel`, un `check-excel-<método>.ts` por
+método) y la ida y vuelta con el formato de la herramienta HTML funciona. Para PROMETHEE y ELECTRE, además, se forzó
+un recálculo real en LibreOffice headless (no solo el valor cacheado) antes de dar las fórmulas por buenas — ver
+"Historial de cambios", 20 sep 2026 noche, el hallazgo de `MEDIAN`/`MAX` sobre una expresión-arreglo. Las rutas
+protegidas redirigen a `/login`.
 
 **Ya hay un Supabase real desplegado** (proyecto `hymmznfylafdldfngxcu`, migración `0001_init.sql` ejecutada, variables de entorno
 puestas en local y en Vercel — production, preview y development) y la app corre en producción en
@@ -113,6 +116,26 @@ del SQL (políticas + funciones `SECURITY DEFINER`) se ve correcta, pero eso no 
 
 ## Historial de cambios
 
+**20 sep 2026 (noche, cierre del roadmap de Excel):**
+- **VIKOR, PROMETHEE y ELECTRE ya exportan a Excel con fórmulas vivas** (`vikorSheet()`, `prometheeSheet()`,
+  `electreSheet()` en `excel.ts`) — los 5 métodos tienen su propia hoja ahora, ninguno arma ya la estructura de AHP
+  como referencia. Cada uno verificado en su propio `scripts/check-excel-{vikor,promethee,electre}.ts` contra el
+  mismo caso IoT/Palmor que sus respectivos `check-{vikor,promethee,electre}.ts`.
+- **Hallazgo real, no obvio, que casi pasa sin probarse**: la primera versión de PROMETHEE usaba el truco de Excel
+  `MEDIAN(0,1,rango)` dentro de `SUMPRODUCT` para "recortar" cada elemento de un arreglo a [0,1] sin fórmula
+  matricial (Ctrl+Shift+Enter), y ELECTRE usaba `MAX(expresión-sobre-un-rango)` para la discordancia. Los valores
+  cacheados en el `.xlsx` coincidían perfecto con `prometheeSynthesis()`/`electreSynthesis()` porque esos números
+  los calcula el mismo JS que arma el archivo — pero eso no prueba que la **fórmula** funcione en un motor de hoja
+  de cálculo real. Se forzó un recálculo real abriendo los archivos en LibreOffice en modo headless (con una macro
+  Basic que llama `calculateAll()` y regrabra, sobre unos `.xlsx` de prueba con los valores cacheados
+  deliberadamente arruinados para que solo la fórmula pudiera dar el número correcto) y ambos fallaron: `MEDIAN`
+  y `MAX` no se evalúan elemento a elemento sobre una expresión-arreglo sin entrarse como matricial, dan un
+  agregado sin sentido. Corregido: PROMETHEE ahora arma el recorte con comparaciones y aritmética pura —
+  `(d>0)*(d<1)*d + (d>=1)*1` — que sí vectoriza sin modo matricial (es la misma base del truco SUMPRODUCT de
+  siempre); ELECTRE arma una grilla de "candidato a discordancia" por criterio (una celda real por cada
+  alternativa/alternativa/criterio) y la discordancia final es `MAX()` de esas celdas reales, no de una expresión —
+  el uso más básico de `MAX()`, siempre confiable. Las dos correcciones se reverificaron con el mismo mecanismo de
+  LibreOffice antes de darlas por buenas.
 **20 sep 2026 (noche):**
 - **Excel principal y Excel de priorización, separados**: antes un único `.xlsx` traía siempre las 5 hojas
   "Prior 1-5" (priorización de criterios, Sesión 1) pegadas al método — ahora hay dos botones ("Descargar Excel" /
@@ -202,10 +225,9 @@ aparte (relaciones + tabla de concordancia/discordancia), no como una lista orde
 → ¿qué te importa más?) que termina en uno de los 5 métodos, más tabla comparativa. Enlazado desde landing, tutorial y
 el selector de método del proyecto.
 
-**Falta:** exportar VIKOR/PROMETHEE/ELECTRE a Excel (el botón sigue generando solo hojas de AHP para esos tres,
-avisado en la propia UI y en el mensaje de la pestaña Compartir — **TOPSIS ya tiene su propia hoja**, ver
-"Historial de cambios"), y ANP — la pieza que de verdad requiere un modelo de datos distinto (supermatriz/red de
-dependencias, no una matriz de decisión más), pendiente de una conversación de diseño aparte.
+**Falta:** solo ANP — la pieza que de verdad requiere un modelo de datos distinto (supermatriz/red de dependencias,
+no una matriz de decisión más), pendiente de una conversación de diseño aparte. Los otros 5 métodos ya tienen Excel
+propio con fórmulas vivas y color de acento propio (ver "Historial de cambios", 20 sep 2026 noche).
 
 **Migraciones que hay que tener corridas contra Supabase real:**
 `supabase/migrations/0002_decision_matrix.sql` (agrega `method`/`decision_matrix` a `projects`, actualiza

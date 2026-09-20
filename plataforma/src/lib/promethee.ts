@@ -12,6 +12,14 @@ export type PrometheeResult = {
   phiPlus: number[];
   phiMinus: number[];
   order: number[];
+  /** Detalle intermedio, expuesto para que excel.ts pueda cachear los mismos números que muestran
+   * las fórmulas vivas del .xlsx (ver topsis.ts, mismo patrón). Con Q=0, pref3(d,0,p) = clamp(d/p,0,1)
+   * — es la identidad que usa la hoja de Excel para escribirlo con MEDIAN(0,1,...) en vez de un IF
+   * anidado (que necesitaría entrarse como fórmula matricial). */
+  weights: number[];
+  p: number[]; // umbral P por columna (rango = max-min, o 1 si el rango es 0)
+  g: number[][]; // matriz "dirección beneficio" (=matrix, con las columnas de costo en signo invertido)
+  pi: number[][]; // preferencia de i sobre k, pi[i][i] = 0
 };
 
 /** Función de preferencia Tipo III (V-shape/lineal): 0 si d<=q, 1 si d>=p, lineal entre medio. */
@@ -25,7 +33,7 @@ function pref3(d: number, q: number, p: number): number {
 export function promethee(matrix: number[][], weights: number[], types: MatrixType[]): PrometheeResult {
   const n = matrix.length;
   const m = weights.length;
-  if (n === 0 || m === 0) return { n, phi: [], phiPlus: [], phiMinus: [], order: [] };
+  if (n === 0 || m === 0) return { n, phi: [], phiPlus: [], phiMinus: [], order: [], weights: [], p: [], g: [], pi: [] };
   const wsum = weights.reduce((a, b) => a + b, 0) || 1;
   const w = weights.map((x) => x / wsum);
 
@@ -48,7 +56,7 @@ export function promethee(matrix: number[][], weights: number[], types: MatrixTy
   const phiMinus = Array.from({ length: n }, (_, k) => pi.reduce((a, row) => a + row[k], 0) / Math.max(1, n - 1));
   const phi = phiPlus.map((p1, i) => p1 - phiMinus[i]);
   const order = phi.map((_, i) => i).sort((a, b) => phi[b] - phi[a]);
-  return { n, phi, phiPlus, phiMinus, order };
+  return { n, phi, phiPlus, phiMinus, order, weights: w, p, g, pi };
 }
 
 export type PrometheeSynth = {

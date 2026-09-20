@@ -5,6 +5,9 @@ import { aggMatrix, altSheet, analyze, expertMatrix, CRIT_SHEET, synthesis, type
 import { toLegacy, type Study } from './legacy.ts';
 import { alive, cols, f2, finalists, inIndep, mean, passes, ranked, scoreOf } from './prio.ts';
 import { getCell, getType, topsis } from './topsis.ts';
+import { vikor } from './vikor.ts';
+import { promethee } from './promethee.ts';
+import { electre, electreSynthesis } from './electre.ts';
 import type { Alternative, Criterion, DecisionMatrix, Method } from './types.ts';
 
 // Un color de acento por método (mismas familias que la landing/`sesiones/pptx_theme.py` del curso:
@@ -223,6 +226,246 @@ function topsisSheet(criteria: Criterion[], alternatives: Alternative[], dm: Dec
   return fin(colsW, [{ hpt: 30 }], [{ s: { r: 0, c: 1 }, e: { r: 0, c: cRk } }]);
 }
 
+/** VIKOR con fórmulas vivas: mismo peso e ideal mejor/peor (f* / f-) por columna que TOPSIS (misma
+ * definición type-aware, ver vikor.ts), aporte ponderado por criterio, S (suma de aportes), R (máximo
+ * aporte), Q (compromiso, v=0.5 fijo — convención del curso, sin UI para cambiarlo). MENOR Q es mejor,
+ * al revés que la cercanía Ci de TOPSIS. Verificado en check-excel-vikor.ts. */
+function vikorSheet(criteria: Criterion[], alternatives: Alternative[], dm: DecisionMatrix, weights: number[], matInfo: MatInfo, matName: string, critInfo: { rN0: number; vc: number }) {
+  const m = criteria.length, n = alternatives.length, { put, fin } = W();
+  const matrix = alternatives.map((a) => criteria.map((c) => getCell(dm, a.id, c.id) ?? 0));
+  const types = criteria.map((c) => getType(dm, c.id));
+  const r = vikor(matrix, weights, types);
+  const rHead = 2, rW = 3, rBest = 4, rWorst = 5, rV0 = 6;
+  const rSmin = rV0 + n, rSmax = rSmin + 1, rRmin = rSmax + 1, rRmax = rRmin + 1;
+  const cS = m + 1, cR = m + 2, cQ = m + 3, cRk = m + 4;
+  const MN = qs(matName), last = colL(m);
+  put(1, 0, 'VIKOR — solución de compromiso', { s: stl.title });
+  put(1, 1, 'S = utilidad de grupo (suma del aporte ponderado de cada criterio), R = arrepentimiento individual (el mayor aporte de un solo criterio), Q = compromiso (v=0.5). MENOR Q es mejor. Peso de cada criterio: hoja Criterios.', { s: stl.note });
+  put(rHead, 0, 'Alternativa', { s: stl.hdrL });
+  criteria.forEach((c, j) => put(rHead, 1 + j, c.name, { s: stl.hdr }));
+  put(rHead, cS, 'S', { s: stl.hdr }); put(rHead, cR, 'R', { s: stl.hdr });
+  put(rHead, cQ, 'Q', { s: stl.hdr }); put(rHead, cRk, 'Ranking', { s: stl.hdr });
+  put(rW, 0, 'Peso (hoja Criterios)', { s: stl.b });
+  criteria.forEach((_, j) => put(rW, 1 + j, r.weights[j], { f: `Criterios!${colL(critInfo.vc)}${critInfo.rN0 + j}`, z: '0.0000' }));
+  put(rBest, 0, 'Mejor por columna (f*)', { s: stl.b });
+  put(rWorst, 0, 'Peor por columna (f-)', { s: stl.b });
+  criteria.forEach((_, j) => {
+    const L = colL(1 + j), rng = `${L}${matInfo.rData0}:${L}${matInfo.rData0 + n - 1}`, typeCell = `${MN}${L}$${matInfo.rType}`;
+    put(rBest, 1 + j, r.best[j], { f: `IF(${typeCell}="Costo",MIN(${MN}${rng}),MAX(${MN}${rng}))`, z: '0.0000' });
+    put(rWorst, 1 + j, r.worst[j], { f: `IF(${typeCell}="Costo",MAX(${MN}${rng}),MIN(${MN}${rng}))`, z: '0.0000' });
+  });
+  alternatives.forEach((a, i) => {
+    const rr = rV0 + i;
+    put(rr, 0, a.name, { s: stl.hdrL });
+    criteria.forEach((_, j) => {
+      const L = colL(1 + j);
+      put(rr, 1 + j, r.contrib[i][j], { f: `IFERROR(${L}$${rW}*(${L}$${rBest}-${MN}${L}${matInfo.rData0 + i})/(${L}$${rBest}-${L}$${rWorst}),0)`, z: '0.0000' });
+    });
+    put(rr, cS, r.s[i], { f: `SUM(B${rr}:${last}${rr})`, z: '0.0000' });
+    put(rr, cR, r.r[i], { f: `MAX(B${rr}:${last}${rr})`, z: '0.0000' });
+    put(rr, cQ, r.q[i], {
+      f: `0.5*IFERROR((${colL(cS)}${rr}-$B$${rSmin})/($B$${rSmax}-$B$${rSmin}),0)+0.5*IFERROR((${colL(cR)}${rr}-$B$${rRmin})/($B$${rRmax}-$B$${rRmin}),0)`,
+      s: stl.key, z: '0.0000',
+    });
+    put(rr, cRk, 1 + r.order.indexOf(i), { f: `RANK(${colL(cQ)}${rr},${colL(cQ)}$${rV0}:${colL(cQ)}$${rV0 + n - 1},1)`, s: stl.c });
+  });
+  put(rSmin, 0, 'S mínimo (para Q)'); put(rSmin, 1, Math.min(...r.s), { f: `MIN(${colL(cS)}${rV0}:${colL(cS)}${rV0 + n - 1})`, z: '0.0000' });
+  put(rSmax, 0, 'S máximo (para Q)'); put(rSmax, 1, Math.max(...r.s), { f: `MAX(${colL(cS)}${rV0}:${colL(cS)}${rV0 + n - 1})`, z: '0.0000' });
+  put(rRmin, 0, 'R mínimo (para Q)'); put(rRmin, 1, Math.min(...r.r), { f: `MIN(${colL(cR)}${rV0}:${colL(cR)}${rV0 + n - 1})`, z: '0.0000' });
+  put(rRmax, 0, 'R máximo (para Q)'); put(rRmax, 1, Math.max(...r.r), { f: `MAX(${colL(cR)}${rV0}:${colL(cR)}${rV0 + n - 1})`, z: '0.0000' });
+  const g = rRmax + 2, top = alternatives[r.order[0]], tie = n < 2 || Math.max(...r.q) - Math.min(...r.q) < 1e-9;
+  put(g, 0, 'Ganador', { s: stl.gain });
+  put(g, 1, tie ? 'Empate (sin datos)' : top?.name ?? '', { f: `INDEX(A${rV0}:A${rV0 + n - 1},MATCH(MIN(${colL(cQ)}${rV0}:${colL(cQ)}${rV0 + n - 1}),${colL(cQ)}${rV0}:${colL(cQ)}${rV0 + n - 1},0))`, s: stl.gkey });
+  put(g, 2, 'con Q de');
+  put(g, 3, r.q[r.order[0]] ?? 0, { f: `MIN(${colL(cQ)}${rV0}:${colL(cQ)}${rV0 + n - 1})`, z: '0.0000' });
+  const colsW = [30, ...Array.from({ length: Math.max(m, 1) }, () => 16), 14, 14, 14, 12];
+  return fin(colsW, [{ hpt: 30 }], [{ s: { r: 0, c: 1 }, e: { r: 0, c: cRk } }]);
+}
+
+/** PROMETHEE II con fórmulas vivas: matriz "dirección beneficio" g (columnas de costo invertidas, así
+ * "mayor siempre es mejor"), P = rango por columna (Q=0, sin umbral de indiferencia — mismo criterio
+ * que promethee.ts), matriz de preferencia pi[i][k] (i vs k) y flujos phi+/phi-/neto. Con Q=0 la
+ * función de preferencia Tipo III es un simple clamp a [0,1] de (dif/P); la fórmula lo arma con
+ * comparaciones y aritmética pura — (d>0)*(d<1)*d + (d>=1)*1 — en vez de IF()/MEDIAN() envolviendo el
+ * rango: funciones aplicadas a un rango completo necesitan entrarse como fórmula matricial
+ * (Ctrl+Shift+Enter) para evaluar elemento a elemento, y sin eso Excel/LibreOffice las trata como
+ * agregado y da un número sin sentido — comprobado aquí mismo con LibreOffice en modo headless
+ * forzando el recálculo real (no solo el valor cacheado) antes de elegir esta forma. Los operadores de
+ * comparación (>,<,>=) y aritméticos si vectorizan sobre un rango sin necesitar modo matricial, que es
+ * la base del truco SUMPRODUCT de siempre. Verificado en check-excel-promethee.ts. */
+function prometheeSheet(criteria: Criterion[], alternatives: Alternative[], dm: DecisionMatrix, weights: number[], matInfo: MatInfo, matName: string, critInfo: { rN0: number; vc: number }) {
+  const m = criteria.length, n = alternatives.length, { put, fin } = W();
+  const matrix = alternatives.map((a) => criteria.map((c) => getCell(dm, a.id, c.id) ?? 0));
+  const types = criteria.map((c) => getType(dm, c.id));
+  const r = promethee(matrix, weights, types);
+  const rHead = 2, rP = 3, rW = 4, rG0 = 5, rPiHead = rG0 + n + 1, rPi0 = rPiHead + 1;
+  const cPhiP = n + 1, cPhiM = n + 2, cPhi = n + 3, cRk = n + 4;
+  const MN = qs(matName), lastCrit = colL(m), denom = Math.max(1, n - 1);
+  put(1, 0, 'PROMETHEE II — flujos de preferencia', { s: stl.title });
+  put(1, 1, 'g convierte cada criterio a "mayor es mejor" (invierte los de costo). P = rango de cada criterio (max-min). pi[i,k] = preferencia de i sobre k, entre 0 y 1. Phi+ = cuánto supera i al resto; Phi- = cuánto lo superan; Phi neto = Phi+ - Phi-, mayor es mejor.', { s: stl.note });
+  put(rHead, 0, 'Alternativa', { s: stl.hdrL });
+  criteria.forEach((c, j) => put(rHead, 1 + j, c.name, { s: stl.hdr }));
+  put(rP, 0, 'P (rango del criterio)', { s: stl.b });
+  put(rW, 0, 'Peso (hoja Criterios)', { s: stl.b });
+  criteria.forEach((_, j) => {
+    const L = colL(1 + j), rng = `${MN}${L}${matInfo.rData0}:${L}${matInfo.rData0 + n - 1}`;
+    put(rP, 1 + j, r.p[j], { f: `IF(MAX(${rng})-MIN(${rng})=0,1,MAX(${rng})-MIN(${rng}))`, z: '0.0000' });
+    put(rW, 1 + j, r.weights[j], { f: `Criterios!${colL(critInfo.vc)}${critInfo.rN0 + j}`, z: '0.0000' });
+  });
+  alternatives.forEach((a, i) => {
+    put(rG0 + i, 0, a.name, { s: stl.hdrL });
+    criteria.forEach((_, j) => {
+      const L = colL(1 + j), typeCell = `${MN}${L}$${matInfo.rType}`;
+      put(rG0 + i, 1 + j, r.g[i][j], { f: `IF(${typeCell}="Costo",-1,1)*${MN}${L}${matInfo.rData0 + i}`, z: '0.0000' });
+    });
+  });
+  put(rPiHead, 0, 'i (fila) vs k (columna)', { s: stl.hdrL });
+  alternatives.forEach((a, k) => put(rPiHead, 1 + k, a.name, { s: stl.hdr }));
+  put(rPiHead, cPhiP, 'Phi+', { s: stl.hdr }); put(rPiHead, cPhiM, 'Phi-', { s: stl.hdr });
+  put(rPiHead, cPhi, 'Phi neto', { s: stl.hdr }); put(rPiHead, cRk, 'Ranking', { s: stl.hdr });
+  alternatives.forEach((a, i) => {
+    const rr = rPi0 + i, gi = `${rG0 + i}`;
+    put(rr, 0, a.name, { s: stl.hdrL });
+    alternatives.forEach((_, k) => {
+      if (i === k) { put(rr, 1 + k, 0, { s: stl.c, z: '0.0000' }); return; }
+      const gk = `${rG0 + k}`;
+      const d = `((B${gi}:${lastCrit}${gi}-B${gk}:${lastCrit}${gk})/$B$${rP}:$${lastCrit}$${rP})`;
+      put(rr, 1 + k, r.pi[i][k], {
+        f: `SUMPRODUCT($B$${rW}:$${lastCrit}$${rW},(${d}>0)*(${d}<1)*${d}+(${d}>=1)*1)`,
+        s: stl.c, z: '0.0000',
+      });
+    });
+    const last = colL(n);
+    put(rr, cPhiP, r.phiPlus[i], { f: `SUM(B${rr}:${last}${rr})/${denom}`, z: '0.0000' });
+    put(rr, cPhiM, r.phiMinus[i], { f: `SUM(${colL(1 + i)}${rPi0}:${colL(1 + i)}${rPi0 + n - 1})/${denom}`, z: '0.0000' });
+    put(rr, cPhi, r.phi[i], { f: `${colL(cPhiP)}${rr}-${colL(cPhiM)}${rr}`, s: stl.key, z: '0.0000' });
+    put(rr, cRk, 1 + r.order.indexOf(i), { f: `RANK(${colL(cPhi)}${rr},${colL(cPhi)}$${rPi0}:${colL(cPhi)}$${rPi0 + n - 1})`, s: stl.c });
+  });
+  const g = rPi0 + n + 1, top = alternatives[r.order[0]], tie = n < 2 || Math.max(...r.phi) - Math.min(...r.phi) < 1e-9;
+  put(g, 0, 'Ganador', { s: stl.gain });
+  put(g, 1, tie ? 'Empate (sin datos)' : top?.name ?? '', { f: `INDEX(A${rPi0}:A${rPi0 + n - 1},MATCH(MAX(${colL(cPhi)}${rPi0}:${colL(cPhi)}${rPi0 + n - 1}),${colL(cPhi)}${rPi0}:${colL(cPhi)}${rPi0 + n - 1},0))`, s: stl.gkey });
+  put(g, 2, 'con flujo neto de');
+  put(g, 3, r.phi[r.order[0]] ?? 0, { f: `MAX(${colL(cPhi)}${rPi0}:${colL(cPhi)}${rPi0 + n - 1})`, z: '0.0000' });
+  const colsW = [30, ...Array.from({ length: Math.max(m, n, 1) }, () => 16), 12, 12, 12, 12];
+  return fin(colsW, [{ hpt: 30 }], [{ s: { r: 0, c: 1 }, e: { r: 0, c: Math.max(m, cRk) } }]);
+}
+
+/** ELECTRE I con fórmulas vivas: misma matriz "dirección beneficio" g y rango P que PROMETHEE.
+ * Concordancia[i,k] = peso acumulado de los criterios donde i es al menos tan bueno como k (g_i>=g_k);
+ * eso sí es un SUMPRODUCT normal sobre rangos (--(rango>=rango)), confiable. Discordancia[i,k] = mayor
+ * objeción normalizada, y "mayor" es un MAX — a diferencia de SUM/SUMPRODUCT, MAX() envolviendo una
+ * expresión-arreglo (en vez de celdas de verdad) NO se evalúa elemento a elemento en Excel/LibreOffice
+ * sin entrarse como fórmula matricial (comprobado aquí con LibreOffice headless forzando el recálculo
+ * real). Por eso primero se arma una grilla de "candidato a discordancia" POR CRITERIO (celda real por
+ * cada (i,k,criterio)), y la discordancia final es MAX de esas celdas reales — un MAX de números
+ * sueltos, no de un rango ni de una expresión, la forma más básica y confiable de usarlo. "Relación"
+ * marca Sí cuando concordancia>=c* y discordancia<=d* (i != k) — puede quedar incomparable, ELECTRE no
+ * da un ranking (ver electre.ts). La superación neta (para intuición, no un ranking real) se calcula
+ * directamente de las grillas de concordancia/discordancia, no de la grilla "Relación" (que es texto):
+ * la diagonal (i=k) siempre cumple concordancia=1/discordancia=0 en la aritmética cruda, pero se cancela
+ * sola al restar superaciones-a-favor menos superaciones-en-contra. Verificado en check-excel-electre.ts. */
+function electreSheet(criteria: Criterion[], alternatives: Alternative[], dm: DecisionMatrix, weights: number[], matInfo: MatInfo, matName: string, critInfo: { rN0: number; vc: number }) {
+  const m = criteria.length, n = alternatives.length, { put, fin } = W();
+  const matrix = alternatives.map((a) => criteria.map((c) => getCell(dm, a.id, c.id) ?? 0));
+  const types = criteria.map((c) => getType(dm, c.id));
+  const r = electre(matrix, weights, types);
+  const syn = electreSynthesis(criteria, alternatives, dm, weights);
+  const rHead = 2, rP = 3, rW = 4, rG0 = 5;
+  const rConHead = rG0 + n + 1, rCon0 = rConHead + 1;
+  // Discordancia por criterio, una grilla n×n por cada uno, ANTES de la grilla combinada: MAX() solo
+  // es confiable sobre celdas reales (aquí, una por criterio), no sobre una expresión-arreglo armada
+  // en la misma fórmula — ver la nota de arriba, comprobado con LibreOffice en modo headless.
+  const rDisCritHead = criteria.map((_, j) => rCon0 + n + 1 + j * (n + 2));
+  const rDisCrit0 = rDisCritHead.map((rh) => rh + 1);
+  const rDisHead = rDisCritHead[m - 1] + n + 2, rDis0 = rDisHead + 1;
+  const rRelHead = rDis0 + n + 1, rRel0 = rRelHead + 1;
+  const MN = qs(matName), lastCrit = colL(m), lastAlt = colL(n), cNet = n + 1;
+  put(1, 0, 'ELECTRE I — relación de superación', { s: stl.title });
+  put(1, 1, `g convierte cada criterio a "mayor es mejor". Concordancia[i,k]: peso de los criterios donde i >= k. Discordancia[i,k]: mayor objeción normalizada a que i supere a k. i supera a k si concordancia >= c* (${r.cStar}) y discordancia <= d* (${r.dStar}) — puede no haber relación en ningún sentido (incomparables), ELECTRE no da un ranking.`, { s: stl.note });
+  put(rHead, 0, 'Alternativa', { s: stl.hdrL });
+  criteria.forEach((c, j) => put(rHead, 1 + j, c.name, { s: stl.hdr }));
+  put(rP, 0, 'P (rango del criterio)', { s: stl.b });
+  put(rW, 0, 'Peso (hoja Criterios)', { s: stl.b });
+  criteria.forEach((_, j) => {
+    const L = colL(1 + j), rng = `${MN}${L}${matInfo.rData0}:${L}${matInfo.rData0 + n - 1}`;
+    put(rP, 1 + j, r.ranges[j], { f: `IF(MAX(${rng})-MIN(${rng})=0,1,MAX(${rng})-MIN(${rng}))`, z: '0.0000' });
+    put(rW, 1 + j, r.weights[j], { f: `Criterios!${colL(critInfo.vc)}${critInfo.rN0 + j}`, z: '0.0000' });
+  });
+  alternatives.forEach((a, i) => {
+    put(rG0 + i, 0, a.name, { s: stl.hdrL });
+    criteria.forEach((_, j) => {
+      const L = colL(1 + j), typeCell = `${MN}${L}$${matInfo.rType}`;
+      put(rG0 + i, 1 + j, r.g[i][j], { f: `IF(${typeCell}="Costo",-1,1)*${MN}${L}${matInfo.rData0 + i}`, z: '0.0000' });
+    });
+  });
+  const gridHead = (rh: number, label: string) => {
+    put(rh, 0, label, { s: stl.hdrL });
+    alternatives.forEach((a, k) => put(rh, 1 + k, a.name, { s: stl.hdr }));
+  };
+  gridHead(rConHead, 'Concordancia i \\ k');
+  alternatives.forEach((a, i) => {
+    const rr = rCon0 + i, gi = rG0 + i;
+    put(rr, 0, a.name, { s: stl.hdrL });
+    alternatives.forEach((_, k) => {
+      if (i === k) { put(rr, 1 + k, 1, { s: stl.c, z: '0.0000' }); return; }
+      const gk = rG0 + k;
+      put(rr, 1 + k, r.concordance[i][k], { f: `SUMPRODUCT($B$${rW}:$${lastCrit}$${rW},--(B${gi}:${lastCrit}${gi}>=B${gk}:${lastCrit}${gk}))`, s: stl.c, z: '0.0000' });
+    });
+  });
+  // Objeción de cada criterio por separado (candidato a discordancia): una celda real por (i,k,j), no
+  // un rango — así el MAX() final de más abajo es MAX de celdas de verdad, no de una expresión.
+  criteria.forEach((c, j) => {
+    gridHead(rDisCritHead[j], `Discordancia — ${c.name}`);
+    const L = colL(1 + j);
+    alternatives.forEach((a, i) => {
+      const rr = rDisCrit0[j] + i, giCell = `${L}${rG0 + i}`;
+      put(rr, 0, a.name, { s: stl.hdrL });
+      alternatives.forEach((_, k) => {
+        if (i === k) { put(rr, 1 + k, 0, { s: stl.c, z: '0.0000' }); return; }
+        const gkCell = `${L}${rG0 + k}`, pCell = `${L}$${rP}`;
+        const cand = r.g[k][j] > r.g[i][j] ? Math.abs(r.g[k][j] - r.g[i][j]) / r.ranges[j] : 0;
+        put(rr, 1 + k, cand, { f: `(${gkCell}>${giCell})*ABS(${gkCell}-${giCell})/${pCell}`, s: stl.c, z: '0.0000' });
+      });
+    });
+  });
+  gridHead(rDisHead, 'Discordancia i \\ k (máximo de los criterios de arriba)');
+  alternatives.forEach((a, i) => {
+    const rr = rDis0 + i;
+    put(rr, 0, a.name, { s: stl.hdrL });
+    alternatives.forEach((_, k) => {
+      if (i === k) { put(rr, 1 + k, 0, { s: stl.c, z: '0.0000' }); return; }
+      const cells = criteria.map((_, j) => colL(1 + k) + (rDisCrit0[j] + i));
+      put(rr, 1 + k, r.discordance[i][k], { f: `MAX(${cells.join(',')})`, s: stl.c, z: '0.0000' });
+    });
+  });
+  put(rRelHead, 0, 'Relación i \\ k', { s: stl.hdrL });
+  alternatives.forEach((a, k) => put(rRelHead, 1 + k, a.name, { s: stl.hdr }));
+  put(rRelHead, cNet, 'Superación neta', { s: stl.hdr });
+  alternatives.forEach((a, i) => {
+    const rr = rRel0 + i, conRow = rCon0 + i, disRow = rDis0 + i;
+    put(rr, 0, a.name, { s: stl.hdrL });
+    alternatives.forEach((_, k) => {
+      if (i === k) { put(rr, 1 + k, '', { s: stl.c }); return; }
+      const cCell = colL(1 + k) + conRow, dCell = colL(1 + k) + disRow;
+      put(rr, 1 + k, r.outranks[i][k] ? 'Sí' : '', { f: `IF(AND(${cCell}>=${r.cStar},${dCell}<=${r.dStar}),"Sí","")`, s: stl.c });
+    });
+    put(rr, cNet, syn.netOutdegree[i], {
+      f: `SUMPRODUCT((B${conRow}:${lastAlt}${conRow}>=${r.cStar})*(B${disRow}:${lastAlt}${disRow}<=${r.dStar}))-SUMPRODUCT((${colL(1 + i)}${rCon0}:${colL(1 + i)}${rCon0 + n - 1}>=${r.cStar})*(${colL(1 + i)}${rDis0}:${colL(1 + i)}${rDis0 + n - 1}<=${r.dStar}))`,
+      s: stl.key, z: '0',
+    });
+  });
+  const rRelSum = rRel0 + n, tie = syn.relations.length === 0 && syn.incomparable.length === 0 && n > 1;
+  put(rRelSum, 0, 'Relaciones (i supera a k)', { s: stl.b12 });
+  if (syn.relations.length) syn.relations.forEach((rel, i) => put(rRelSum + 1 + i, 0, `${rel.winner} supera a ${rel.loser}`, { s: stl.wrap }));
+  else put(rRelSum + 1, 0, tie ? 'Sin datos suficientes todavía.' : 'Ninguna alternativa supera a otra con estos umbrales.', { s: stl.wrap });
+  const rInc = rRelSum + 2 + syn.relations.length;
+  put(rInc, 0, 'Pares incomparables (ninguna supera a la otra)', { s: stl.b12 });
+  if (syn.incomparable.length) syn.incomparable.forEach(([x, y], i) => put(rInc + 1 + i, 0, `${x} — ${y}`, { s: stl.wrap }));
+  else put(rInc + 1, 0, 'Ninguno: cada par tiene relación en algún sentido.', { s: stl.wrap });
+  const colsW = [30, ...Array.from({ length: Math.max(m, n, 1) }, () => 16)];
+  return fin(colsW, [{ hpt: 30 }], [{ s: { r: 0, c: 1 }, e: { r: 0, c: Math.max(m, n) } }]);
+}
+
 /** Excel principal del estudio: Notas, Criterios y las hojas del método elegido, más el respaldo
  * oculto `_datos`. La priorización de criterios (Sesión 1) vive en un .xlsx aparte — buildPrioWorkbook()
  * más abajo — para no forzar su descarga cada vez que solo hace falta el método. */
@@ -232,7 +475,7 @@ export function buildWorkbook(XLSX: any, study: Study) {
   const ex = study.experts.map((e) => e.role_desc || e.name);
   const expertIds = study.experts.map((e) => e.id);
   const S = study;
-  const res = ['Notas', 'Criterios', 'Síntesis', 'Matriz de decisión', 'TOPSIS', '_datos'];
+  const res = ['Notas', 'Criterios', 'Síntesis', 'Matriz de decisión', 'TOPSIS', 'VIKOR', 'PROMETHEE', 'ELECTRE', '_datos'];
   res.forEach((x) => used.add(x.toLowerCase()));
   const sname = (n: string) => {
     const b = String(n).replace(/[[\]:*?/\\]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 28) || 'Hoja';
@@ -243,13 +486,14 @@ export function buildWorkbook(XLSX: any, study: Study) {
   };
   const add = (name: string, ws: any) => XLSX.utils.book_append_sheet(wb, ws, name);
   const mapsFor = (sheet: string): JMap[] => expertIds.map((e) => S.idx[e]?.[sheet] ?? {});
-  const isTopsis = S.method === 'topsis';
+  const MATRIX_SHEET_NAME: Partial<Record<Method, string>> = { topsis: 'TOPSIS', vikor: 'VIKOR', promethee: 'PROMETHEE', electre: 'ELECTRE' };
+  const isMatrixMethod = S.method in MATRIX_SHEET_NAME;
 
   { // Notas
     const { put, fin } = W();
-    const ord = (isTopsis ? ['Notas', 'Criterios', 'Matriz de decisión', 'TOPSIS'] : ['Notas', 'Criterios', ...S.criteria.map((c) => c.name), 'Síntesis']).join(' → ');
-    const usoTxt = isTopsis
-      ? 'Cómo usarlo: la hoja Criterios pesa los criterios con juicios por pares, igual que en AHP. «Matriz de decisión» trae el valor real de cada alternativa por criterio y si es beneficio o costo. «TOPSIS» normaliza, pondera con esos pesos, calcula el ideal mejor/peor y la cercanía relativa Ci de cada alternativa. Las celdas con GEOMEAN, SUMSQ, SUMPRODUCT, RANK, etc. son fórmulas vivas: si cambias un juicio o un valor, todo se recalcula.'
+    const ord = (isMatrixMethod ? ['Notas', 'Criterios', 'Matriz de decisión', MATRIX_SHEET_NAME[S.method]] : ['Notas', 'Criterios', ...S.criteria.map((c) => c.name), 'Síntesis']).join(' → ');
+    const usoTxt = isMatrixMethod
+      ? `Cómo usarlo: la hoja Criterios pesa los criterios con juicios por pares, igual que en AHP. «Matriz de decisión» trae el valor real de cada alternativa por criterio y si es beneficio o costo. «${MATRIX_SHEET_NAME[S.method]}» ranquea las alternativas con esos pesos y esos datos (ver su propia nota, arriba de cada hoja, para el detalle del método). Las celdas con SUMPRODUCT, SUMSQ, RANK, etc. son fórmulas vivas: si cambias un juicio o un valor, todo se recalcula.`
       : 'Cómo usarlo: la hoja Criterios es una matriz de juicios por pares que pesa los criterios; le sigue una matriz de comparación de las alternativas por cada criterio, y la Síntesis combina peso × prioridad local en el resultado final. Las celdas con GEOMEAN, SUM, AVERAGE, SUMPRODUCT y RANK son fórmulas vivas: si cambias un juicio individual, todo se recalcula.';
     const lines: [string, any][] = [
       [S.title || 'Estudio MCDA', stl.title],
@@ -271,11 +515,16 @@ export function buildWorkbook(XLSX: any, study: Study) {
   // el método elegido para comparar las alternativas — ver CLAUDE.md § "Visión multicriterio".
   const critInfo = ahpSheet(S.criteria, mapsFor(CRIT_SHEET), ex, 'AHP, Criterios', 'Media geométrica de los expertos (Forman & Peniwati, 1998); ver juicios individuales más abajo. Objetivo: ' + S.objective);
   add('Criterios', critInfo.ws);
-  if (S.method === 'topsis') {
+  if (isMatrixMethod) {
     const matInfo = matrixSheet(S.criteria, S.alternatives, S.decisionMatrix, 'Matriz de decisión',
       'Valores reales por alternativa y criterio, tal como los cargaste en la plataforma. "Tipo" indica si más es mejor (Beneficio) o menos es mejor (Costo).');
     add('Matriz de decisión', matInfo.ws);
-    add('TOPSIS', topsisSheet(S.criteria, S.alternatives, S.decisionMatrix, critInfo.w, matInfo, 'Matriz de decisión', critInfo));
+    const args = [S.criteria, S.alternatives, S.decisionMatrix, critInfo.w, matInfo, 'Matriz de decisión', critInfo] as const;
+    const sheet = S.method === 'topsis' ? topsisSheet(...args)
+      : S.method === 'vikor' ? vikorSheet(...args)
+        : S.method === 'promethee' ? prometheeSheet(...args)
+          : electreSheet(...args);
+    add(MATRIX_SHEET_NAME[S.method]!, sheet);
   } else {
     const alts = S.criteria.map((c) => {
       const nm = sname(c.name);

@@ -82,16 +82,20 @@ navegador desde los datos guardados (`decision_matrix` en `projects`, migracione
 `main`, Working directory `plataforma` + Deploy to production activado, ya no hace falta pegarlas a mano). Asistente
 "¿qué método uso?" en `/metodo` (árbol de 3 preguntas, con los colores de familia reales del curso — violeta
 comparación por pares, verde-azulado distancia al ideal, magenta sobreclasificación — tomados de
-`sesiones/pptx_theme.py` del docente). **Excel**: AHP y, desde el 20 sep 2026 (tarde), TOPSIS tienen hojas propias con
-fórmulas vivas (`matrixSheet()`/`topsisSheet()` en `excel.ts`), cada método con su propio color de acento
-(`METHOD_COLOR` — ya no todos violeta); VIKOR/PROMETHEE/ELECTRE todavía arman la estructura de AHP como referencia,
-avisado en la UI. La priorización de criterios (Sesión 1, Prior 1-5) es, desde el 20 sep 2026 (noche), un Excel
+`sesiones/pptx_theme.py` del docente). **Excel**: los 5 métodos tienen hoja propia con fórmulas vivas
+(`{ahp,matrix,topsis,vikor,promethee,electre}Sheet()` en `excel.ts`) y su propio color de acento (`METHOD_COLOR`).
+Para PROMETHEE y ELECTRE, la primera versión usaba `MEDIAN(0,1,…)`/`MAX(…)` envolviendo una expresión-arreglo dentro
+de `SUMPRODUCT` — se ve bien en la app porque el valor cacheado lo calcula el mismo JS que arma el archivo, pero un
+recálculo real en LibreOffice headless (macro `calculateAll()`, valores cacheados arruinados a propósito) demostró
+que la fórmula en sí NO se evalúa elemento a elemento sin modo matricial; corregido con aritmética pura
+(`(d>0)*(d<1)*d+(d>=1)*1`) en PROMETHEE y una grilla de discordancia por criterio (celdas reales, no expresión) para
+que el `MAX()` de ELECTRE sea de números sueltos. La priorización de criterios (Sesión 1, Prior 1-5) es un Excel
 aparte (`buildPrioWorkbook()`) en vez de venir siempre pegada al del método — el respaldo `_datos` para reimportar
-sigue viviendo solo en el Excel del método. Falta: **ANP** (Sesión 6 — generaliza el paso de PESOS a una red con
-dependencias, no encaja en el patrón de matriz de decisión de los otros 4, necesita su propia conversación de diseño
-antes de tocar código), exportar VIKOR/PROMETHEE/ELECTRE a Excel, y la extensión Fuzzy (el temario la trata como
-"enriquecimiento" sobre cualquier método, no un método aparte). Detalle completo en `plataforma/README.md` § "Visión:
-plataforma multicriterio completa".
+sigue viviendo solo en el Excel del método. Falta: solo **ANP** (Sesión 6 — generaliza el paso de PESOS a una red
+con dependencias, no encaja en el patrón de matriz de decisión de los otros 4, necesita su propia conversación de
+diseño antes de tocar código) y la extensión Fuzzy (el temario la trata como "enriquecimiento" sobre cualquier
+método, no un método aparte). Detalle completo en `plataforma/README.md` § "Visión: plataforma multicriterio
+completa".
 
 ### Artefactos publicados en claude.ai (privados, del propietario de la sesión)
 Priorizador de criterios (`Tu8BSq5BvgYRwjdxcd9k3o`), MCDA para ASR con datos de Harold (`9dKxsYtKh7P1m27RUnEYSr`) y plantilla en blanco (`KULzPjwGLgGk562R2fQtgy`). El estado de cada uno vive en el `localStorage` de su propio origen; no se comparte entre ellos.

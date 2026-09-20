@@ -11,12 +11,18 @@ export type VikorResult = {
   r: number[]; // arrepentimiento individual por alternativa
   q: number[]; // compromiso; MENOR es mejor (a diferencia de TOPSIS, donde mayor es mejor)
   order: number[]; // índices ordenados de mejor (Q menor) a peor
+  /** Detalle intermedio, expuesto para que excel.ts pueda cachear los mismos números que muestran
+   * las fórmulas vivas del .xlsx (ver topsis.ts, mismo patrón). */
+  weights: number[];
+  best: number[]; // f* por columna
+  worst: number[]; // f- por columna
+  contrib: number[][]; // aporte ponderado de cada alternativa/criterio a S (y de donde sale R = max de la fila)
 };
 
 export function vikor(matrix: number[][], weights: number[], types: MatrixType[], v = 0.5): VikorResult {
   const n = matrix.length;
   const m = weights.length;
-  if (n === 0 || m === 0) return { n, s: [], r: [], q: [], order: [] };
+  if (n === 0 || m === 0) return { n, s: [], r: [], q: [], order: [], weights: [], best: [], worst: [], contrib: [] };
   const wsum = weights.reduce((a, b) => a + b, 0) || 1;
   const w = weights.map((x) => x / wsum);
 
@@ -45,7 +51,7 @@ export function vikor(matrix: number[][], weights: number[], types: MatrixType[]
     return v * sPart + (1 - v) * rPart;
   });
   const order = q.map((_, i) => i).sort((a, b) => q[a] - q[b]);
-  return { n, s, r, q, order };
+  return { n, s, r, q, order, weights: w, best, worst, contrib };
 }
 
 export type VikorSynth = {

@@ -15,12 +15,19 @@ export type ElectreResult = {
   outranks: boolean[][]; // outranks[i][k] = true si i supera a k (concordance>=cStar y discordance<=dStar)
   cStar: number;
   dStar: number;
+  /** Detalle intermedio, expuesto para que excel.ts pueda cachear los mismos números que muestran
+   * las fórmulas vivas del .xlsx (ver topsis.ts, mismo patrón). g es la misma matriz "dirección
+   * beneficio" que usa promethee.ts: en espacio g, "mayor siempre es mejor" sin importar
+   * beneficio/costo, lo que deja concordance/discordance como comparaciones simples (>=, diferencia). */
+  weights: number[];
+  ranges: number[]; // rango por columna (max-min, o 1 si es 0), usado para normalizar la discordancia
+  g: number[][];
 };
 
 export function electre(matrix: number[][], weights: number[], types: MatrixType[], cStar = 0.65, dStar = 0.30): ElectreResult {
   const n = matrix.length;
   const m = weights.length;
-  if (n === 0 || m === 0) return { n, concordance: [], discordance: [], outranks: [], cStar, dStar };
+  if (n === 0 || m === 0) return { n, concordance: [], discordance: [], outranks: [], cStar, dStar, weights: [], ranges: [], g: [] };
   const wsum = weights.reduce((a, b) => a + b, 0) || 1;
   const w = weights.map((x) => x / wsum);
 
@@ -29,6 +36,7 @@ export function electre(matrix: number[][], weights: number[], types: MatrixType
     const col = colOf(j);
     return Math.max(...col) - Math.min(...col) || 1;
   });
+  const g = matrix.map((row) => row.map((x, j) => (types[j] === 'min' ? -x : x)));
   const betterOrEqual = (a: number, b: number, j: number) => (types[j] === 'min' ? a <= b : a >= b);
   const strictlyBetter = (a: number, b: number, j: number) => (types[j] === 'min' ? a < b : a > b);
 
@@ -52,7 +60,7 @@ export function electre(matrix: number[][], weights: number[], types: MatrixType
   }));
 
   const outranks = concordance.map((row, i) => row.map((c, k) => i !== k && c >= cStar && discordance[i][k] <= dStar));
-  return { n, concordance, discordance, outranks, cStar, dStar };
+  return { n, concordance, discordance, outranks, cStar, dStar, weights: w, ranges, g };
 }
 
 export type ElectreSynth = {
