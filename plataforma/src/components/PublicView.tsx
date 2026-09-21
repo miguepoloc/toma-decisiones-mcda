@@ -6,7 +6,7 @@ import type { PublicGet } from '@/lib/types';
 import Results from './Results';
 import Topbar from './Topbar';
 
-export default function PublicView({ token }: { token: string }) {
+export default function PublicView({ token, loggedIn, userEmail }: { token: string; loggedIn: boolean; userEmail?: string }) {
   const supabase = useMemo(() => createClient(), []);
   const [data, setData] = useState<PublicGet | null | undefined>(undefined);
 
@@ -27,7 +27,7 @@ export default function PublicView({ token }: { token: string }) {
   }
   return (
     <div className="wrap">
-      <Topbar badge="PÚBLICO" subtitle="Vista de Resultados">
+      <Topbar badge="PÚBLICO" subtitle="Vista de Resultados" loggedIn={loggedIn} userEmail={userEmail}>
         <span className="muted" style={{ fontSize: 13, background: 'var(--surface2)', padding: '6px 12px', borderRadius: 8, border: '1px solid var(--line)' }}>
           Vista pública de solo lectura
         </span>
