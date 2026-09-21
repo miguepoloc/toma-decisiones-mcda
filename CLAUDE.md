@@ -20,7 +20,7 @@ Capas que conviene no confundir:
 2. **Herramientas HTML de Harold** (`MCDA_ASR_Harold.html`, `MCDA_plantilla_en_blanco.html`, sin versionar): priorización de criterios (Parte A, Sesión 1) + AHP dinámico con varios expertos (Parte B, Sesión 2), aplicadas a su tesis (estrategia de adaptación ASR).
 3. **`plataforma/`**: versión con servidor (Next.js 15 + Supabase + Vercel) de la misma herramienta, ya desplegada en producción (`https://mcda-decisions.vercel.app`). **Hoy solo cubre AHP + priorización simple** (lo que Harold necesita para S1-S2); el docente quiere expandirla a las 6 sesiones/métodos del curso — ver "Visión multicriterio" más abajo. Ver `plataforma/README.md` para puesta en marcha y el roadmap completo.
 
-También hay material del curso sin versionar (PDF de sesiones, `Ejercicio.xlsx`, `Herramienta_priorizacion_criterios_3ASR .xlsx`, `Plantilla_Informe_AHP.docx`): son la referencia de formato; no modificarlos sin que se pida.
+Puede haber material del curso sin versionar (PDF de sesiones, Excel/Word de referencia de formato) que el docente mantenga localmente; nunca debe comitearse (ver `.gitignore`). Se limpiaron de la raíz el 21 sep 2026 (habían quedado comiteados por error, junto con los HTML de Harold).
 
 ## Contexto del proyecto de Harold (no derivable del código)
 

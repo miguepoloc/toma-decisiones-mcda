@@ -13,11 +13,12 @@ const NAV_LINKS = [
 ];
 
 /** Barra superior compartida por TODAS las páginas: mismo logo, misma navegación (Inicio / ¿Qué
- * método uso? / Cómo funciona) y el mismo control de sesión a la derecha en todas partes — entra a
- * `/login` si no hay sesión, muestra correo + «Mis proyectos» + «Salir» si la hay. `cta` reemplaza ese
- * control por un botón propio de la página (p. ej. la guía de método precarga el método elegido al
- * crear proyecto); `showNav`/`hideAuthAction` lo apagan para flujos anónimos por token (experto,
- * vista pública) donde no aplica o distraería de la tarea. */
+ * método uso? / Cómo funciona) y el mismo control de sesión a la derecha en todas partes, sin
+ * excepción — entra a `/login` si no hay sesión, muestra correo + «Mis proyectos» + «Salir» si la hay.
+ * `children` puede agregar algo propio de la página ANTES de ese control (una insignia, un dato de
+ * contexto), pero nunca lo reemplaza: si una página cambiara ese bloque, se vería distinta a las demás,
+ * que es justo lo que este componente existe para evitar. `showNav`/`hideAuthAction` lo apagan solo
+ * para flujos anónimos por token (experto, vista pública) donde no aplica o distraería de la tarea. */
 export default function Topbar({
   badge,
   subtitle,
@@ -27,7 +28,6 @@ export default function Topbar({
   userEmail,
   showNav = true,
   hideAuthAction = false,
-  cta,
   children,
 }: {
   badge: string;
@@ -38,7 +38,6 @@ export default function Topbar({
   userEmail?: string;
   showNav?: boolean;
   hideAuthAction?: boolean;
-  cta?: { href: string; label: string };
   children?: ReactNode;
 }) {
   const pathname = usePathname();
@@ -79,9 +78,7 @@ export default function Topbar({
 
         <div className="topbar-actions">
           {children}
-          {!hideAuthAction && (cta ? (
-            <Link className="btn sm primary" href={cta.href}>{cta.label}</Link>
-          ) : loggedIn ? (
+          {!hideAuthAction && (loggedIn ? (
             <div className="user">
               {userEmail && <span style={{ fontFamily: 'var(--f-mono)', fontSize: 12 }}>{userEmail}</span>}
               {pathname !== '/dashboard' && <Link className="btn sm" href="/dashboard">Mis proyectos</Link>}
