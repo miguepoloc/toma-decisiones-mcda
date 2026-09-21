@@ -9,30 +9,47 @@ import Logo from '@/components/Logo';
 function LoginForm() {
   const router = useRouter();
   const next = useSearchParams().get('next') || '/dashboard';
-  const [mode, setMode] = useState<'in' | 'up'>('in');
+  const [mode, setMode] = useState<'in' | 'up' | 'reset'>('in');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [msg, setMsg] = useState('');
+  const [msgType, setMsgType] = useState<'err' | 'ok'>('err');
   const [busy, setBusy] = useState(false);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
     setMsg('');
+    setMsgType('err');
     const supabase = createClient();
+
     if (mode === 'in') {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) setMsg(error.message === 'Invalid login credentials' ? 'Correo o contraseña incorrectos.' : error.message);
       else { router.push(next); router.refresh(); }
-    } else {
+    } else if (mode === 'up') {
       const { data, error } = await supabase.auth.signUp({
         email, password,
         options: { data: { full_name: name }, emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}` },
       });
       if (error) setMsg(error.message);
       else if (data.session) { router.push(next); router.refresh(); }
-      else setMsg('Cuenta creada. Revisa tu correo para confirmarla y luego inicia sesión.');
+      else {
+        setMsgType('ok');
+        setMsg('Cuenta creada con éxito. Hemos enviado un correo de confirmación. Revisa tu bandeja de entrada y haz clic en el enlace para activar tu cuenta.');
+      }
+    } else {
+      // mode === 'reset'
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth/callback?next=/update-password`,
+      });
+      if (error) {
+        setMsg(error.message);
+      } else {
+        setMsgType('ok');
+        setMsg('Enlace de recuperación enviado. Revisa tu correo electrónico (incluida la carpeta de spam o correo no deseado).');
+      }
     }
     setBusy(false);
   }
@@ -67,20 +84,62 @@ function LoginForm() {
 
         <div className="authcard">
           <div>
-            <div className="eyebrow">{mode === 'in' ? 'Bienvenido de vuelta' : 'Empecemos'}</div>
-            <h1>{mode === 'in' ? 'Iniciar sesión' : 'Crear cuenta'}</h1>
+            <div className="eyebrow">
+              {mode === 'in' ? 'Bienvenido de vuelta' : mode === 'up' ? 'Empecemos' : 'Seguridad de la cuenta'}
+            </div>
+            <h1>
+              {mode === 'in' ? 'Iniciar sesión' : mode === 'up' ? 'Crear cuenta' : 'Recuperar contraseña'}
+            </h1>
+            {mode === 'reset' && (
+              <p className="muted" style={{ fontSize: 13.5, marginTop: 4 }}>
+                Ingresa tu correo y te enviaremos un enlace seguro para restablecer el acceso a tu cuenta.
+              </p>
+            )}
           </div>
           {!supabaseConfigurado && <div className="banner"><span><b>Falta configurar Supabase.</b> Define NEXT_PUBLIC_SUPABASE_URL y NEXT_PUBLIC_SUPABASE_ANON_KEY (ver README).</span></div>}
           <form className="card form" onSubmit={submit}>
-            {mode === 'up' && <div><label className="lbl" htmlFor="n">Nombre</label><input id="n" type="text" required value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" /></div>}
-            <div><label className="lbl" htmlFor="e">Correo</label><input id="e" type="text" inputMode="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" /></div>
-            <div><label className="lbl" htmlFor="p">Contraseña</label><input id="p" type="password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete={mode === 'in' ? 'current-password' : 'new-password'} /></div>
-            {msg && <p className="err" role="alert">{msg}</p>}
-            <button className="btn primary" type="submit" disabled={busy}>{busy ? 'Un momento…' : mode === 'in' ? 'Entrar' : 'Crear cuenta'}</button>
+            {mode === 'up' && <div><label className="lbl" htmlFor="n">Nombre completo</label><input id="n" type="text" required value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" placeholder="Ej. Dr. Carlos Mendoza" /></div>}
+            <div>
+              <label className="lbl" htmlFor="e">Correo electrónico</label>
+              <input id="e" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" placeholder="tu-correo@universidad.edu.co" />
+            </div>
+            {mode !== 'reset' && (
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                  <label className="lbl" htmlFor="p" style={{ margin: 0 }}>Contraseña</label>
+                  {mode === 'in' && (
+                    <button
+                      type="button"
+                      onClick={() => { setMode('reset'); setMsg(''); }}
+                      style={{ background: 'none', border: 'none', color: 'var(--accent)', fontSize: 12, cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
+                    >
+                      ¿Olvidaste tu contraseña?
+                    </button>
+                  )}
+                </div>
+                <input id="p" type="password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete={mode === 'in' ? 'current-password' : 'new-password'} placeholder="Mínimo 8 caracteres" />
+              </div>
+            )}
+            {msg && (
+              <div className={msgType === 'ok' ? 'banner info' : 'banner'} role="alert" style={{ margin: 0, fontSize: 13.5 }}>
+                <span><b>{msgType === 'ok' ? '✓ Enviado:' : 'Error:'}</b> {msg}</span>
+              </div>
+            )}
+            <button className="btn primary" type="submit" disabled={busy}>
+              {busy ? 'Un momento…' : mode === 'in' ? 'Entrar' : mode === 'up' ? 'Crear cuenta' : 'Enviar enlace de recuperación'}
+            </button>
           </form>
-          <button className="btn" type="button" onClick={() => { setMode(mode === 'in' ? 'up' : 'in'); setMsg(''); }}>
-            {mode === 'in' ? 'No tengo cuenta: crear una' : 'Ya tengo cuenta: entrar'}
-          </button>
+
+          {mode === 'reset' ? (
+            <button className="btn" type="button" onClick={() => { setMode('in'); setMsg(''); }}>
+              ← Volver al inicio de sesión
+            </button>
+          ) : (
+            <button className="btn" type="button" onClick={() => { setMode(mode === 'in' ? 'up' : 'in'); setMsg(''); }}>
+              {mode === 'in' ? 'No tengo cuenta: crear una' : 'Ya tengo cuenta: entrar'}
+            </button>
+          )}
+
           <p className="muted" style={{ fontSize: 13 }}>¿Eres experto y te compartieron un enlace? No necesitas cuenta: ábrelo directamente.</p>
         </div>
       </div>

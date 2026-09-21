@@ -11,6 +11,7 @@ import JudgmentEditor from './JudgmentEditor';
 import PrioritizationEditor from './PrioritizationEditor';
 import DecisionMatrixEditor from './DecisionMatrixEditor';
 import Results from './Results';
+import ScientificMethodModal, { type MethodKey } from './ScientificMethodModal';
 
 type Props = { initialProject: ProjectRow; initialExperts: ExpertRow[]; initialJudgments: JudgmentRow[] };
 type Patch = Partial<Pick<ProjectRow, 'title' | 'objective' | 'method' | 'weighting_method' | 'criteria' | 'alternatives' | 'decision_matrix' | 'prioritization' | 'is_public' | 'public_token'>>;
@@ -43,6 +44,20 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
   const [editing, setEditing] = useState<string | null>(null);
   const [save, setSave] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [saveErr, setSaveErr] = useState('');
+  const [showSciModal, setShowSciModal] = useState(false);
+  const TABS = project.method === 'ahp' ? TABS_AHP : TABS_MATRIX;
+
+  // Respaldo de borrador local continuo
+  useEffect(() => {
+    try {
+      localStorage.setItem(`mcda_draft_${project.id}`, JSON.stringify({
+        id: project.id,
+        title: project.title,
+        updatedAt: new Date().toISOString(),
+      }));
+    } catch {}
+  }, [project.id, project.title, project.method, project.decision_matrix]);
+
   const pending = useRef<Patch>({});
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [pendDel, setPendDel] = useState<string | null>(null);
@@ -52,7 +67,6 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
   const prio = useMemo(() => normalizePrio(project.prioritization), [project.prioritization]);
   const idx = useMemo(() => indexJudgments(judgments), [judgments]);
   const dm = useMemo(() => normalizeMatrix(project.decision_matrix), [project.decision_matrix]);
-  const TABS = project.method === 'ahp' ? TABS_AHP : TABS_MATRIX;
 
   const flush = useCallback(async () => {
     const p = pending.current;
@@ -280,7 +294,25 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
                       📚 <em>Referencia científica: {cur?.citation}</em>
                     </div>
                   </div>
-                  <a href="/metodo" target="_blank" rel="noreferrer">Ver fórmulas y literatura →</a>
+                  <button
+                    type="button"
+                    onClick={() => setShowSciModal(true)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--accent)',
+                      fontSize: 13,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      padding: 0,
+                      textDecoration: 'underline',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
+                    }}
+                  >
+                    Ver fórmulas y literatura científica →
+                  </button>
                 </div>
               );
             })()}
@@ -427,6 +459,8 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
             weightingMethod={project.weighting_method ?? 'ahp'}
             decisionMatrix={project.decision_matrix}
             showPerExpert
+            projectTitle={project.title}
+            projectObjective={project.objective}
           />
         </div>
       )}
@@ -460,6 +494,13 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
             </div>
           </div>
         </div>
+      )}
+
+      {showSciModal && (
+        <ScientificMethodModal
+          methodKey={project.method as MethodKey}
+          onClose={() => setShowSciModal(false)}
+        />
       )}
     </div>
   );

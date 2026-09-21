@@ -507,6 +507,165 @@
       background: rgba(0, 229, 255, 0.1);
       box-shadow: 0 0 14px rgba(0, 229, 255, 0.25);
     }
+
+    /* QUIZ & METODO REDESIGN STYLES */
+    .quiz-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      display: grid;
+      gap: 16px;
+      position: relative;
+    }
+    .quiz-progress-bar {
+      height: 4px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 2px;
+      overflow: hidden;
+      margin-bottom: 4px;
+    }
+    .quiz-progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #00E5FF, #3B82F6);
+      width: 25%;
+      transition: width 0.3s ease;
+    }
+    
+    /* EJEMPLO 1: CHOICE CARDS PRO */
+    .choice-card-list {
+      display: grid;
+      gap: 12px;
+    }
+    .choice-card {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 16px 20px;
+      background: var(--surface-elevated);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      cursor: pointer;
+      text-align: left;
+      color: inherit;
+      transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+      position: relative;
+    }
+    .choice-card:hover {
+      border-color: #00E5FF;
+      background: #1A2740;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 229, 255, 0.18);
+    }
+    .choice-badge {
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 14px;
+      color: #94A3B8;
+      flex-shrink: 0;
+      transition: all 0.2s ease;
+    }
+    .choice-card:hover .choice-badge {
+      background: #00E5FF;
+      color: #0B0F17;
+      border-color: #00E5FF;
+      box-shadow: 0 0 10px rgba(0, 229, 255, 0.4);
+    }
+    .choice-title {
+      font-size: 14.5px;
+      font-weight: 600;
+      color: #F8FAFC;
+      margin-bottom: 2px;
+    }
+    .choice-desc {
+      font-size: 12.5px;
+      color: #94A3B8;
+    }
+    .choice-arrow {
+      margin-left: auto;
+      font-size: 16px;
+      color: #64748B;
+      transition: transform 0.2s ease, color 0.2s ease;
+    }
+    .choice-card:hover .choice-arrow {
+      color: #00E5FF;
+      transform: translateX(4px);
+    }
+
+    /* EJEMPLO 2: ACTION PILLS WITH TAGS */
+    .pill-stack {
+      display: grid;
+      gap: 10px;
+    }
+    .action-pill-btn {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 18px;
+      background: #131B2A;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 99px;
+      color: #E2E8F0;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      transition: all 0.2s ease;
+    }
+    .action-pill-btn:hover {
+      border-color: #38BDF8;
+      background: #1E2B42;
+      color: #FFF;
+      transform: scale(1.01);
+      box-shadow: 0 4px 14px rgba(56, 189, 248, 0.2);
+    }
+    .action-pill-tag {
+      font-size: 11px;
+      font-family: 'IBM Plex Mono', monospace;
+      padding: 2px 8px;
+      border-radius: 99px;
+      background: rgba(255, 255, 255, 0.08);
+      color: #94A3B8;
+    }
+
+    /* SCIENTIFIC MODAL PREVIEW */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(8px);
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .modal-box {
+      background: #111827;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-top: 4px solid #00E5FF;
+      border-radius: 14px;
+      max-width: 620px;
+      width: 100%;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
+      overflow: hidden;
+      display: grid;
+      gap: 18px;
+      padding: 28px;
+      animation: modalFadeIn 0.22s ease-out;
+    }
+    @keyframes modalFadeIn {
+      from { opacity: 0; transform: translateY(12px) scale(0.98); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
   </style>
 </head>
 <body>
@@ -515,11 +674,12 @@
   <div class="lab-banner">
     <div class="lab-title">
       <span class="lab-badge">TEST INTERACTIVO</span>
-      Compara las dos variantes de selector y los 3 estilos de Logo:
+      Compara las dos variantes de selector, los 3 Logos y los estilos de /metodo:
     </div>
     <div class="view-toggle-btns">
       <button class="toggle-btn active" onclick="switchVariant('cards', this)">1. Selector: Tarjetas Modulares</button>
       <button class="toggle-btn" onclick="switchVariant('pills', this)">2. Selector: Pills Segmentados</button>
+      <button class="toggle-btn" style="background: #8B5CF6; border-color: #A78BFA; color: #FFF;" onclick="document.getElementById('metodo-quiz-lab').scrollIntoView({behavior:'smooth'})">✦ Ver Ejemplos Rediseño /metodo</button>
     </div>
   </div>
 
@@ -717,33 +877,159 @@
 
       <!-- EXPLICACIÓN DINÁMICA -->
       <div id="detail-banner" class="detail-banner" style="--cur-method-color: #00E5FF;">
-        <span id="detail-text">
-          <strong>TOPSIS seleccionado (Cercanía a la Solución Ideal):</strong> Escribes los valores reales cuantitativos en la matriz. Ranquea buscando simultáneamente la menor distancia a la alternativa ideal positiva y la mayor a la ideal negativa.
-        </span>
-        <a href="/metodo" target="_blank">Comparativa en la literatura →</a>
-      </div>
-    </div>
-
-    <!-- SECCIÓN DE CRITERIOS -->
-    <div class="card">
-      <label class="field-label">CRITERIOS (3) Y SU REGLA DE LECTURA</label>
-      <div style="display: grid; gap: 10px; margin-block: 12px;">
-        <input class="text-input" value="Alcance de transmisión (km) — Regla: Mayor es mejor">
-        <input class="text-input" value="Duración de batería (meses) — Regla: Mayor es mejor">
-        <input class="text-input" value="Costo de despliegue ($) — Regla: Menor es mejor (Costo)">
-      </div>
-      <button class="btn-add">+ Agregar criterio</button>
-    </div>
-
-    <div style="height: 600px; padding: 30px; border: 1px dashed var(--border); border-radius: 14px; text-align: center; color: var(--muted); display: grid; place-items: center;">
-      <div>
-        <p style="font-weight: 700; font-size: 16px; color: #FFF; margin-bottom: 8px;">Zona de prueba de scroll continuo</p>
-        <p style="font-size: 13.5px; max-width: 55ch; margin: 0 auto;">
-          Baja con el ratón o trackpad: verás cómo la cabecera superior se mantiene suspendida de forma elegante con <strong>backdrop-filter blur</strong>, manteniendo visible el botón de marca «Plataforma MCDA» con su enlace a mis proyectos y el estado de guardado.
+    <!-- LABORATORIO INTERACTIVO: REDISEÑO DE /METODO Y MODAL CIENTÍFICO -->
+    <div id="metodo-quiz-lab" style="margin-top: 48px; border-top: 2px solid rgba(0, 229, 255, 0.3); padding-top: 40px;">
+      
+      <div style="margin-bottom: 28px;">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+          <span style="font-size: 11px; font-family: 'IBM Plex Mono', monospace; font-weight: 700; color: #00E5FF; text-transform: uppercase; letter-spacing: 0.08em; background: rgba(0, 229, 255, 0.1); padding: 2px 8px; border-radius: 4px; border: 1px solid rgba(0, 229, 255, 0.3);">LABORATORIO UI/UX · PÁGINA /METODO</span>
+          <span style="font-size: 12px; color: var(--muted);">Comparación de botones y preguntas</span>
+        </div>
+        <h2 style="font-size: 26px; color: #FFF; margin-bottom: 8px;">Rediseño de las Preguntas de Teoría y Botones Accionables</h2>
+        <p style="color: var(--muted); font-size: 14px; max-width: 65ch;">
+          Actualmente, los botones en <code style="color: #00E5FF; font-family: monospace;">/metodo</code> usaban la clase <code style="color: #00E5FF;">.seg</code>, lo que hacía que parecieran etiquetas de texto planas y sin affordance de clic. A continuación puedes interactuar con los ejemplos propuestos:
         </p>
+      </div>
+
+      <!-- DEMO MODAL CIENTÍFICO TRIGGER -->
+      <div style="background: linear-gradient(135deg, #111827 0%, #162032 100%); border: 1px solid rgba(0, 229, 255, 0.3); border-radius: 12px; padding: 20px 24px; margin-bottom: 32px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px;">
+        <div>
+          <div style="font-size: 11px; font-family: 'IBM Plex Mono', monospace; color: #00E5FF; font-weight: 700; text-transform: uppercase;">NUEVO FLUJO DE LITERATURA CIENTÍFICA</div>
+          <h3 style="font-size: 17px; color: #FFF; margin-top: 4px;">Modal de Fórmulas y Enlace Directo al Artículo (DOI)</h3>
+          <p style="font-size: 13px; color: var(--muted); margin-top: 2px;">Al hacer clic en «Ver fórmulas y literatura» dentro de un proyecto, se abre este modal con la formulación matemática y el acceso al paper original:</p>
+        </div>
+        <button class="toggle-btn" style="background: #00E5FF; color: #0B0F17; border-color: #00E5FF; font-weight: 700; padding: 10px 20px;" onclick="openScientificModalDemo('topsis')">
+          Probar Modal Científico (TOPSIS) ↗
+        </button>
+      </div>
+
+      <!-- COMPARACIÓN DE ESTILOS DE PREGUNTAS -->
+      <div style="display: grid; gap: 32px;">
+
+        <!-- EJEMPLO 1 (RECOMENDADO): CHOICE CARDS PRO -->
+        <div class="quiz-card" style="border-top: 3px solid #00E5FF;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 12px; font-family: 'IBM Plex Mono', monospace; font-weight: 700; color: #00E5FF;">EJEMPLO 1 (RECOMENDADO) · CHOICE CARDS ELEVADAS</span>
+            <span style="font-size: 12px; color: var(--muted); font-family: 'IBM Plex Mono', monospace;">Pregunta 1 de 4 (25%)</span>
+          </div>
+          <div class="quiz-progress-bar">
+            <div class="quiz-progress-fill" style="width: 25%;"></div>
+          </div>
+          <h3 style="font-size: 18px; color: #FFF; margin-bottom: 4px;">1. ¿Tienes un valor medible por cada alternativa en cada criterio?</h3>
+          <p style="font-size: 13px; color: var(--muted); margin-top: -8px;">Elige la opción que mejor describa la naturaleza de tus datos:</p>
+
+          <div class="choice-card-list">
+            <div class="choice-card" onclick="alert('Seleccionaste: Datos Cuantitativos Reales → Siguiente pregunta sobre simplicidad/compromiso')">
+              <div class="choice-badge">A</div>
+              <div>
+                <div class="choice-title">Sí, tengo datos reales exactos</div>
+                <div class="choice-desc">Precios en dólares, distancias en km, consumo de batería, años de vida útil, etc.</div>
+              </div>
+              <div class="choice-arrow">→</div>
+            </div>
+
+            <div class="choice-card" onclick="alert('Seleccionaste: Subjetivos/Inciertos → Te recomienda directamente Fuzzy TOPSIS')">
+              <div class="choice-badge">B</div>
+              <div>
+                <div class="choice-title">Sí, pero son subjetivos, vagos o cualitativos</div>
+                <div class="choice-desc">Solo puedo calificar con etiquetas como «Muy alta», «Aceptable», «Poco confiable»…</div>
+              </div>
+              <div class="choice-arrow">→</div>
+            </div>
+
+            <div class="choice-card" onclick="alert('Seleccionaste: No tengo valores → Te recomienda AHP (Pares de Saaty)')">
+              <div class="choice-badge">C</div>
+              <div>
+                <div class="choice-title">No tengo datos numéricos, solo juicios comparativos</div>
+                <div class="choice-desc">Mis expertos evalúan de a pares cuál opción supera a cuál en cada criterio (Escala 1 a 9).</div>
+              </div>
+              <div class="choice-arrow">→</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- EJEMPLO 2: ACTION PILLS MODERNOS CON TAGS -->
+        <div class="quiz-card" style="border-top: 3px solid #38BDF8;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 12px; font-family: 'IBM Plex Mono', monospace; font-weight: 700; color: #38BDF8;">EJEMPLO 2 · ACTION PILLS GRANDES CON BADGES TÉCNICOS</span>
+            <span style="font-size: 12px; color: var(--muted); font-family: 'IBM Plex Mono', monospace;">Pregunta 1 de 4</span>
+          </div>
+          <h3 style="font-size: 18px; color: #FFF;">1. ¿Tienes un valor medible por cada alternativa en cada criterio?</h3>
+
+          <div class="pill-stack">
+            <button class="action-pill-btn" onclick="alert('Opción seleccionada')">
+              <span><b>Sí, tengo datos reales</b> (precio, kilómetros, horas, costos)</span>
+              <span class="action-pill-tag">[CUANTITATIVO]</span>
+            </button>
+            <button class="action-pill-btn" onclick="alert('Opción seleccionada')">
+              <span><b>Sí, pero son subjetivos o inciertos</b> («muy buena», «regular»)</span>
+              <span class="action-pill-tag">[LÓGICA DIFUSA]</span>
+            </button>
+            <button class="action-pill-btn" onclick="alert('Opción seleccionada')">
+              <span><b>No, solo puedo comparar pares</b> de alternativas directamente</span>
+              <span class="action-pill-tag">[AHP PARES]</span>
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- MODAL CIENTÍFICO DEMO OVERLAY -->
+    <div id="sci-modal-overlay" class="modal-overlay" style="display: none;" onclick="if(event.target === this) closeScientificModalDemo()">
+      <div class="modal-box">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+          <div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 11px; font-family: 'IBM Plex Mono', monospace; background: rgba(0, 229, 255, 0.15); color: #00E5FF; padding: 2px 8px; border-radius: 4px; font-weight: 700;">DISTANCIA IDEAL</span>
+              <span style="font-size: 11px; font-family: 'IBM Plex Mono', monospace; color: var(--muted);">ALGORITMO MULTICRITERIO</span>
+            </div>
+            <h2 style="font-size: 22px; color: #FFF; margin-top: 6px;">TOPSIS · Fundamento Matemático</h2>
+          </div>
+          <button style="background: none; border: none; color: var(--muted); font-size: 24px; cursor: pointer;" onclick="closeScientificModalDemo()">✕</button>
+        </div>
+
+        <div style="background: var(--surface-elevated); border: 1px solid var(--border); border-radius: 8px; padding: 14px; font-size: 13px; font-family: 'IBM Plex Mono', monospace; color: #E2E8F0; line-height: 1.6;">
+          <strong>Referencia científica:</strong><br>
+          Hwang, C. L., & Yoon, K. (1981). <em>Multiple Attribute Decision Making: Methods and Applications</em>. Springer-Verlag, Berlin/Heidelberg.<br>
+          <span style="color: #00E5FF;">DOI: 10.1007/978-3-642-48318-9</span>
+        </div>
+
+        <div>
+          <h4 style="font-size: 14px; color: #FFF; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em; font-family: 'IBM Plex Mono', monospace;">Ecuaciones del Algoritmo:</h4>
+          <div style="display: grid; gap: 10px; font-size: 13.5px; color: var(--muted);">
+            <div style="padding: 10px 14px; background: rgba(255,255,255,0.03); border-radius: 6px; border-left: 3px solid #00E5FF;">
+              <strong style="color: #FFF;">1. Normalización Vectorial:</strong>
+              <div style="font-family: monospace; color: #00E5FF; margin-top: 4px;">r_ij = x_ij / √( Σ_k (x_kj)² )</div>
+            </div>
+            <div style="padding: 10px 14px; background: rgba(255,255,255,0.03); border-radius: 6px; border-left: 3px solid #00E5FF;">
+              <strong style="color: #FFF;">2. Matriz Ponderada:</strong>
+              <div style="font-family: monospace; color: #00E5FF; margin-top: 4px;">v_ij = w_j · r_ij</div>
+            </div>
+            <div style="padding: 10px 14px; background: rgba(255,255,255,0.03); border-radius: 6px; border-left: 3px solid #00E5FF;">
+              <strong style="color: #FFF;">3. Coeficiente de Cercanía Relativa:</strong>
+              <div style="font-family: monospace; color: #00E5FF; margin-top: 4px;">C_i = d_i⁻ / ( d_i⁺ + d_i⁻ ), donde C_i ∈ [0, 1]</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 10px;">
+          <button class="toggle-btn" onclick="closeScientificModalDemo()">Cerrar</button>
+          <a href="https://doi.org/10.1007/978-3-642-48318-9" target="_blank" rel="noreferrer" class="toggle-btn" style="background: #00E5FF; color: #0B0F17; border-color: #00E5FF; font-weight: 700; text-decoration: none; display: inline-flex; align-items: center; gap: 6px;">
+            Abrir artículo en Springer (DOI) ↗
+          </a>
+        </div>
       </div>
     </div>
   </main>
+
+  <script>
+    function openScientificModalDemo(method) {
+      document.getElementById('sci-modal-overlay').style.display = 'flex';
+    }
+    function closeScientificModalDemo() {
+      document.getElementById('sci-modal-overlay').style.display = 'none';
+    }
 
   <script>
     const descs = {

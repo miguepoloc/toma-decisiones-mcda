@@ -16,6 +16,15 @@ function TrashIcon() {
   );
 }
 
+function CopyIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </svg>
+  );
+}
+
 function WarnIcon() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -54,6 +63,48 @@ export default function ProjectList({ initial }: { initial: Row[] }) {
     setTarget(null);
   }
 
+  async function duplicateProject(p: Row) {
+    setBusy(true);
+    setMsg('');
+    const supabase = createClient();
+    const { data: orig, error: fetchErr } = await supabase
+      .from('projects')
+      .select('*')
+      .eq('id', p.id)
+      .single();
+
+    if (fetchErr || !orig) {
+      setMsg(fetchErr?.message ?? 'No se pudo leer el proyecto original');
+      setBusy(false);
+      return;
+    }
+
+    const { data: copyRow, error: insertErr } = await supabase
+      .from('projects')
+      .insert({
+        title: `${orig.title} (Copia)`,
+        objective: orig.objective,
+        method: orig.method,
+        weighting_method: orig.weighting_method,
+        criteria: orig.criteria,
+        alternatives: orig.alternatives,
+        decision_matrix: orig.decision_matrix,
+        prioritization: orig.prioritization,
+        is_public: false,
+        user_id: orig.user_id,
+      })
+      .select('id, title, objective, is_public')
+      .single();
+
+    setBusy(false);
+    if (insertErr || !copyRow) {
+      setMsg(insertErr?.message ?? 'Error al duplicar el proyecto');
+      return;
+    }
+
+    setProjects((prev) => [copyRow, ...prev]);
+  }
+
   const matches = target ? confirmText.trim() === target.title.trim() : false;
 
   return (
@@ -71,9 +122,20 @@ export default function ProjectList({ initial }: { initial: Row[] }) {
           <span className={'pill ' + (p.is_public ? '' : 'neutral')}>{p.is_public ? 'Público con enlace' : 'Privado'}</span>
           <button
             type="button"
+            className="btn icon sm"
+            title={`Duplicar «${p.title}»`}
+            aria-label={`Duplicar «${p.title}»`}
+            onClick={() => void duplicateProject(p)}
+            disabled={busy}
+          >
+            <CopyIcon />
+          </button>
+          <button
+            type="button"
             className="btn icon sm del"
             aria-label={`Eliminar «${p.title}»`}
             onClick={() => setTarget(p)}
+            disabled={busy}
           >
             <TrashIcon />
           </button>

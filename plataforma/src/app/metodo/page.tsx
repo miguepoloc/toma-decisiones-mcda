@@ -3,69 +3,140 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import Logo from '@/components/Logo';
-
-type MethodKey = 'ahp' | 'topsis' | 'vikor' | 'electre' | 'promethee' | 'saw' | 'fuzzy_topsis';
-
-const METHOD_INFO: Record<MethodKey, { label: string; family: string; color: string; why: string; citation: string }> = {
-  ahp: {
-    label: 'AHP · Analytic Hierarchy Process',
-    family: 'Pares Saaty',
-    color: 'var(--m-ahp)',
-    why: 'No tienes datos numéricos para todo, así que comparas de a pares qué alternativa es mejor en cada criterio — el mismo mecanismo que ya usaste para pesar los criterios.',
-    citation: 'Saaty, T. L. (1980). The Analytic Hierarchy Process. McGraw-Hill.',
-  },
-  saw: {
-    label: 'SAW · Simple Additive Weighting',
-    family: 'Suma Directa',
-    color: 'var(--m-saw)',
-    why: 'Tienes datos reales y quieres el método más transparente: normalizar y sumar pesos × valores. Fácil de explicar, rápido de calcular, ideal cuando la sencillez argumentativa importa.',
-    citation: 'MacCrimmon, K. R. (1968). Decisionmaking among multiple-attribute alternatives. RAND Memorandum.',
-  },
-  topsis: {
-    label: 'TOPSIS · Similarity to Ideal Solution',
-    family: 'Distancia Ideal',
-    color: 'var(--m-topsis)',
-    why: 'Tienes datos reales y quieres el método más directo: qué tan cerca está cada alternativa de una combinación «ideal» de todos los criterios.',
-    citation: 'Hwang, C. L., & Yoon, K. (1981). Multiple Attribute Decision Making: Methods and Applications. Springer-Verlag.',
-  },
-  vikor: {
-    label: 'VIKOR · Solución de Compromiso',
-    family: 'Compromiso',
-    color: 'var(--m-vikor)',
-    why: 'Tienes datos reales y te importa evitar una alternativa que quede muy mal en un solo criterio, no solo la que suma más en total.',
-    citation: 'Opricovic, S., & Tzeng, G. H. (2004). Compromise solution by MCDM methods. EJOR, 156(2), 445–455.',
-  },
-  promethee: {
-    label: 'PROMETHEE II · Flujos de Preferencia',
-    family: 'Superación',
-    color: 'var(--m-promethee)',
-    why: 'Tienes datos reales y prefieres comparar cada par de alternativas directamente, criterio por criterio, en vez de contra un punto «ideal» abstracto.',
-    citation: 'Brans, J. P., & Vincke, P. (1985). A preference ranking organisation method. Management Science, 31(6), 647–656.',
-  },
-  electre: {
-    label: 'ELECTRE · Relación de Concordancia y Veto',
-    family: 'Concordancia',
-    color: 'var(--m-electre)',
-    why: 'Tienes datos reales y prefieres que el método te diga honestamente cuando dos alternativas no se pueden comparar, en vez de forzar un orden entre ellas.',
-    citation: 'Roy, B. (1991). The outranking approach and the foundations of ELECTRE methods. Theory and Decision, 31(1), 49–73.',
-  },
-  fuzzy_topsis: {
-    label: 'Fuzzy TOPSIS · Evaluaciones Lingüísticas',
-    family: 'Lógica Difusa',
-    color: 'var(--m-fuzzy)',
-    why: 'Tus datos son inciertos o subjetivos y no se pueden reducir a un solo número. Evalúas con etiquetas (Muy buena, Buena, Regular…) y el método maneja la imprecisión con lógica difusa triangular.',
-    citation: 'Chen, C. T. (2000). Extensions of the TOPSIS for group decision-making under fuzzy environment. Fuzzy Sets and Systems, 114(1), 1–9.',
-  },
-};
+import ScientificMethodModal, { METHOD_SPECS, type MethodKey } from '@/components/ScientificMethodModal';
 
 type Step = 'q1' | 'q1b' | 'q2' | 'q3' | MethodKey;
 
+interface QuestionConfig {
+  number: number;
+  title: string;
+  subtitle: string;
+  progressPercent: number;
+  options: {
+    badge: string;
+    title: string;
+    desc: string;
+    target: Step;
+    tag?: string;
+  }[];
+}
+
+const QUESTIONS: Record<'q1' | 'q1b' | 'q2' | 'q3', QuestionConfig> = {
+  q1: {
+    number: 1,
+    title: '¿Tienes un valor medible por cada alternativa en cada criterio?',
+    subtitle: 'Elige la opción que mejor describa la naturaleza de los datos de tu problema:',
+    progressPercent: 25,
+    options: [
+      {
+        badge: 'A',
+        title: 'Sí, tengo datos reales exactos',
+        desc: 'Precios en dinero, distancias en km, duración de batería en meses, consumos, tasas técnicas...',
+        target: 'q1b',
+        tag: 'CUANTITATIVO',
+      },
+      {
+        badge: 'B',
+        title: 'Sí, pero son subjetivos, vagos o cualitativos',
+        desc: 'Solo dispongo de juicios como «Muy buena», «Regular», «Poco confiable» o percepciones ambiguas.',
+        target: 'fuzzy_topsis',
+        tag: 'LÓGICA DIFUSA',
+      },
+      {
+        badge: 'C',
+        title: 'No tengo datos numéricos, solo comparaciones relativas',
+        desc: 'Mis expertos comparan de a pares cuál alternativa es superior en cada criterio según la escala 1–9.',
+        target: 'ahp',
+        tag: 'PARES SAATY',
+      },
+    ],
+  },
+  q1b: {
+    number: 2,
+    title: '¿Qué tan importante es la simplicidad del argumento al sustentar la decisión?',
+    subtitle: 'Considera ante quién presentarás los resultados (un comité directivo, una comunidad o un jurado):',
+    progressPercent: 50,
+    options: [
+      {
+        badge: 'A',
+        title: 'Muy importante — debe ser intuitivo y transparente',
+        desc: 'Prefiero un método directo (normalizar y sumar pesos × valores) que cualquier persona pueda auditar.',
+        target: 'saw',
+        tag: 'SUMA DIRECTA',
+      },
+      {
+        badge: 'B',
+        title: 'No es prioritario — busco robustez matemática',
+        desc: 'Puedo emplear algoritmos de optimización multiobjetivo más avanzados y fundamentados.',
+        target: 'q2',
+        tag: 'AVANZADO',
+      },
+    ],
+  },
+  q2: {
+    number: 3,
+    title: '¿Está bien si el método señala que dos opciones son incomparables?',
+    subtitle: 'Enfoque de relaciones de superación (outranking) frente a enfoques compensatorios:',
+    progressPercent: 75,
+    options: [
+      {
+        badge: 'A',
+        title: 'Sí, prefiero que lo señale si no hay evidencia suficiente',
+        desc: 'Filtrado no compensatorio: valida concordancia y umbrales de veto estricto sin forzar una suma.',
+        target: 'electre',
+        tag: 'SUPERACIÓN',
+      },
+      {
+        badge: 'B',
+        title: 'No, requiero un ranking completo obligatorio',
+        desc: 'Necesito una posición del 1 al N para todas las alternativas analizadas.',
+        target: 'q3',
+        tag: 'ORDEN COMPLETO',
+      },
+    ],
+  },
+  q3: {
+    number: 4,
+    title: '¿Qué principio de preferencia prefieres aplicar entre alternativas?',
+    subtitle: 'Elige el concepto matemático central de comparación:',
+    progressPercent: 100,
+    options: [
+      {
+        badge: 'A',
+        title: 'Distancia a una combinación ideal y anti-ideal',
+        desc: 'Buscar la alternativa más cercana a la mejor solución posible y más lejana a la peor (TOPSIS).',
+        target: 'topsis',
+        tag: 'DISTANCIA IDEAL',
+      },
+      {
+        badge: 'B',
+        title: 'Solución de compromiso (evitar el peor desempeño individual)',
+        desc: 'Maximizar el beneficio grupal pero penalizar fuertemente si una opción falla en un criterio clave (VIKOR).',
+        target: 'vikor',
+        tag: 'COMPROMISO',
+      },
+      {
+        badge: 'C',
+        title: 'Comparación par a par criterio por criterio con flujos de preferencia',
+        desc: 'Medir la intensidad de superación entre cada par de opciones para calcular flujos netos (PROMETHEE II).',
+        target: 'promethee',
+        tag: 'FLUJOS NETOS',
+      },
+    ],
+  },
+};
+
 export default function MetodoPage() {
   const [step, setStep] = useState<Step>('q1');
-  const isResult = !['q1', 'q1b', 'q2', 'q3'].includes(step);
+  const [modalMethod, setModalMethod] = useState<MethodKey | null>(null);
+
+  const isQuestion = step === 'q1' || step === 'q1b' || step === 'q2' || step === 'q3';
+  const currentQ = isQuestion ? QUESTIONS[step] : null;
+  const currentSpec = !isQuestion ? METHOD_SPECS[step as MethodKey] : null;
 
   return (
     <div className="wrap">
+      {/* Sticky Header */}
       <div className="topbar">
         <Link className="brand" href="/" title="Plataforma MCDA · Inicio">
           <Logo size={26} />
@@ -77,91 +148,241 @@ export default function MetodoPage() {
             <span className="brand-sub">← Ir al inicio</span>
           </div>
         </Link>
-        <Link className="btn sm" href="/tutorial">Cómo funciona</Link>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <Link className="btn sm" href="/tutorial">Tutorial</Link>
+          <Link className="btn sm primary" href="/login">Crear proyecto</Link>
+        </div>
       </div>
 
       <div className="ttl">
-        <div className="eyebrow">¿Qué método uso?</div>
-        <h1>Cuatro preguntas, un método</h1>
-        <p className="muted lnote" style={{ marginTop: 10 }}>
-          Todos pesan los criterios igual (con juicios de a pares de tus expertos, pestaña Criterios). La diferencia
-          está en cómo comparas las alternativas entre sí.
+        <div className="eyebrow">Guía de Selección Metodológica</div>
+        <h1>¿Qué método multicriterio debo usar?</h1>
+        <p className="muted lnote" style={{ marginTop: 10, maxWidth: '65ch', fontSize: 14 }}>
+          En todos los métodos del curso, la ponderación de criterios se fundamenta de forma rigurosa
+          (juicios de expertos con AHP, o ponderaciones objetivas con CRITIC y Entropía). La diferencia
+          recae en el algoritmo matemático utilizado para comparar las alternativas entre sí.
         </p>
       </div>
 
-      <div className="card form" style={{ marginTop: 24 }}>
-        {step === 'q1' && (
-          <div className="fgrp">
-            <label className="lbl">1. ¿Tienes un valor por cada alternativa en cada criterio?</label>
-            <div className="seg" role="group" aria-label="Pregunta 1">
-              <button type="button" onClick={() => setStep('q1b')}>Sí, tengo datos reales (precio, kilómetros, años…)</button>
-              <button type="button" onClick={() => setStep('fuzzy_topsis')}>Sí, pero son subjetivos o inciertos — solo puedo decir «buena», «mala»…</button>
-              <button type="button" className="d" onClick={() => setStep('ahp')}>No, solo puedo comparar cuál alternativa es mejor en cada criterio</button>
-            </div>
-          </div>
-        )}
-        {step === 'q1b' && (
-          <div className="fgrp">
-            <label className="lbl">2. ¿Qué tan importante es la simplicidad del argumento al presentar la decisión?</label>
-            <div className="seg" role="group" aria-label="Pregunta 1b">
-              <button type="button" onClick={() => setStep('saw')}>Muy importante — prefiero algo que cualquiera pueda seguir paso a paso</button>
-              <button type="button" className="d" onClick={() => setStep('q2')}>No es prioritario — puedo usar un método más sofisticado</button>
-            </div>
-          </div>
-        )}
-        {step === 'q2' && (
-          <div className="fgrp">
-            <label className="lbl">3. ¿Está bien que el método a veces diga «no se puede comparar estas dos» en vez de forzar un orden completo?</label>
-            <div className="seg" role="group" aria-label="Pregunta 2">
-              <button type="button" onClick={() => setStep('electre')}>Sí, prefiero que lo diga si pasa</button>
-              <button type="button" className="d" onClick={() => setStep('q3')}>No, quiero un orden completo siempre</button>
-            </div>
-          </div>
-        )}
-        {step === 'q3' && (
-          <div className="fgrp">
-            <label className="lbl">4. ¿Qué te importa más al comparar las alternativas?</label>
-            <div className="seg" role="group" aria-label="Pregunta 3">
-              <button type="button" onClick={() => setStep('topsis')}>Que cada una se mida contra una combinación «ideal»</button>
-              <button type="button" onClick={() => setStep('vikor')}>Que ninguna quede muy mal en un solo criterio (compromiso)</button>
-              <button type="button" onClick={() => setStep('promethee')}>Comparar cada par de alternativas directamente</button>
-            </div>
-          </div>
-        )}
-        {isResult && (
+      {/* Cuestionario Interactivo con Choice Cards */}
+      <div style={{ marginTop: 28 }}>
+        {isQuestion && currentQ && (
           <div
-            className="card win"
+            className="card"
             style={{
-              margin: 0,
-              borderLeft: `5px solid ${METHOD_INFO[step as MethodKey].color}`,
-              background: `linear-gradient(135deg, var(--surface) 0%, color-mix(in srgb, ${METHOD_INFO[step as MethodKey].color} 10%, var(--surface)) 100%)`,
-              boxShadow: `0 8px 30px color-mix(in srgb, ${METHOD_INFO[step as MethodKey].color} 20%, transparent)`,
+              borderTop: '3px solid var(--accent)',
+              display: 'grid',
+              gap: 18,
+              padding: '24px 28px',
             }}
           >
-            <div className="acts" style={{ justifyContent: 'space-between', marginBottom: 6 }}>
-              <span className="eyebrow" style={{ color: METHOD_INFO[step as MethodKey].color }}>Recomendación para tu caso</span>
-              <span style={{ fontSize: 11, fontFamily: 'var(--f-mono)', background: 'rgba(255,255,255,0.08)', padding: '2px 8px', borderRadius: 4 }}>
-                Familia: {METHOD_INFO[step as MethodKey].family}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: 12, fontFamily: 'var(--f-mono)', fontWeight: 700, color: 'var(--accent)' }}>
+                PREGUNTA {currentQ.number} DE 4
+              </span>
+              <span style={{ fontSize: 12, color: 'var(--muted)', fontFamily: 'var(--f-mono)' }}>
+                Progreso: {currentQ.progressPercent}%
               </span>
             </div>
-            <span className="big" style={{ fontSize: 24, fontWeight: 700, color: 'var(--ink)' }}>
-              {METHOD_INFO[step as MethodKey].label}
-            </span>
-            <p style={{ fontSize: 14.5, color: 'var(--muted)', marginTop: 8, lineHeight: 1.5 }}>
-              {METHOD_INFO[step as MethodKey].why}
-            </p>
-            <div style={{ marginTop: 12, padding: '8px 12px', borderRadius: 6, background: 'rgba(0,0,0,0.2)', fontSize: 12, fontFamily: 'var(--f-mono)', color: 'var(--ink)' }}>
-              📚 <strong>Referencia fundacional:</strong> {METHOD_INFO[step as MethodKey].citation}
+
+            {/* Barra de progreso */}
+            <div style={{ height: 4, background: 'rgba(255,255,255,0.08)', borderRadius: 2, overflow: 'hidden' }}>
+              <div
+                style={{
+                  height: '100%',
+                  background: 'linear-gradient(90deg, var(--accent), #3B82F6)',
+                  width: `${currentQ.progressPercent}%`,
+                  transition: 'width 0.3s ease',
+                }}
+              />
             </div>
+
+            <div>
+              <h2 style={{ fontSize: 20, margin: '4px 0 6px', color: 'var(--ink)' }}>
+                {currentQ.number}. {currentQ.title}
+              </h2>
+              <p className="muted" style={{ fontSize: 13.5, margin: 0 }}>
+                {currentQ.subtitle}
+              </p>
+            </div>
+
+            {/* Choice Cards List */}
+            <div style={{ display: 'grid', gap: 12, marginTop: 4 }}>
+              {currentQ.options.map((opt) => (
+                <button
+                  key={opt.badge}
+                  type="button"
+                  onClick={() => setStep(opt.target)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 16,
+                    padding: '16px 20px',
+                    background: 'var(--surface2)',
+                    border: '1px solid var(--line)',
+                    borderRadius: 10,
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    color: 'inherit',
+                    transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = 'var(--accent)';
+                    e.currentTarget.style.transform = 'translateY(-2px)';
+                    e.currentTarget.style.boxShadow = '0 6px 20px rgba(0, 229, 255, 0.15)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = 'var(--line)';
+                    e.currentTarget.style.transform = 'translateY(0)';
+                    e.currentTarget.style.boxShadow = 'none';
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 8,
+                      background: 'rgba(255, 255, 255, 0.05)',
+                      border: '1px solid rgba(255, 255, 255, 0.12)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontWeight: 700,
+                      fontFamily: 'var(--f-mono)',
+                      fontSize: 14,
+                      color: 'var(--muted)',
+                      flexShrink: 0,
+                    }}
+                  >
+                    {opt.badge}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+                      <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--ink)' }}>{opt.title}</span>
+                      {opt.tag && (
+                        <span style={{ fontSize: 10, fontFamily: 'var(--f-mono)', padding: '1px 6px', borderRadius: 4, background: 'rgba(255,255,255,0.08)', color: 'var(--muted)' }}>
+                          {opt.tag}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.4 }}>{opt.desc}</div>
+                  </div>
+                  <div style={{ fontSize: 18, color: 'var(--muted)', paddingLeft: 8 }}>→</div>
+                </button>
+              ))}
+            </div>
+
+            {step !== 'q1' && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, paddingTop: 12, borderTop: '1px solid var(--line)' }}>
+                <button
+                  className="btn sm"
+                  type="button"
+                  onClick={() => setStep('q1')}
+                  style={{ color: 'var(--muted)' }}
+                >
+                  ↺ Volver al inicio del cuestionario
+                </button>
+              </div>
+            )}
           </div>
         )}
-        {step !== 'q1' && (
-          <div className="acts"><button className="btn sm" type="button" onClick={() => setStep('q1')}>↺ Empezar de nuevo</button></div>
+
+        {/* Tarjeta de Recomendación Final */}
+        {!isQuestion && currentSpec && (
+          <div
+            className="card"
+            style={{
+              borderLeft: `5px solid ${currentSpec.color}`,
+              background: `linear-gradient(135deg, var(--surface) 0%, color-mix(in srgb, ${currentSpec.color} 8%, var(--surface)) 100%)`,
+              padding: '28px',
+              display: 'grid',
+              gap: 18,
+              boxShadow: `0 12px 35px color-mix(in srgb, ${currentSpec.color} 18%, transparent)`,
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span
+                  style={{
+                    fontSize: 11,
+                    fontFamily: 'var(--f-mono)',
+                    background: 'rgba(255, 255, 255, 0.08)',
+                    color: currentSpec.color,
+                    padding: '2px 8px',
+                    borderRadius: 4,
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    border: `1px solid ${currentSpec.color}`,
+                  }}
+                >
+                  {currentSpec.family}
+                </span>
+                <span style={{ fontSize: 12, fontFamily: 'var(--f-mono)', color: 'var(--muted)' }}>
+                  RECOMENDACIÓN METODOLÓGICA ÓPTIMA
+                </span>
+              </div>
+              <button className="btn sm" type="button" onClick={() => setStep('q1')}>
+                ↺ Reiniciar cuestionario
+              </button>
+            </div>
+
+            <div>
+              <h2 style={{ fontSize: 24, margin: '2px 0 8px', color: 'var(--ink)' }}>{currentSpec.name}</h2>
+              <p style={{ fontSize: 14.5, color: 'var(--muted)', lineHeight: 1.6, margin: 0 }}>
+                {currentSpec.summary}
+              </p>
+            </div>
+
+            {/* Referencia Formal */}
+            <div style={{ background: 'var(--surface2)', border: '1px solid var(--line)', borderRadius: 8, padding: '14px 16px' }}>
+              <div style={{ fontSize: 11, fontFamily: 'var(--f-mono)', color: 'var(--muted)', textTransform: 'uppercase', marginBottom: 4 }}>
+                Publicación Científica de Referencia (APA 7.ª ed.)
+              </div>
+              <div style={{ fontSize: 13, fontFamily: 'var(--f-mono)', color: 'var(--ink)' }}>
+                {currentSpec.citationApa}
+              </div>
+            </div>
+
+            {/* Acciones */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
+              <button
+                type="button"
+                className="btn sm"
+                style={{ borderColor: currentSpec.color, color: 'var(--ink)' }}
+                onClick={() => setModalMethod(step as MethodKey)}
+              >
+                Ver fórmulas y ecuaciones matemáticas →
+              </button>
+              <a
+                href={currentSpec.doiUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="btn sm"
+                style={{ textDecoration: 'none' }}
+              >
+                Abrir artículo original (DOI) ↗
+              </a>
+              <Link
+                href="/login"
+                className="btn sm primary"
+                style={{ marginLeft: 'auto', textDecoration: 'none' }}
+              >
+                Crear proyecto con este método →
+              </Link>
+            </div>
+          </div>
         )}
       </div>
 
-      <div className="card" style={{ marginTop: 24 }}>
-        <h3 style={{ marginBottom: 12 }}>Comparación directa de los 7 métodos del curso</h3>
+      {/* Comparación directa de los 7 métodos */}
+      <div className="card" style={{ marginTop: 32 }}>
+        <div style={{ marginBottom: 14 }}>
+          <h3 style={{ margin: '0 0 4px', fontSize: 18 }}>Comparación directa de los 7 métodos del curso</h3>
+          <p className="muted" style={{ fontSize: 13.5, margin: 0 }}>
+            Matriz de características y principios matemáticos de la disciplina:
+          </p>
+        </div>
+
         <div className="tbl">
           <table>
             <thead>
@@ -177,81 +398,125 @@ export default function MetodoPage() {
               </tr>
             </thead>
             <tbody>
-              <tr><td>Compara alternativas con</td><td className="n">Juicios por pares</td><td className="n" colSpan={5} style={{ textAlign: 'center' }}>Matriz de datos reales cuantitativos</td><td className="n">Etiquetas lingüísticas</td></tr>
-              <tr><td>Ponderación de criterios</td><td className="n">Siempre AHP (expertos)</td><td className="n" colSpan={6} style={{ textAlign: 'center' }}>AHP (expertos), CRITIC o Entropía (objetivo)</td></tr>
-              <tr><td>Resultado</td><td className="n">Ranking completo</td><td className="n">Ranking completo</td><td className="n">Ranking completo</td><td className="n">Ranking (compromiso)</td><td className="n">Ranking completo</td><td className="n">Puede dejar pares incomparables</td><td className="n">Ranking completo</td></tr>
-              <tr><td>Principio matemático</td><td className="n">Autovalores y Consistencia (CR)</td><td className="n">Suma ponderada Min-Max</td><td className="n">Distancia euclidiana al PIS/NIS</td><td className="n">Optimización S, R y Q</td><td className="n">Flujos netos Φ+ y Φ-</td><td className="n">Concordancia, discordancia y veto</td><td className="n">Lógica difusa triangular (TFN)</td></tr>
-              <tr><td>Datos inciertos o subjetivos</td><td className="n">No aplica</td><td className="n" colSpan={5} style={{ textAlign: 'center' }}>Requiere datos exactos</td><td className="n">✓ Diseñado para esto</td></tr>
-              <tr><td>Límite sugerido de alternativas</td><td className="n">Hasta 9 (Saaty)</td><td className="n" colSpan={6} style={{ textAlign: 'center' }}>Sin límite de 9 elementos</td></tr>
+              <tr>
+                <td>Compara alternativas con</td>
+                <td className="n">Juicios por pares (1 al 9)</td>
+                <td className="n" colSpan={5} style={{ textAlign: 'center' }}>Matriz de datos cuantitativos reales</td>
+                <td className="n">Etiquetas lingüísticas difusas</td>
+              </tr>
+              <tr>
+                <td>Ponderación de criterios</td>
+                <td className="n">Siempre AHP (expertos)</td>
+                <td className="n" colSpan={6} style={{ textAlign: 'center' }}>AHP (expertos), CRITIC o Entropía (ponderación objetiva)</td>
+              </tr>
+              <tr>
+                <td>Tipo de resultado</td>
+                <td className="n">Ranking completo</td>
+                <td className="n">Ranking completo</td>
+                <td className="n">Ranking completo</td>
+                <td className="n">Ranking (compromiso Q)</td>
+                <td className="n">Ranking completo (Φ)</td>
+                <td className="n">Grafo de superación (incomparables)</td>
+                <td className="n">Ranking completo (CC_i)</td>
+              </tr>
+              <tr>
+                <td>Principio matemático</td>
+                <td className="n">Autovalores y Consistencia (CR)</td>
+                <td className="n">Suma ponderada Min-Max</td>
+                <td className="n">Distancia euclidiana al PIS/NIS</td>
+                <td className="n">Optimización S, R y Q</td>
+                <td className="n">Flujos netos Φ+ y Φ-</td>
+                <td className="n">Concordancia y veto no compensatorio</td>
+                <td className="n">Distancia euclidiana de vértice difuso</td>
+              </tr>
+              <tr>
+                <td>Manejo de ambigüedad</td>
+                <td className="n">Subjetivo pero consistente</td>
+                <td className="n" colSpan={5} style={{ textAlign: 'center' }}>Requiere datos numéricos precisos</td>
+                <td className="n">✓ Diseñado para incertidumbre humana</td>
+              </tr>
+              <tr>
+                <td>Límite recomendado de alternativas</td>
+                <td className="n">Hasta 9 (límite cognitivo de Saaty)</td>
+                <td className="n" colSpan={6} style={{ textAlign: 'center' }}>Sin límite de 9 elementos</td>
+              </tr>
             </tbody>
           </table>
         </div>
       </div>
 
-      <div className="card" style={{ marginTop: 24 }}>
-        <h3 style={{ marginBottom: 12 }}>📚 Marco Teórico y Bibliografía Científica del Curso</h3>
-        <p className="muted" style={{ fontSize: 13.5, marginBottom: 16 }}>
-          La plataforma implementa los algoritmos estándar descritos en las publicaciones de referencia de la disciplina (Universidad del Magdalena, Maestría en Ingeniería):
-        </p>
-        <div style={{ display: 'grid', gap: 12 }}>
-          <div style={{ padding: '12px 16px', borderRadius: 8, background: 'var(--surface2)', borderLeft: '3px solid var(--m-ahp)' }}>
-            <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--ink)' }}>AHP (Analytic Hierarchy Process)</div>
-            <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>
-              <strong>Saaty, T. L. (1980).</strong> <em>The Analytic Hierarchy Process: Planning, Priority Setting, Resource Allocation</em>. McGraw-Hill, New York.
+      {/* Marco Teórico y Bibliografía con Enlaces Directos al DOI */}
+      <div className="card" style={{ marginTop: 28 }}>
+        <div style={{ marginBottom: 16 }}>
+          <h3 style={{ margin: '0 0 4px', fontSize: 18 }}>📚 Marco Teórico y Bibliografía Científica del Curso</h3>
+          <p className="muted" style={{ fontSize: 13.5, margin: 0 }}>
+            Publicaciones fundacionales de referencia en la disciplina (Universidad del Magdalena, Maestría en Ingeniería):
+          </p>
+        </div>
+
+        <div style={{ display: 'grid', gap: 14 }}>
+          {Object.entries(METHOD_SPECS).map(([key, spec]) => (
+            <div
+              key={key}
+              style={{
+                padding: '16px 18px',
+                borderRadius: 8,
+                background: 'var(--surface2)',
+                borderLeft: `4px solid ${spec.color}`,
+                display: 'flex',
+                flexWrap: 'wrap',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 12,
+              }}
+            >
+              <div style={{ flex: 1, minWidth: 260 }}>
+                <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--ink)' }}>{spec.name}</div>
+                <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4, lineHeight: 1.4 }}>
+                  {spec.citationApa}
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <button
+                  type="button"
+                  className="btn sm"
+                  onClick={() => setModalMethod(key as MethodKey)}
+                  style={{ fontSize: 12 }}
+                >
+                  Fórmulas
+                </button>
+                <a
+                  href={spec.doiUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="btn sm"
+                  style={{ fontSize: 12, textDecoration: 'none', color: spec.color, borderColor: spec.color }}
+                >
+                  Abrir paper (DOI) ↗
+                </a>
+              </div>
             </div>
-          </div>
-          <div style={{ padding: '12px 16px', borderRadius: 8, background: 'var(--surface2)', borderLeft: '3px solid var(--m-topsis)' }}>
-            <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--ink)' }}>TOPSIS (Technique for Order Preference by Similarity to Ideal Solution)</div>
-            <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>
-              <strong>Hwang, C. L., & Yoon, K. (1981).</strong> <em>Multiple Attribute Decision Making: Methods and Applications</em>. Springer-Verlag, Berlin/Heidelberg.
-            </div>
-          </div>
-          <div style={{ padding: '12px 16px', borderRadius: 8, background: 'var(--surface2)', borderLeft: '3px solid var(--m-vikor)' }}>
-            <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--ink)' }}>VIKOR (VlseKriterijumska Optimizacija I Kompromisno Resenje)</div>
-            <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>
-              <strong>Opricovic, S., & Tzeng, G. H. (2004).</strong> Compromise solution by MCDM methods: A comparative analysis of VIKOR and TOPSIS. <em>European Journal of Operational Research</em>, 156(2), 445–455.
-            </div>
-          </div>
-          <div style={{ padding: '12px 16px', borderRadius: 8, background: 'var(--surface2)', borderLeft: '3px solid var(--m-promethee)' }}>
-            <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--ink)' }}>PROMETHEE II (Preference Ranking Organization METHod for Enrichment Evaluations)</div>
-            <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>
-              <strong>Brans, J. P., & Vincke, P. (1985).</strong> A preference ranking organisation method: The PROMETHEE method for multiple criteria decision-making. <em>Management Science</em>, 31(6), 647–656.
-            </div>
-          </div>
-          <div style={{ padding: '12px 16px', borderRadius: 8, background: 'var(--surface2)', borderLeft: '3px solid var(--m-electre)' }}>
-            <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--ink)' }}>ELECTRE (ELimination Et Choix Traduisant la REalité)</div>
-            <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>
-              <strong>Roy, B. (1991).</strong> The outranking approach and the foundations of ELECTRE methods. <em>Theory and Decision</em>, 31(1), 49–73.
-            </div>
-          </div>
-          <div style={{ padding: '12px 16px', borderRadius: 8, background: 'var(--surface2)', borderLeft: '3px solid var(--m-saw)' }}>
-            <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--ink)' }}>SAW (Simple Additive Weighting)</div>
-            <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>
-              <strong>MacCrimmon, K. R. (1968).</strong> <em>Decisionmaking among multiple-attribute alternatives: a survey and consolidated approach</em>. RAND Memorandum.
-            </div>
-          </div>
-          <div style={{ padding: '12px 16px', borderRadius: 8, background: 'var(--surface2)', borderLeft: '3px solid var(--m-fuzzy)' }}>
-            <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--ink)' }}>Fuzzy TOPSIS (Lógica Difusa)</div>
-            <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>
-              <strong>Chen, C. T. (2000).</strong> Extensions of the TOPSIS for group decision-making under fuzzy environment. <em>Fuzzy Sets and Systems</em>, 114(1), 1–9.
-            </div>
-          </div>
-          <div style={{ padding: '12px 16px', borderRadius: 8, background: 'var(--surface2)', borderLeft: '3px solid var(--s1)' }}>
-            <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--ink)' }}>Ponderaciones Objetivas (CRITIC y Entropía)</div>
-            <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>
-              <strong>Diakoulaki, D., Mavrotas, G., & Papayannakis, L. (1995).</strong> Determining objective weights in multiple criteria problems: The CRITIC method. <em>Computers & Operations Research</em>, 22(7), 763–770. &bull; <strong>Shannon, C. E. (1948).</strong> A mathematical theory of communication. <em>Bell System Technical Journal</em>, 27(3), 379–423.
-            </div>
-          </div>
+          ))}
         </div>
       </div>
 
-      <div className="lcta" style={{ marginBlock: '32px 24px' }}>
-        <h2>Listo, ¿empezamos?</h2>
+      {/* CTA Final */}
+      <div className="lcta" style={{ marginBlock: '36px 28px' }}>
+        <h2>¿Listo para modelar tu caso de estudio?</h2>
+        <p>Crea tu modelo, asigna criterios y calcula el ranking óptimo con cualquiera de los métodos multicriterio.</p>
         <div className="acts">
           <Link className="btn primary" href="/login">Crear proyecto</Link>
-          <Link className="btn" href="/tutorial">Ver el paso a paso</Link>
+          <Link className="btn" href="/tutorial">Ver tutorial paso a paso</Link>
         </div>
       </div>
+
+      {/* Modal Científico si está activo */}
+      {modalMethod && (
+        <ScientificMethodModal
+          methodKey={modalMethod}
+          onClose={() => setModalMethod(null)}
+        />
+      )}
     </div>
   );
 }

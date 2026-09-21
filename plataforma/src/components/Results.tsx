@@ -12,6 +12,9 @@ import { electreSynthesis } from '@/lib/electre';
 import { sawSynthesis } from '@/lib/saw';
 import { fuzzyTopsisSynthesis } from '@/lib/fuzzy_topsis';
 import { criticWeights, entropyWeights } from '@/lib/weights';
+import SensitivitySimulator from './SensitivitySimulator';
+import ExecutiveReportModal from './ExecutiveReportModal';
+import type { MethodKey } from './ScientificMethodModal';
 
 export type ExpertLite = { id: string; label: string };
 
@@ -27,6 +30,8 @@ type Props = {
   decisionMatrix?: DecisionMatrix | Record<string, never>;
   /** Si true, muestra el detalle de lo que respondió cada experto (vista del dueño). */
   showPerExpert?: boolean;
+  projectTitle?: string;
+  projectObjective?: string;
 };
 
 const METHOD_LABEL: Record<Method, string> = {
@@ -45,7 +50,8 @@ function Table({ names, M, f }: { names: string[]; M: number[][]; f: (x: number)
   );
 }
 
-export default function Results({ criteria, alternatives, experts, judgments, method = 'ahp', weightingMethod = 'ahp', decisionMatrix, showPerExpert }: Props) {
+export default function Results({ criteria, alternatives, experts, judgments, method = 'ahp', weightingMethod = 'ahp', decisionMatrix, showPerExpert, projectTitle = 'Proyecto MCDA', projectObjective = '' }: Props) {
+  const [showReportModal, setShowReportModal] = useState(false);
   const idx = useMemo(() => indexJudgments(judgments), [judgments]);
   const withData = useMemo(() => experts.filter((e) => Object.keys(idx[e.id] ?? {}).length > 0).map((e) => e.id), [experts, idx]);
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
@@ -140,6 +146,23 @@ export default function Results({ criteria, alternatives, experts, judgments, me
 
   return (
     <div className="panel">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 2 }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 20 }}>Síntesis y Ranking de Resultados</h2>
+          <p className="muted" style={{ margin: '2px 0 0', fontSize: 13 }}>
+            Ponderación por {weightingMethod.toUpperCase()} · Algoritmo de ranking {METHOD_LABEL[method]}
+          </p>
+        </div>
+        <button
+          type="button"
+          className="btn sm primary"
+          onClick={() => setShowReportModal(true)}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 700 }}
+        >
+          📄 Generar Informe Ejecutivo (PDF)
+        </button>
+      </div>
+
       <div className="card">
         <div className="eyebrow">Expertos incluidos en el cálculo ({used.length} de {withData.length})</div>
         <div className="chips" style={{ marginTop: 8 }}>
@@ -299,6 +322,16 @@ export default function Results({ criteria, alternatives, experts, judgments, me
         </>
       )}
 
+      {/* Simulador de Sensibilidad What-If */}
+      <SensitivitySimulator
+        criteria={criteria}
+        alternatives={alternatives}
+        decisionMatrix={dm}
+        baseWeights={critWeights}
+        method={method as MethodKey}
+        ahpSynthRows={syn.rows.map((r) => ({ name: r.name, score: r.g, rank: r.rank }))}
+      />
+
       <div className="card res">
         <h3>Detalle por hoja</h3>
         <div className="sheetnav" role="group" aria-label="Hoja">
@@ -341,6 +374,24 @@ export default function Results({ criteria, alternatives, experts, judgments, me
           </>
         )}
       </div>
+
+      {showReportModal && (
+        <ExecutiveReportModal
+          projectTitle={projectTitle}
+          projectObjective={projectObjective}
+          method={method as MethodKey}
+          criteria={criteria}
+          alternatives={alternatives}
+          decisionMatrix={dm}
+          weights={critWeights}
+          rankingRows={
+            method === 'ahp'
+              ? syn.rows.map((r) => ({ name: r.name, score: r.g, rank: r.rank }))
+              : quant.rows.map((r) => ({ name: r.name, score: r.value, rank: r.rank }))
+          }
+          onClose={() => setShowReportModal(false)}
+        />
+      )}
     </div>
   );
 }
