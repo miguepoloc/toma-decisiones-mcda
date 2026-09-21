@@ -11,15 +11,23 @@ export default function Icon() {
           width: 32,
           height: 32,
           borderRadius: 8,
-          background: '#0B7A85',
+          background: 'linear-gradient(135deg, #0284C7 0%, #00E5FF 100%)',
           display: 'flex',
+          flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
           gap: 3,
+          padding: 5,
         }}
       >
-        <div style={{ width: 8, height: 8, borderRadius: 2, background: '#8FE0E2' }} />
-        <div style={{ width: 15, height: 15, borderRadius: 3.5, background: '#FFFFFF' }} />
+        <div style={{ display: 'flex', gap: 3 }}>
+          <div style={{ width: 8, height: 8, borderRadius: 2, background: 'rgba(255,255,255,0.35)' }} />
+          <div style={{ width: 8, height: 8, borderRadius: 2, background: 'rgba(255,255,255,0.7)' }} />
+        </div>
+        <div style={{ display: 'flex', gap: 3 }}>
+          <div style={{ width: 8, height: 8, borderRadius: 2, background: 'rgba(255,255,255,0.35)' }} />
+          <div style={{ width: 8, height: 8, borderRadius: 2.5, background: '#FFFFFF' }} />
+        </div>
       </div>
     ),
     { ...size },

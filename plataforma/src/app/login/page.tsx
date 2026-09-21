@@ -40,7 +40,16 @@ function LoginForm() {
   return (
     <div className="wrap">
       <div className="topbar">
-        <Link className="brand" href="/"><Logo />Plataforma MCDA</Link>
+        <Link className="brand" href="/" title="Plataforma MCDA · Inicio">
+          <Logo size={26} />
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, lineHeight: 1.2 }}>
+              <span>Plataforma MCDA</span>
+              <span style={{ fontSize: 10, fontFamily: 'var(--f-mono)', padding: '1px 5px', borderRadius: 4, background: 'rgba(255,255,255,0.1)', color: 'var(--muted)' }}>ACCESO</span>
+            </div>
+            <span className="brand-sub">← Ir al inicio</span>
+          </div>
+        </Link>
         <Link className="btn sm" href="/tutorial">Cómo funciona</Link>
       </div>
 

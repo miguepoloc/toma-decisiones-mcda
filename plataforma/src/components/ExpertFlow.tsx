@@ -45,7 +45,21 @@ export default function ExpertFlow({ token }: { token: string }) {
 
   return (
     <div className="wrap">
-      <div className="topbar"><Link className="brand" href="/"><Logo />Plataforma MCDA</Link><span className="muted" style={{ fontSize: 13 }}>Respondiendo como: {data.expert.name}{data.expert.role_desc ? ` · ${data.expert.role_desc}` : ''}</span></div>
+      <div className="topbar">
+        <Link className="brand" href="/" title="Plataforma MCDA · Inicio">
+          <Logo size={26} />
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, lineHeight: 1.2 }}>
+              <span>Plataforma MCDA</span>
+              <span style={{ fontSize: 10, fontFamily: 'var(--f-mono)', padding: '1px 5px', borderRadius: 4, background: 'rgba(255,255,255,0.1)', color: 'var(--muted)' }}>EXPERTO</span>
+            </div>
+            <span className="brand-sub">Panel de Consulta</span>
+          </div>
+        </Link>
+        <span className="muted" style={{ fontSize: 13, background: 'var(--surface2)', padding: '6px 12px', borderRadius: 8, border: '1px solid var(--line)' }}>
+          Respondiendo como: <b>{data.expert.name}</b>{data.expert.role_desc ? ` · ${data.expert.role_desc}` : ''}
+        </span>
+      </div>
       <div className="panel">
         <header>
           <div className="eyebrow">Consulta a expertos</div>

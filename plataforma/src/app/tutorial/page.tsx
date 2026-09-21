@@ -17,7 +17,16 @@ export default async function TutorialPage() {
   return (
     <div className="wrap">
       <div className="topbar">
-        <Link className="brand" href="/"><Logo />Plataforma MCDA</Link>
+        <Link className="brand" href="/" title="Plataforma MCDA · Inicio">
+          <Logo size={26} />
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, lineHeight: 1.2 }}>
+              <span>Plataforma MCDA</span>
+              <span style={{ fontSize: 10, fontFamily: 'var(--f-mono)', padding: '1px 5px', borderRadius: 4, background: 'rgba(255,255,255,0.1)', color: 'var(--muted)' }}>GUÍA</span>
+            </div>
+            <span className="brand-sub">← Ir al inicio</span>
+          </div>
+        </Link>
         <div className="acts">
           <Link className="btn sm primary" href={primaryHref}>{primaryLabel}</Link>
         </div>
@@ -106,6 +115,47 @@ export default async function TutorialPage() {
               <p>Pestaña «Compartir»: descarga el Excel con la misma estructura del ejercicio del curso (fórmulas vivas, listo para el informe), o activa un enlace público de solo resultados — sin nombres de expertos, sin sus enlaces, sin la priorización de criterios.</p>
             </div>
           </div>
+
+          <div className="tphase" id="referencias">
+            <span className="k">Marco Científico</span>
+            <h2>Literatura y Referencias Fundacionales</h2>
+
+            <div className="titem">
+              <span className="no">📚</span>
+              <h3>AHP (Analytic Hierarchy Process)</h3>
+              <p><b>Saaty, T. L. (1980).</b> <em>The Analytic Hierarchy Process: Planning, Priority Setting, Resource Allocation</em>. McGraw-Hill, New York. DOI/ISBN: 0-07-054371-2. Fundamenta la escala de juicios pareados 1 al 9 y el autovector principal como estimador de pesos con razón de consistencia CR &lt; 0.10.</p>
+            </div>
+
+            <div className="titem">
+              <span className="no">📚</span>
+              <h3>TOPSIS (Technique for Order Preference by Similarity to Ideal Solution)</h3>
+              <p><b>Hwang, C. L., & Yoon, K. (1981).</b> <em>Multiple Attribute Decision Making: Methods and Applications</em>. Springer-Verlag, Berlin/Heidelberg. Introduce la métrica euclidiana de proximidad simultánea a la solución ideal positiva (PIS) y lejanía de la anti-ideal (NIS).</p>
+            </div>
+
+            <div className="titem">
+              <span className="no">📚</span>
+              <h3>VIKOR (Compromise Solution MCDM)</h3>
+              <p><b>Opricovic, S., & Tzeng, G. H. (2004).</b> Compromise solution by MCDM methods: A comparative analysis of VIKOR and TOPSIS. <em>European Journal of Operational Research</em>, 156(2), 445–455. Formula la optimización multicriterio de compromiso basada en la medida de utilidad de la mayoría (S) y el pesar individual (R).</p>
+            </div>
+
+            <div className="titem">
+              <span className="no">📚</span>
+              <h3>PROMETHEE (Outranking Methods)</h3>
+              <p><b>Brans, J. P., & Vincke, P. (1985).</b> A preference ranking organisation method: The PROMETHEE method for multiple criteria decision-making. <em>Management Science</em>, 31(6), 647–656. Relaciones de superación basadas en funciones de preferencia y flujos netos Φ.</p>
+            </div>
+
+            <div className="titem">
+              <span className="no">📚</span>
+              <h3>ELECTRE (Concordance & Discordance)</h3>
+              <p><b>Roy, B. (1991).</b> The outranking approach and the foundations of ELECTRE methods. <em>Theory and Decision</em>, 31(1), 49–73. Procedimientos de partición no compensatoria basados en umbrales de veto y concordancia.</p>
+            </div>
+
+            <div className="titem">
+              <span className="no">📚</span>
+              <h3>Ponderación Objetiva (CRITIC y Entropía)</h3>
+              <p><b>Diakoulaki, D., Mavrotas, G., & Papayannakis, L. (1995).</b> Determining objective weights in multiple criteria problems: The CRITIC method. <em>Computers & Operations Research</em>, 22(7), 763–770. Junto con <b>Shannon, C. E. (1948)</b>, permite calcular pesos estadísticos cuando no se cuenta con panel de expertos.</p>
+            </div>
+          </div>
         </div>
 
         <nav className="trail" aria-label="Secciones de esta guía">
@@ -114,6 +164,7 @@ export default async function TutorialPage() {
           <a href="#configurar">2. Configurar tu proyecto</a>
           <a href="#expertos">3. Los expertos</a>
           <a href="#resultados">4. Resultados</a>
+          <a href="#referencias">5. Referencias científicas</a>
         </nav>
       </div>
 

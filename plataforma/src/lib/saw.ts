@@ -16,12 +16,13 @@ export type SawResult = {
   scores: number[];   // mismo orden que `alternatives`
   normalized: number[][];  // filas=alternativas, columnas=criterios (normalizado Min-Max)
   order: number[];
+  weights: number[];
 };
 
 export function saw(matrix: number[][], weights: number[], types: MatrixType[]): SawResult {
   const n = matrix.length;
   const m = weights.length;
-  if (n === 0 || m === 0) return { scores: [], normalized: [], order: [] };
+  if (n === 0 || m === 0) return { scores: [], normalized: [], order: [], weights: [] };
 
   const wsum = weights.reduce((a, b) => a + b, 0) || 1;
   const w = weights.map((x) => x / wsum);
@@ -42,7 +43,7 @@ export function saw(matrix: number[][], weights: number[], types: MatrixType[]):
 
   const scores = normalized.map((row) => row.reduce((s, v, j) => s + w[j] * v, 0));
   const order = scores.map((_, i) => i).sort((a, b) => scores[b] - scores[a]);
-  return { scores, normalized, order };
+  return { scores, normalized, order, weights: w };
 }
 
 export type SawSynth = {

@@ -16,19 +16,19 @@ type Props = { initialProject: ProjectRow; initialExperts: ExpertRow[]; initialJ
 type Patch = Partial<Pick<ProjectRow, 'title' | 'objective' | 'method' | 'weighting_method' | 'criteria' | 'alternatives' | 'decision_matrix' | 'prioritization' | 'is_public' | 'public_token'>>;
 const TABS_AHP = ['Proyecto', 'Priorización (A)', 'Expertos', 'Resultados', 'Compartir'];
 const TABS_MATRIX = ['Proyecto', 'Priorización (A)', 'Expertos', 'Matriz de decisión', 'Resultados', 'Compartir'];
-const METHOD_OPTIONS: { key: Method; label: string; desc: string }[] = [
-  { key: 'ahp', label: 'AHP', desc: 'Tus expertos comparan las alternativas de a pares, un criterio a la vez.' },
-  { key: 'topsis', label: 'TOPSIS', desc: 'Escribes el valor real de cada alternativa por criterio; ranquea por cercanía a la solución ideal.' },
-  { key: 'vikor', label: 'VIKOR', desc: 'Misma matriz que TOPSIS; ranquea buscando la mejor solución de compromiso (menor Q es mejor).' },
-  { key: 'promethee', label: 'PROMETHEE', desc: 'Misma matriz; compara cada par de alternativas criterio por criterio y suma flujos netos.' },
-  { key: 'electre', label: 'ELECTRE', desc: 'Misma matriz; no siempre da un ganador único — puede dejar alternativas incomparables entre sí.' },
-  { key: 'saw', label: 'SAW', desc: 'Suma ponderada simple (Simple Additive Weighting): normalización Min-Max + suma con pesos.' },
-  { key: 'fuzzy_topsis', label: 'Fuzzy TOPSIS', desc: 'TOPSIS con evaluaciones lingüísticas (Muy mala → Muy buena) representadas como números difusos triangulares.' },
+const METHOD_OPTIONS: { key: Method; label: string; family: string; desc: string; citation: string }[] = [
+  { key: 'ahp', label: 'AHP', family: 'Pares Saaty', desc: 'Tus expertos comparan las alternativas de a pares con la escala fundamental 1–9. Calcula autovalores y consistencia λmáx.', citation: 'Saaty, T. L. (1980). The Analytic Hierarchy Process. McGraw-Hill.' },
+  { key: 'topsis', label: 'TOPSIS', family: 'Distancia Ideal', desc: 'Escribes el valor cuantitativo real de cada alternativa; ranquea por cercanía euclidiana a la solución ideal (PIS) y lejanía de la anti-ideal (NIS).', citation: 'Hwang, C. L., & Yoon, K. (1981). Multiple Attribute Decision Making. Springer-Verlag.' },
+  { key: 'vikor', label: 'VIKOR', family: 'Compromiso', desc: 'Misma matriz que TOPSIS; ranquea buscando la solución de compromiso mutuo: maximiza utilidad de la mayoría (S) y minimiza pesar (R).', citation: 'Opricovic, S., & Tzeng, G. H. (2004). Compromise solution by MCDM methods. European Journal of Operational Research, 156(2), 445–455.' },
+  { key: 'promethee', label: 'PROMETHEE', family: 'Superación', desc: 'Relaciones de outranking: compara cada par de alternativas por criterio con funciones de preferencia y calcula flujos netos Φ.', citation: 'Brans, J. P., & Vincke, P. (1985). A preference ranking organisation method. Management Science, 31(6), 647–656.' },
+  { key: 'electre', label: 'ELECTRE', family: 'Concordancia', desc: 'Filtrado no compensatorio: particiona alternativas mediante índices de concordancia, discordancia y umbrales de veto.', citation: 'Roy, B. (1991). The outranking approach and the foundations of ELECTRE methods. Theory and Decision, 31(1), 49–73.' },
+  { key: 'saw', label: 'SAW', family: 'Suma Directa', desc: 'Suma ponderada simple (Simple Additive Weighting): normalización Min-Max lineal sumada con el vector de pesos.', citation: 'MacCrimmon, K. R. (1968). Decisionmaking among multiple-attribute alternatives. RAND Memorandum.' },
+  { key: 'fuzzy_topsis', label: 'Fuzzy TOPSIS', family: 'Lógica Difusa', desc: 'Trata la incertidumbre lingüística mediante números difusos triangulares (TFN) para modelar la ambigüedad del juicio humano.', citation: 'Chen, C. T. (2000). Extensions of the TOPSIS for group decision-making under fuzzy environment. Fuzzy Sets and Systems, 114(1), 1–9.' },
 ];
-const WEIGHTING_OPTIONS: { key: WeightingMethod; label: string; desc: string }[] = [
-  { key: 'ahp', label: 'AHP (expertos)', desc: 'Pesos derivados de los juicios por pares de los expertos en la pestaña Expertos.' },
-  { key: 'critic', label: 'CRITIC (objetivo)', desc: 'Pesos calculados automáticamente a partir de la varianza y correlación entre criterios en la matriz de datos.' },
-  { key: 'entropy', label: 'Entropía (objetivo)', desc: 'Pesos calculados automáticamente: menor entropía (mayor dispersión) significa criterio más informativo.' },
+const WEIGHTING_OPTIONS: { key: WeightingMethod; label: string; desc: string; citation: string }[] = [
+  { key: 'ahp', label: 'AHP (expertos)', desc: 'Pesos derivados de juicios por pares de expertos con autovalores y consistencia.', citation: 'Saaty, T. L. (1980)' },
+  { key: 'critic', label: 'CRITIC (objetivo)', desc: 'Pesos calculados a partir de la desviación estándar (contraste) y correlación lineal entre criterios en la matriz.', citation: 'Diakoulaki, D., Mavrotas, G., & Papayannakis, L. (1995)' },
+  { key: 'entropy', label: 'Entropía de Shannon (objetivo)', desc: 'Pesos automáticos por dispersión de datos: menor entropía implica mayor variabilidad y mayor poder de decisión.', citation: 'Shannon, C. E. (1948)' },
 ];
 
 const expertLabel = (e: ExpertRow) => (e.role_desc ? `${e.name} · ${e.role_desc}` : e.name);
@@ -188,16 +188,31 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
 
   return (
     <div>
-      <div className="acts" style={{ justifyContent: 'space-between', marginBottom: 6 }}>
+      <div className="acts" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <div>
-          <div className="eyebrow">Proyecto</div>
-          <h1 style={{ fontSize: 28 }}>{project.title}</h1>
+          <div className="eyebrow">Proyecto en edición</div>
+          <h1 style={{ fontSize: 28, letterSpacing: '-0.01em' }}>{project.title}</h1>
         </div>
-        <span className="savest" aria-live="polite">{save === 'saving' && 'Guardando…'}{save === 'saved' && '✓ Guardado'}{save === 'error' && `Error al guardar: ${saveErr}`}</span>
+        <div className="acts">
+          <span className="savest" aria-live="polite" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            {save === 'saving' && <span style={{ color: 'var(--warn)' }}>Guardando…</span>}
+            {save === 'saved' && (
+              <span style={{ color: 'var(--pass)', display: 'inline-flex', alignItems: 'center', gap: 5, background: 'rgba(16,185,129,0.1)', padding: '3px 9px', borderRadius: 99, border: '1px solid rgba(16,185,129,0.25)', fontSize: 12 }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--pass)', display: 'inline-block' }} />
+                Guardado en tiempo real
+              </span>
+            )}
+            {save === 'error' && <span style={{ color: 'var(--warn)' }}>Error al guardar: {saveErr}</span>}
+          </span>
+        </div>
       </div>
 
       <div className="tabsbar" role="tablist">
-        {TABS.map((t) => <button key={t} role="tab" aria-selected={tab === t} onClick={() => { setTab(t); setEditing(null); setMsg(''); }}>{t}</button>)}
+        {TABS.map((t) => (
+          <button key={t} role="tab" aria-selected={tab === t} onClick={() => { setTab(t); setEditing(null); setMsg(''); }}>
+            {t}
+          </button>
+        ))}
       </div>
       {msg && <p className="muted" role="status" style={{ marginBottom: 10 }}>{msg}</p>}
 
@@ -205,31 +220,95 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
         <div className="panel">
           <div className="card form">
             <div><label className="lbl" htmlFor="t">Título del proyecto</label><input id="t" type="text" value={project.title} onChange={(e) => patch({ title: e.target.value })} /></div>
-            <div><label className="lbl" htmlFor="o">Objetivo de decisión</label><textarea id="o" value={project.objective} onChange={(e) => patch({ objective: e.target.value })} placeholder="Ej.: seleccionar la alternativa X que mejor cumpla Y en el contexto Z" /></div>
+            <div><label className="lbl" htmlFor="o">Objetivo de decisión</label><textarea id="o" value={project.objective} onChange={(e) => patch({ objective: e.target.value })} placeholder="Ej.: seleccionar la mejor arquitectura IoT que maximice cobertura y minimice costo de despliegue" /></div>
           </div>
+
           <div className="card form">
-            <label className="lbl">Cómo comparar las alternativas</label>
-            <div className="seg" role="group" aria-label="Método">
-              {METHOD_OPTIONS.map((m) => (
-                <button key={m.key} type="button" aria-pressed={project.method === m.key} onClick={() => patch({ method: m.key }, true)}>{m.label}</button>
-              ))}
-            </div>
-            <p className="muted" style={{ fontSize: 13 }}>
-              {METHOD_OPTIONS.find((m) => m.key === project.method)?.desc}
-              {' '}¿No sabes cuál te conviene? <a href="/metodo" target="_blank" rel="noreferrer">Compáralos</a>.
-            </p>
-            {project.method !== 'ahp' && (
-              <>
-                <label className="lbl" style={{ marginTop: 12 }}>Método de ponderación de criterios</label>
-                <div className="seg" role="group" aria-label="Ponderación">
-                  {WEIGHTING_OPTIONS.map((o) => (
-                    <button key={o.key} type="button" aria-pressed={(project.weighting_method ?? 'ahp') === o.key} onClick={() => patch({ weighting_method: o.key }, true)}>{o.label}</button>
-                  ))}
-                </div>
-                <p className="muted" style={{ fontSize: 13 }}>
-                  {WEIGHTING_OPTIONS.find((o) => o.key === (project.weighting_method ?? 'ahp'))?.desc}
+            <div className="acts" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div>
+                <label className="lbl">Cómo comparar las alternativas (Algoritmo MCDA)</label>
+                <p className="muted" style={{ fontSize: 13, marginBottom: 10 }}>
+                  Selecciona el método con el que se calculará el ranking. Cada algoritmo cuenta con sustento matemático y justificación en la literatura científica.
                 </p>
-              </>
+              </div>
+              <a href="/metodo" target="_blank" rel="noreferrer" className="btn sm" style={{ textDecoration: 'none' }}>
+                📖 Comparar métodos y teoría →
+              </a>
+            </div>
+
+            <div className="methods-cards-grid" role="group" aria-label="Método de decisión multicriterio">
+              {METHOD_OPTIONS.map((m) => {
+                const isSelected = project.method === m.key;
+                return (
+                  <div
+                    key={m.key}
+                    className={`method-card ${isSelected ? 'selected' : ''}`}
+                    data-method={m.key}
+                    role="button"
+                    tabIndex={0}
+                    aria-pressed={isSelected}
+                    onClick={() => patch({ method: m.key }, true)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); patch({ method: m.key }, true); } }}
+                  >
+                    <div className="method-card-top">
+                      <span className="method-badge">{m.family}</span>
+                      <div className="method-radio">
+                        {isSelected && (
+                          <svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor">
+                            <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                          </svg>
+                        )}
+                      </div>
+                    </div>
+                    <div className="method-name">
+                      <span className="method-dot" />
+                      <span>{m.label}</span>
+                    </div>
+                    <div className="method-desc">{m.desc}</div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {(() => {
+              const cur = METHOD_OPTIONS.find((m) => m.key === project.method);
+              return (
+                <div className="method-callout">
+                  <div>
+                    <strong>{cur?.label} ({cur?.family}):</strong> {cur?.desc}
+                    <div style={{ fontSize: 12, marginTop: 4, opacity: 0.85, fontFamily: 'var(--f-mono)' }}>
+                      📚 <em>Referencia científica: {cur?.citation}</em>
+                    </div>
+                  </div>
+                  <a href="/metodo" target="_blank" rel="noreferrer">Ver fórmulas y literatura →</a>
+                </div>
+              );
+            })()}
+
+            {project.method !== 'ahp' && (
+              <div style={{ marginTop: 14 }}>
+                <label className="lbl">Método de ponderación de criterios</label>
+                <div className="weights-grid" role="group" aria-label="Ponderación de criterios">
+                  {WEIGHTING_OPTIONS.map((o) => {
+                    const isSelected = (project.weighting_method ?? 'ahp') === o.key;
+                    return (
+                      <div
+                        key={o.key}
+                        className={`weight-card ${isSelected ? 'selected' : ''}`}
+                        role="button"
+                        tabIndex={0}
+                        aria-pressed={isSelected}
+                        onClick={() => patch({ weighting_method: o.key }, true)}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); patch({ weighting_method: o.key }, true); } }}
+                      >
+                        <b>{o.label}</b>
+                        <span>{o.desc}</span>
+                        <div style={{ fontSize: 11, color: 'var(--muted)', fontFamily: 'var(--f-mono)' }}>{o.citation}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             )}
           </div>
           <div className="card form">

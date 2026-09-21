@@ -1,0 +1,846 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Previsualizador de Métodos y Estilos UI/UX - Plataforma MCDA</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    :root {
+      --bg: #0B0F17;
+      --surface: #111827;
+      --surface-elevated: #162032;
+      --border: rgba(255, 255, 255, 0.09);
+      --border-hover: rgba(255, 255, 255, 0.25);
+      --text: #F1F5F9;
+      --muted: #94A3B8;
+      
+      /* PALETA DE COLORES IDENTITARIOS POR MÉTODO */
+      --color-ahp: #8B5CF6;
+      --color-topsis: #00E5FF;
+      --color-vikor: #10B981;
+      --color-promethee: #F43F5E;
+      --color-electre: #F59E0B;
+      --color-saw: #FB923C;
+      --color-fuzzy: #2DD4BF;
+    }
+
+    body {
+      font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      min-height: 220vh;
+      line-height: 1.5;
+    }
+
+    /* TOP BAR LAB CONTROL */
+    .lab-banner {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: #000000;
+      border-bottom: 1px solid rgba(255,255,255,0.15);
+      padding: 10px 24px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+    }
+    .lab-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #94A3B8;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .lab-badge {
+      background: #0284C7;
+      color: #FFFFFF;
+      padding: 3px 8px;
+      border-radius: 99px;
+      font-size: 11px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-weight: 700;
+    }
+    .view-toggle-btns {
+      display: flex;
+      gap: 8px;
+    }
+    .toggle-btn {
+      background: #1E293B;
+      color: #E2E8F0;
+      border: 1px solid #334155;
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .toggle-btn:hover { background: #334155; color: #FFF; }
+    .toggle-btn.active {
+      background: #0284C7;
+      border-color: #38BDF8;
+      color: #FFF;
+      box-shadow: 0 0 12px rgba(56, 189, 248, 0.4);
+    }
+
+    /* HEADER STICKY CON BLUR */
+    .app-header {
+      position: sticky;
+      top: 49px;
+      z-index: 50;
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      background: rgba(11, 15, 23, 0.85);
+      border-bottom: 1px solid var(--border);
+      transition: all 0.2s ease;
+    }
+    .header-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    /* BRAND BUTTON ACCIONABLE CON MICRO-INTERACCIÓN */
+    .brand-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      padding: 7px 14px 7px 9px;
+      border-radius: 9px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border);
+      text-decoration: none;
+      color: inherit;
+      cursor: pointer;
+      transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .brand-btn:hover {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(0, 229, 255, 0.4);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 16px rgba(0, 229, 255, 0.15);
+    }
+    .brand-icon {
+      width: 30px;
+      height: 30px;
+      border-radius: 7px;
+      background: linear-gradient(135deg, #0284C7 0%, #00E5FF 100%);
+      display: grid;
+      place-items: center;
+      box-shadow: 0 0 14px rgba(0, 229, 255, 0.4);
+      flex-shrink: 0;
+    }
+    .brand-icon svg { width: 17px; height: 17px; fill: #FFFFFF; }
+    .brand-text { display: flex; flex-direction: column; }
+    .brand-title {
+      font-family: 'Bricolage Grotesque', sans-serif;
+      font-size: 15px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .brand-badge {
+      font-size: 10px;
+      font-family: 'IBM Plex Mono', monospace;
+      padding: 1px 6px;
+      background: rgba(255,255,255,0.12);
+      border-radius: 4px;
+      color: var(--muted);
+    }
+    .brand-sub {
+      font-size: 11px;
+      color: var(--muted);
+      font-weight: 500;
+      transition: color 0.2s ease;
+    }
+    .brand-btn:hover .brand-sub { color: #00E5FF; }
+
+    /* ACCIONES DE HEADER */
+    .header-actions { display: flex; align-items: center; gap: 14px; }
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-family: 'IBM Plex Mono', monospace;
+      color: #10B981;
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.25);
+      padding: 4px 10px;
+      border-radius: 99px;
+    }
+    .status-pill::before {
+      content: '';
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #10B981;
+      box-shadow: 0 0 8px #10B981;
+    }
+    .btn-exit {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .btn-exit:hover {
+      background: rgba(239, 68, 68, 0.12);
+      border-color: rgba(239, 68, 68, 0.4);
+      color: #EF4444;
+    }
+
+    /* CONTENEDOR WORKSPACE */
+    .workspace-wrap {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 28px 24px 100px;
+    }
+
+    .project-header { margin-bottom: 24px; }
+    .eyebrow {
+      font-size: 12px;
+      font-family: 'IBM Plex Mono', monospace;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #00E5FF;
+      margin-bottom: 4px;
+    }
+    .project-title {
+      font-family: 'Bricolage Grotesque', sans-serif;
+      font-size: 32px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    /* PESTAÑAS */
+    .tabs-nav {
+      display: flex;
+      gap: 6px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 28px;
+      overflow-x: auto;
+    }
+    .tab-item {
+      background: transparent;
+      border: none;
+      border-bottom: 2px solid transparent;
+      padding: 10px 16px;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--muted);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s ease;
+      border-radius: 6px 6px 0 0;
+    }
+    .tab-item:hover { color: #FFFFFF; background: rgba(255,255,255,0.03); }
+    .tab-item.active {
+      color: #FFFFFF;
+      border-bottom-color: #00E5FF;
+      background: rgba(0, 229, 255, 0.05);
+    }
+
+    /* CARD CONTENEDORA */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 24px;
+      margin-bottom: 24px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.25);
+    }
+    .field-label {
+      display: block;
+      font-size: 12px;
+      font-family: 'IBM Plex Mono', monospace;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      margin-bottom: 6px;
+      font-weight: 600;
+    }
+
+    /* ========================================================
+       VARIANTE 1: TARJETAS MODULARES ENRIQUECIDAS (CARDS GRID)
+       ======================================================== */
+    .variant-section { display: none; }
+    .variant-section.active { display: block; }
+
+    .methods-cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 14px;
+      margin-top: 14px;
+    }
+    .card-option {
+      background: var(--surface-elevated);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px 18px;
+      cursor: pointer;
+      text-align: left;
+      position: relative;
+      transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      user-select: none;
+    }
+    .card-option:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    }
+    
+    /* ESTILOS ESPECÍFICOS POR MÉTODO (COLOR PROPIO) */
+    .card-option[data-method="ahp"] { --m-color: var(--color-ahp); }
+    .card-option[data-method="topsis"] { --m-color: var(--color-topsis); }
+    .card-option[data-method="vikor"] { --m-color: var(--color-vikor); }
+    .card-option[data-method="promethee"] { --m-color: var(--color-promethee); }
+    .card-option[data-method="electre"] { --m-color: var(--color-electre); }
+    .card-option[data-method="saw"] { --m-color: var(--color-saw); }
+    .card-option[data-method="fuzzy_topsis"] { --m-color: var(--color-fuzzy); }
+
+    .card-option:hover {
+      border-color: color-mix(in srgb, var(--m-color) 45%, transparent);
+    }
+
+    .card-option.selected {
+      background: linear-gradient(150deg, var(--surface-elevated) 0%, color-mix(in srgb, var(--m-color) 16%, var(--surface-elevated)) 100%);
+      border-color: var(--m-color);
+      box-shadow: 0 0 0 1px var(--m-color), 0 10px 28px color-mix(in srgb, var(--m-color) 22%, transparent);
+    }
+
+    .card-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .card-badge {
+      font-size: 10px;
+      font-family: 'IBM Plex Mono', monospace;
+      text-transform: uppercase;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      padding: 2px 7px;
+      border-radius: 4px;
+      background: rgba(255,255,255,0.06);
+      color: var(--muted);
+      transition: all 0.2s ease;
+    }
+    .card-option.selected .card-badge {
+      background: var(--m-color);
+      color: #0B0F17;
+    }
+    .card-radio {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      border: 1.5px solid var(--border);
+      display: grid;
+      place-items: center;
+      transition: all 0.2s ease;
+    }
+    .card-option.selected .card-radio {
+      border-color: var(--m-color);
+      background: var(--m-color);
+    }
+    .card-radio svg {
+      width: 11px;
+      height: 11px;
+      fill: #0B0F17;
+      display: none;
+    }
+    .card-option.selected .card-radio svg { display: block; }
+
+    .card-name {
+      font-size: 17px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      color: #FFFFFF;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .card-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--m-color);
+      box-shadow: 0 0 8px var(--m-color);
+    }
+    .card-desc {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    /* ========================================================
+       VARIANTE 2: PILLS / CHIPS SEGMENTADOS DE ALTO IMPACTO
+       ======================================================== */
+    .pills-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 14px;
+    }
+    .pill-option {
+      background: var(--surface-elevated);
+      border: 1px solid var(--border);
+      border-radius: 99px;
+      padding: 8px 18px 8px 12px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      user-select: none;
+    }
+    .pill-option[data-method="ahp"] { --m-color: var(--color-ahp); }
+    .pill-option[data-method="topsis"] { --m-color: var(--color-topsis); }
+    .pill-option[data-method="vikor"] { --m-color: var(--color-vikor); }
+    .pill-option[data-method="promethee"] { --m-color: var(--color-promethee); }
+    .pill-option[data-method="electre"] { --m-color: var(--color-electre); }
+    .pill-option[data-method="saw"] { --m-color: var(--color-saw); }
+    .pill-option[data-method="fuzzy_topsis"] { --m-color: var(--color-fuzzy); }
+
+    .pill-option:hover {
+      border-color: color-mix(in srgb, var(--m-color) 50%, transparent);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 14px rgba(0,0,0,0.3);
+    }
+    .pill-option.selected {
+      background: color-mix(in srgb, var(--m-color) 18%, var(--surface-elevated));
+      border-color: var(--m-color);
+      box-shadow: 0 0 16px color-mix(in srgb, var(--m-color) 35%, transparent);
+      color: #FFFFFF;
+    }
+    .pill-indicator {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--m-color);
+      box-shadow: 0 0 6px var(--m-color);
+    }
+    .pill-family {
+      font-size: 11px;
+      font-family: 'IBM Plex Mono', monospace;
+      color: var(--muted);
+      font-weight: 400;
+    }
+    .pill-option.selected .pill-family {
+      color: color-mix(in srgb, var(--m-color) 80%, white);
+    }
+
+    /* BANNER EXPLICATIVO DINÁMICO */
+    .detail-banner {
+      margin-top: 18px;
+      padding: 14px 20px;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.02);
+      border-left: 4px solid var(--cur-method-color, #00E5FF);
+      font-size: 13.5px;
+      color: #CBD5E1;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      transition: border-color 0.25s ease;
+    }
+    .detail-banner a {
+      color: var(--cur-method-color, #00E5FF);
+      text-decoration: none;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .detail-banner a:hover { text-decoration: underline; }
+
+    /* INPUTS Y BOTONES */
+    .text-input {
+      width: 100%;
+      background: var(--surface-elevated);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 14px;
+      color: #FFFFFF;
+      font-family: inherit;
+    }
+    .btn-add {
+      background: var(--surface-elevated);
+      border: 1px solid var(--border);
+      color: #FFFFFF;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+    }
+    .btn-add:hover {
+      border-color: #00E5FF;
+      background: rgba(0, 229, 255, 0.1);
+      box-shadow: 0 0 14px rgba(0, 229, 255, 0.25);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- LAB CONTROL TOP BAR -->
+  <div class="lab-banner">
+    <div class="lab-title">
+      <span class="lab-badge">TEST INTERACTIVO</span>
+      Compara las dos variantes de selector y los 3 estilos de Logo:
+    </div>
+    <div class="view-toggle-btns">
+      <button class="toggle-btn active" onclick="switchVariant('cards', this)">1. Selector: Tarjetas Modulares</button>
+      <button class="toggle-btn" onclick="switchVariant('pills', this)">2. Selector: Pills Segmentados</button>
+    </div>
+  </div>
+
+  <!-- LOGO SWITCHER BAR -->
+  <div style="background: #0B0F17; border-bottom: 1px solid rgba(255,255,255,0.08); padding: 10px 24px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px;">
+    <div style="font-size: 13px; font-weight: 600; color: #94A3B8; display: flex; align-items: center; gap: 8px;">
+      <span>🎨 Elige el Logo para previsualizarlo en la cabecera:</span>
+    </div>
+    <div style="display: flex; gap: 10px; align-items: center;">
+      <button id="logo-btn-1" class="toggle-btn active" style="display: flex; align-items: center; gap: 8px;" onclick="setAppLogo(1, this)">
+        <span style="font-weight: 700;">Logo 1: Matriz de Decisión</span>
+      </button>
+      <button id="logo-btn-2" class="toggle-btn" style="display: flex; align-items: center; gap: 8px;" onclick="setAppLogo(2, this)">
+        <span style="font-weight: 700;">Logo 2: Bloques Originales Modernizados</span>
+      </button>
+      <button id="logo-btn-3" class="toggle-btn" style="display: flex; align-items: center; gap: 8px;" onclick="setAppLogo(3, this)">
+        <span style="font-weight: 700;">Logo 3: Balanza / Vector de Criterios</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- HEADER STICKY -->
+  <header class="app-header">
+    <div class="header-inner">
+      <a href="#" class="brand-btn" title="Volver a mis proyectos">
+        <div id="app-brand-icon" class="brand-icon">
+          <svg viewBox="0 0 32 32" width="18" height="18" fill="none">
+            <rect width="32" height="32" rx="8" fill="url(#grad1)" />
+            <rect x="6" y="6" width="8" height="8" rx="2" fill="#FFFFFF" fill-opacity="0.3" />
+            <rect x="18" y="6" width="8" height="8" rx="2" fill="#FFFFFF" fill-opacity="0.6" />
+            <rect x="6" y="18" width="8" height="8" rx="2" fill="#FFFFFF" fill-opacity="0.3" />
+            <rect x="18" y="18" width="8" height="8" rx="2.5" fill="#FFFFFF" />
+            <circle cx="22" cy="22" r="2" fill="#0284C7" />
+            <defs>
+              <linearGradient id="grad1" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+                <stop stop-color="#0284C7"/>
+                <stop offset="1" stop-color="#00E5FF"/>
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <div class="brand-title">Plataforma MCDA <span class="brand-badge">PRO</span></div>
+          <div class="brand-sub">← Mis proyectos</div>
+        </div>
+      </a>
+
+      <div class="header-actions">
+        <div class="status-pill">Guardado en tiempo real</div>
+        <div style="font-size: 13px; color: var(--muted);">REDACTED_EMAIL</div>
+        <button class="btn-exit">Salir</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- CONTENIDO -->
+  <main class="workspace-wrap">
+    <div class="project-header">
+      <div class="eyebrow">Proyecto en edición</div>
+      <h1 class="project-title">IoT Palmor</h1>
+    </div>
+
+    <nav class="tabs-nav">
+      <button class="tab-item active">Proyecto</button>
+      <button class="tab-item">Priorización (A)</button>
+      <button class="tab-item">Expertos</button>
+      <button class="tab-item">Matriz de decisión</button>
+      <button class="tab-item">Resultados</button>
+      <button class="tab-item">Compartir</button>
+    </nav>
+
+    <!-- CARD FORMULARIO -->
+    <div class="card">
+      <label class="field-label" style="font-size: 13px; color: #FFF; margin-bottom: 4px;">CÓMO COMPARAR LAS ALTERNATIVAS</label>
+      <p style="font-size: 13px; color: var(--muted); margin-bottom: 12px;">
+        Haz clic en cada método para ver cómo se ilumina con su color y cómo se activa la explicación en vivo:
+      </p>
+
+      <!-- SECCIÓN VARIANTE A: TARJETAS MODULARES -->
+      <div id="variant-cards" class="variant-section active">
+        <div class="methods-cards-grid">
+          
+          <div class="card-option" data-method="ahp" onclick="chooseMethod('ahp', '#8B5CF6', this)">
+            <div class="card-top">
+              <span class="card-badge">Pares Saaty</span>
+              <div class="card-radio"><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></div>
+            </div>
+            <div class="card-name"><span class="card-dot"></span>AHP</div>
+            <div class="card-desc">Juicios pareados 1–9. Ponderación jerárquica con autovalores y consistencia λmáx.</div>
+          </div>
+
+          <div class="card-option selected" data-method="topsis" onclick="chooseMethod('topsis', '#00E5FF', this)">
+            <div class="card-top">
+              <span class="card-badge">Distancia Ideal</span>
+              <div class="card-radio"><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></div>
+            </div>
+            <div class="card-name"><span class="card-dot"></span>TOPSIS</div>
+            <div class="card-desc">Datos reales cuantificables. Ranquea por cercanía euclidiana a PIS y lejanía de NIS.</div>
+          </div>
+
+          <div class="card-option" data-method="vikor" onclick="chooseMethod('vikor', '#10B981', this)">
+            <div class="card-top">
+              <span class="card-badge">Compromiso</span>
+              <div class="card-radio"><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></div>
+            </div>
+            <div class="card-name"><span class="card-dot"></span>VIKOR</div>
+            <div class="card-desc">Solución de compromiso mutuo: maximiza utilidad de la mayoría (S) y minimiza pesar (R).</div>
+          </div>
+
+          <div class="card-option" data-method="promethee" onclick="chooseMethod('promethee', '#F43F5E', this)">
+            <div class="card-top">
+              <span class="card-badge">Superación</span>
+              <div class="card-radio"><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></div>
+            </div>
+            <div class="card-name"><span class="card-dot"></span>PROMETHEE</div>
+            <div class="card-desc">Relaciones de superación (outranking) con flujos de preferencia netos Φ+ y Φ-.</div>
+          </div>
+
+          <div class="card-option" data-method="electre" onclick="chooseMethod('electre', '#F59E0B', this)">
+            <div class="card-top">
+              <span class="card-badge">Concordancia</span>
+              <div class="card-radio"><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></div>
+            </div>
+            <div class="card-name"><span class="card-dot"></span>ELECTRE</div>
+            <div class="card-desc">Conjuntos de dominancia mediante índices de concordancia, discordancia y veto.</div>
+          </div>
+
+          <div class="card-option" data-method="saw" onclick="chooseMethod('saw', '#FB923C', this)">
+            <div class="card-top">
+              <span class="card-badge">Suma Directa</span>
+              <div class="card-radio"><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></div>
+            </div>
+            <div class="card-name"><span class="card-dot"></span>SAW</div>
+            <div class="card-desc">Suma ponderada lineal simple: normalización Min-Max más producto directo con pesos.</div>
+          </div>
+
+          <div class="card-option" data-method="fuzzy_topsis" onclick="chooseMethod('fuzzy_topsis', '#2DD4BF', this)">
+            <div class="card-top">
+              <span class="card-badge">Lógica Difusa</span>
+              <div class="card-radio"><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></div>
+            </div>
+            <div class="card-name"><span class="card-dot"></span>Fuzzy TOPSIS</div>
+            <div class="card-desc">Trata la incertidumbre lingüística mediante números difusos triangulares (TFN).</div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- SECCIÓN VARIANTE B: PILLS SEGMENTADOS -->
+      <div id="variant-pills" class="variant-section">
+        <div class="pills-container">
+          <div class="pill-option" data-method="ahp" onclick="chooseMethodPill('ahp', '#8B5CF6', this)">
+            <span class="pill-indicator"></span>
+            <span>AHP</span>
+            <span class="pill-family">· Pares Saaty</span>
+          </div>
+
+          <div class="pill-option selected" data-method="topsis" onclick="chooseMethodPill('topsis', '#00E5FF', this)">
+            <span class="pill-indicator"></span>
+            <span>TOPSIS</span>
+            <span class="pill-family">· Distancia Ideal</span>
+          </div>
+
+          <div class="pill-option" data-method="vikor" onclick="chooseMethodPill('vikor', '#10B981', this)">
+            <span class="pill-indicator"></span>
+            <span>VIKOR</span>
+            <span class="pill-family">· Compromiso</span>
+          </div>
+
+          <div class="pill-option" data-method="promethee" onclick="chooseMethodPill('promethee', '#F43F5E', this)">
+            <span class="pill-indicator"></span>
+            <span>PROMETHEE</span>
+            <span class="pill-family">· Superación</span>
+          </div>
+
+          <div class="pill-option" data-method="electre" onclick="chooseMethodPill('electre', '#F59E0B', this)">
+            <span class="pill-indicator"></span>
+            <span>ELECTRE</span>
+            <span class="pill-family">· Concordancia</span>
+          </div>
+
+          <div class="pill-option" data-method="saw" onclick="chooseMethodPill('saw', '#FB923C', this)">
+            <span class="pill-indicator"></span>
+            <span>SAW</span>
+            <span class="pill-family">· Suma Ponderada</span>
+          </div>
+
+          <div class="pill-option" data-method="fuzzy_topsis" onclick="chooseMethodPill('fuzzy_topsis', '#2DD4BF', this)">
+            <span class="pill-indicator"></span>
+            <span>Fuzzy TOPSIS</span>
+            <span class="pill-family">· Lógica Difusa</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- EXPLICACIÓN DINÁMICA -->
+      <div id="detail-banner" class="detail-banner" style="--cur-method-color: #00E5FF;">
+        <span id="detail-text">
+          <strong>TOPSIS seleccionado (Cercanía a la Solución Ideal):</strong> Escribes los valores reales cuantitativos en la matriz. Ranquea buscando simultáneamente la menor distancia a la alternativa ideal positiva y la mayor a la ideal negativa.
+        </span>
+        <a href="/metodo" target="_blank">Comparativa en la literatura →</a>
+      </div>
+    </div>
+
+    <!-- SECCIÓN DE CRITERIOS -->
+    <div class="card">
+      <label class="field-label">CRITERIOS (3) Y SU REGLA DE LECTURA</label>
+      <div style="display: grid; gap: 10px; margin-block: 12px;">
+        <input class="text-input" value="Alcance de transmisión (km) — Regla: Mayor es mejor">
+        <input class="text-input" value="Duración de batería (meses) — Regla: Mayor es mejor">
+        <input class="text-input" value="Costo de despliegue ($) — Regla: Menor es mejor (Costo)">
+      </div>
+      <button class="btn-add">+ Agregar criterio</button>
+    </div>
+
+    <div style="height: 600px; padding: 30px; border: 1px dashed var(--border); border-radius: 14px; text-align: center; color: var(--muted); display: grid; place-items: center;">
+      <div>
+        <p style="font-weight: 700; font-size: 16px; color: #FFF; margin-bottom: 8px;">Zona de prueba de scroll continuo</p>
+        <p style="font-size: 13.5px; max-width: 55ch; margin: 0 auto;">
+          Baja con el ratón o trackpad: verás cómo la cabecera superior se mantiene suspendida de forma elegante con <strong>backdrop-filter blur</strong>, manteniendo visible el botón de marca «Plataforma MCDA» con su enlace a mis proyectos y el estado de guardado.
+        </p>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const descs = {
+      ahp: '<strong>AHP seleccionado (Jerarquía y Juicios Pareados Saaty):</strong> Los expertos comparan criterios y alternativas de a pares con la escala fundamental (1 al 9). Se calcula consistencia formal (CR < 0.10).',
+      topsis: '<strong>TOPSIS seleccionado (Distancia a la Solución Ideal):</strong> Escribes los valores cuantitativos reales en la matriz. Ranquea por cercanía euclidiana a la solución óptima y lejanía de la peor.',
+      vikor: '<strong>VIKOR seleccionado (Solución de Compromiso):</strong> Busca un balance óptimo entre la satisfacción de la mayoría y el rechazo del oponente mediante los índices S, R y Q.',
+      promethee: '<strong>PROMETHEE seleccionado (Relaciones de Superación):</strong> Compara alternativas pares a pares por criterio aplicando funciones de preferencia para obtener flujos netos Φ.',
+      electre: '<strong>ELECTRE seleccionado (Concordancia y Discordancia):</strong> Elimina alternativas dominadas utilizando umbrales de veto y concordancia sin forzar una suma compensatoria.',
+      saw: '<strong>SAW seleccionado (Suma Ponderada Simple):</strong> Normaliza los valores de la matriz entre 0 y 1 mediante Min-Max y calcula la suma ponderada directa.',
+      fuzzy_topsis: '<strong>Fuzzy TOPSIS seleccionado (Extensión con Números Difusos):</strong> Permite ingresar juicios cualitativos difusos triangulares para modelar la ambigüedad inherente al criterio humano.'
+    };
+
+    function switchVariant(variant, btn) {
+      document.querySelectorAll('.variant-section').forEach(s => s.classList.remove('active'));
+      document.getElementById('variant-' + variant).classList.add('active');
+      document.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    }
+
+    function chooseMethod(method, color, card) {
+      document.querySelectorAll('.card-option').forEach(c => c.classList.remove('selected'));
+      card.classList.add('selected');
+      updateExplanation(method, color);
+      // sincronizar con pills
+      const matchingPill = document.querySelector(`.pill-option[data-method="${method}"]`);
+      if (matchingPill) {
+        document.querySelectorAll('.pill-option').forEach(p => p.classList.remove('selected'));
+        matchingPill.classList.add('selected');
+      }
+    }
+
+    function chooseMethodPill(method, color, pill) {
+      document.querySelectorAll('.pill-option').forEach(p => p.classList.remove('selected'));
+      pill.classList.add('selected');
+      updateExplanation(method, color);
+      // sincronizar con cards
+      const matchingCard = document.querySelector(`.card-option[data-method="${method}"]`);
+      if (matchingCard) {
+        document.querySelectorAll('.card-option').forEach(c => c.classList.remove('selected'));
+        matchingCard.classList.add('selected');
+      }
+    }
+
+    const logos = {
+      1: `<svg viewBox="0 0 32 32" width="18" height="18" fill="none">
+            <rect width="32" height="32" rx="8" fill="url(#grad1)" />
+            <rect x="6" y="6" width="8" height="8" rx="2" fill="#FFFFFF" fill-opacity="0.3" />
+            <rect x="18" y="6" width="8" height="8" rx="2" fill="#FFFFFF" fill-opacity="0.6" />
+            <rect x="6" y="18" width="8" height="8" rx="2" fill="#FFFFFF" fill-opacity="0.3" />
+            <rect x="18" y="18" width="8" height="8" rx="2.5" fill="#FFFFFF" />
+            <circle cx="22" cy="22" r="2" fill="#0284C7" />
+            <defs>
+              <linearGradient id="grad1" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+                <stop stop-color="#0284C7"/>
+                <stop offset="1" stop-color="#00E5FF"/>
+              </linearGradient>
+            </defs>
+          </svg>`,
+      2: `<svg viewBox="0 0 32 32" width="18" height="18" fill="none">
+            <rect width="32" height="32" rx="8" fill="#0B7A85" />
+            <rect x="3" y="12" width="8" height="8" rx="2" fill="#8FE0E2" />
+            <rect x="14" y="8.5" width="15" height="15" rx="3.5" fill="#FFFFFF" />
+          </svg>`,
+      3: `<svg viewBox="0 0 32 32" width="18" height="18" fill="none">
+            <rect width="32" height="32" rx="8" fill="url(#grad3)" />
+            <path d="M7 13L25 10" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round"/>
+            <circle cx="7" cy="17" r="3.5" fill="#38BDF8" />
+            <circle cx="25" cy="14" r="4.5" fill="#FFFFFF" />
+            <path d="M16 11.5V23" stroke="#94A3B8" stroke-width="2" stroke-linecap="round"/>
+            <path d="M11 23H21" stroke="#94A3B8" stroke-width="2" stroke-linecap="round"/>
+            <defs>
+              <linearGradient id="grad3" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+                <stop stop-color="#1E1B4B"/>
+                <stop offset="1" stop-color="#6366F1"/>
+              </linearGradient>
+            </defs>
+          </svg>`
+    };
+
+    function setAppLogo(id, btn) {
+      document.querySelectorAll('#logo-btn-1, #logo-btn-2, #logo-btn-3').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const iconContainer = document.getElementById('app-brand-icon');
+      if (iconContainer) {
+        iconContainer.innerHTML = logos[id];
+        if (id === 1) {
+          iconContainer.style.background = 'transparent';
+          iconContainer.style.boxShadow = '0 0 14px rgba(0, 229, 255, 0.4)';
+        } else if (id === 2) {
+          iconContainer.style.background = 'transparent';
+          iconContainer.style.boxShadow = '0 0 14px rgba(11, 122, 133, 0.4)';
+        } else {
+          iconContainer.style.background = 'transparent';
+          iconContainer.style.boxShadow = '0 0 14px rgba(99, 102, 241, 0.4)';
+        }
+      }
+    }
+  </script>
+</body>
+</html>

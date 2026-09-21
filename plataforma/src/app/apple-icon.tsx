@@ -10,15 +10,24 @@ export default function AppleIcon() {
         style={{
           width: 180,
           height: 180,
-          background: '#0B7A85',
+          borderRadius: 40,
+          background: 'linear-gradient(135deg, #0284C7 0%, #00E5FF 100%)',
           display: 'flex',
+          flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
           gap: 16,
+          padding: 24,
         }}
       >
-        <div style={{ width: 42, height: 42, borderRadius: 10, background: '#8FE0E2' }} />
-        <div style={{ width: 82, height: 82, borderRadius: 18, background: '#FFFFFF' }} />
+        <div style={{ display: 'flex', gap: 16 }}>
+          <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(255,255,255,0.35)' }} />
+          <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(255,255,255,0.7)' }} />
+        </div>
+        <div style={{ display: 'flex', gap: 16 }}>
+          <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(255,255,255,0.35)' }} />
+          <div style={{ width: 44, height: 44, borderRadius: 14, background: '#FFFFFF' }} />
+        </div>
       </div>
     ),
     { ...size },
