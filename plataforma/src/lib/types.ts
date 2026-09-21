@@ -62,7 +62,7 @@ export type ExpertGet = {
 
 export type PublicGet = {
   project: {
-    title: string; objective: string; method: Method; criteria: Criterion[]; alternatives: Alternative[];
+    title: string; objective: string; method: Method; weighting_method?: WeightingMethod; criteria: Criterion[]; alternatives: Alternative[];
     decision_matrix: DecisionMatrix | Record<string, never>;
   };
   experts: { id: string; label: string }[];

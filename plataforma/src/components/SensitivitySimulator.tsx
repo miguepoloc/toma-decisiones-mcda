@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import type { Criterion, Alternative, DecisionMatrix } from '@/lib/types';
 import { topsisSynthesis } from '@/lib/topsis';
 import { sawSynthesis } from '@/lib/saw';
@@ -10,13 +10,20 @@ import { electreSynthesis } from '@/lib/electre';
 import { fuzzyTopsisSynthesis } from '@/lib/fuzzy_topsis';
 import type { MethodKey } from './ScientificMethodModal';
 
+export interface AhpSynthRow {
+  name: string;
+  score: number;
+  rank: number;
+  loc?: number[];
+}
+
 interface SensitivitySimulatorProps {
   criteria: Criterion[];
   alternatives: Alternative[];
   decisionMatrix: DecisionMatrix;
   baseWeights: number[];
   method: MethodKey;
-  ahpSynthRows?: { name: string; score: number; rank: number }[];
+  ahpSynthRows?: AhpSynthRow[];
 }
 
 export default function SensitivitySimulator({
@@ -29,6 +36,11 @@ export default function SensitivitySimulator({
 }: SensitivitySimulatorProps) {
   // Inicializar pesos simulados con los pesos base
   const [simWeights, setSimWeights] = useState<number[]>(() => [...baseWeights]);
+
+  // Sincronizar pesos simulados cuando cambian los pesos base externos
+  useEffect(() => {
+    setSimWeights([...baseWeights]);
+  }, [baseWeights]);
 
   // Si no hay alternativas o criterios suficientes, no renderizar
   if (!criteria.length || !alternatives.length || !baseWeights.length) {
@@ -305,7 +317,7 @@ function computeRanking(
   alternatives: Alternative[],
   dm: DecisionMatrix,
   weights: number[],
-  ahpSynthRows?: { name: string; score: number; rank: number }[],
+  ahpSynthRows?: AhpSynthRow[],
 ): { name: string; score: number; rank: number }[] {
   if (method === 'topsis') {
     const synth = topsisSynthesis(criteria, alternatives, dm, weights);
@@ -344,8 +356,21 @@ function computeRanking(
     return synth.rows.map((r) => ({ name: r.name, score: r.value, rank: r.rank }));
   }
 
-  // Fallback AHP: si hay filas calculadas
-  if (ahpSynthRows && ahpSynthRows.length) {
+  // Síntesis dinámica de AHP usando prioridades locales de los criterios
+  if (method === 'ahp' && ahpSynthRows && ahpSynthRows.length) {
+    const hasLoc = ahpSynthRows.some((r) => r.loc && r.loc.length > 0);
+    if (hasLoc) {
+      // g_i(w) = sum_c (w_c * loc_c,i)
+      const scored = ahpSynthRows.map((r) => {
+        const score = (r.loc ?? []).reduce((acc: number, l: number, c: number) => acc + (weights[c] ?? 0) * (l ?? 0), 0);
+        return { name: r.name, score };
+      });
+      return scored.map((s) => ({
+        name: s.name,
+        score: s.score,
+        rank: 1 + scored.filter((o) => o.score > s.score + 1e-9).length,
+      }));
+    }
     return ahpSynthRows.map((r) => ({ name: r.name, score: r.score, rank: r.rank }));
   }
 

@@ -63,10 +63,23 @@ export default function ProjectList({ initial }: { initial: Row[] }) {
     setTarget(null);
   }
 
+  const [successMsg, setSuccessMsg] = useState('');
+
   async function duplicateProject(p: Row) {
     setBusy(true);
     setMsg('');
+    setSuccessMsg('');
     const supabase = createClient();
+
+    // Obtener sesión del usuario autenticado para satisfacer la política RLS (owner_id = auth.uid())
+    const { data: authData } = await supabase.auth.getUser();
+    const currentUserId = authData?.user?.id;
+    if (!currentUserId) {
+      setMsg('Sesión no válida o expirada. Por favor vuelve a iniciar sesión.');
+      setBusy(false);
+      return;
+    }
+
     const { data: orig, error: fetchErr } = await supabase
       .from('projects')
       .select('*')
@@ -82,6 +95,7 @@ export default function ProjectList({ initial }: { initial: Row[] }) {
     const { data: copyRow, error: insertErr } = await supabase
       .from('projects')
       .insert({
+        owner_id: currentUserId,
         title: `${orig.title} (Copia)`,
         objective: orig.objective,
         method: orig.method,
@@ -91,18 +105,65 @@ export default function ProjectList({ initial }: { initial: Row[] }) {
         decision_matrix: orig.decision_matrix,
         prioritization: orig.prioritization,
         is_public: false,
-        user_id: orig.user_id,
       })
       .select('id, title, objective, is_public')
       .single();
 
-    setBusy(false);
     if (insertErr || !copyRow) {
       setMsg(insertErr?.message ?? 'Error al duplicar el proyecto');
+      setBusy(false);
       return;
     }
 
+    // Duplicar también expertos y sus juicios si existen
+    try {
+      const { data: origExperts } = await supabase
+        .from('experts')
+        .select('id, name, role_desc, position, filled_by, status')
+        .eq('project_id', orig.id);
+
+      if (origExperts && origExperts.length > 0) {
+        for (const exp of origExperts) {
+          const { data: newExp } = await supabase
+            .from('experts')
+            .insert({
+              project_id: copyRow.id,
+              name: exp.name,
+              role_desc: exp.role_desc,
+              position: exp.position,
+              filled_by: exp.filled_by,
+              status: exp.status,
+            })
+            .select('id')
+            .single();
+
+          if (newExp) {
+            const { data: origJudgments } = await supabase
+              .from('judgments')
+              .select('sheet, pair_key, value')
+              .eq('expert_id', exp.id);
+
+            if (origJudgments && origJudgments.length > 0) {
+              await supabase.from('judgments').insert(
+                origJudgments.map((j) => ({
+                  expert_id: newExp.id,
+                  sheet: j.sheet,
+                  pair_key: j.pair_key,
+                  value: j.value,
+                }))
+              );
+            }
+          }
+        }
+      }
+    } catch {
+      // Si la copia de expertos falla, el proyecto base ya fue duplicado exitosamente
+    }
+
+    setBusy(false);
     setProjects((prev) => [copyRow, ...prev]);
+    setSuccessMsg(`Proyecto «${copyRow.title}» duplicado con éxito.`);
+    setTimeout(() => setSuccessMsg(''), 4500);
   }
 
   const matches = target ? confirmText.trim() === target.title.trim() : false;
@@ -110,6 +171,26 @@ export default function ProjectList({ initial }: { initial: Row[] }) {
   return (
     <div className="plist">
       {msg && <p className="err" role="alert">{msg}</p>}
+      {successMsg && (
+        <div
+          role="status"
+          style={{
+            background: 'rgba(16, 185, 129, 0.12)',
+            border: '1px solid rgba(16, 185, 129, 0.4)',
+            color: '#34D399',
+            borderRadius: 8,
+            padding: '10px 14px',
+            fontSize: 13.5,
+            fontWeight: 500,
+            marginBottom: 14,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+          }}
+        >
+          <span style={{ fontWeight: 700 }}>✓</span> {successMsg}
+        </div>
+      )}
       {!projects.length && (
         <div className="card muted">Aún no tienes proyectos. Crea el primero o importa tu trabajo de la herramienta HTML.</div>
       )}

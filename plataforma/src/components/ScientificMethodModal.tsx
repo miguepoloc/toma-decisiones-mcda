@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useState, useEffect } from 'react';
 
 export type MethodKey = 'ahp' | 'topsis' | 'vikor' | 'promethee' | 'electre' | 'saw' | 'fuzzy_topsis';
+export type CitationFormat = 'ieee' | 'apa' | 'bibtex' | 'chicago';
 
 interface MethodDoc {
   name: string;
@@ -15,7 +16,8 @@ interface MethodDoc {
   doiUrl: string;
   summary: string;
   steps: { title: string; formula?: string; desc: string }[];
-  citationApa: string;
+  citations: Record<CitationFormat, string>;
+  citationApa: string; // compatibilidad
 }
 
 export const METHOD_SPECS: Record<MethodKey, MethodDoc> = {
@@ -24,8 +26,8 @@ export const METHOD_SPECS: Record<MethodKey, MethodDoc> = {
     family: 'Pares Saaty',
     color: 'var(--m-ahp)',
     author: 'Saaty, Thomas L.',
-    year: 1980,
-    publication: 'The Analytic Hierarchy Process. McGraw-Hill / European Journal of Operational Research (1990)',
+    year: 1990,
+    publication: 'European Journal of Operational Research, 48(1), 9–26',
     doi: '10.1016/0377-2217(90)90057-I',
     doiUrl: 'https://doi.org/10.1016/0377-2217(90)90057-I',
     summary: 'Descompone el problema en una estructura jerárquica. Emplea comparaciones de a pares bajo una escala fundamental (1 al 9) y deriva el vector de prioridades resolviendo el problema de autovalor máximo (A · w = λ_max · w). Incluye el cálculo riguroso de la Razón de Consistencia (CR < 0.10).',
@@ -47,6 +49,21 @@ export const METHOD_SPECS: Record<MethodKey, MethodDoc> = {
       },
     ],
     citationApa: 'Saaty, T. L. (1990). How to make a decision: The Analytic Hierarchy Process. European Journal of Operational Research, 48(1), 9–26. https://doi.org/10.1016/0377-2217(90)90057-I',
+    citations: {
+      ieee: 'T. L. Saaty, "How to make a decision: The Analytic Hierarchy Process," European Journal of Operational Research, vol. 48, no. 1, pp. 9–26, 1990, doi: 10.1016/0377-2217(90)90057-I.',
+      apa: 'Saaty, T. L. (1990). How to make a decision: The Analytic Hierarchy Process. European Journal of Operational Research, 48(1), 9–26. https://doi.org/10.1016/0377-2217(90)90057-I',
+      bibtex: `@article{saaty1990how,
+  author    = {Saaty, Thomas L.},
+  title     = {How to make a decision: The Analytic Hierarchy Process},
+  journal   = {European Journal of Operational Research},
+  volume    = {48},
+  number    = {1},
+  pages     = {9--26},
+  year      = {1990},
+  doi       = {10.1016/0377-2217(90)90057-I}
+}`,
+      chicago: 'Saaty, Thomas L. 1990. "How to Make a Decision: The Analytic Hierarchy Process." European Journal of Operational Research 48 (1): 9–26. https://doi.org/10.1016/0377-2217(90)90057-I.',
+    },
   },
   topsis: {
     name: 'TOPSIS · Technique for Order Preference by Similarity to Ideal Solution',
@@ -76,6 +93,19 @@ export const METHOD_SPECS: Record<MethodKey, MethodDoc> = {
       },
     ],
     citationApa: 'Hwang, C. L., & Yoon, K. (1981). Multiple Attribute Decision Making: Methods and Applications. Springer-Verlag, Berlin/Heidelberg. https://doi.org/10.1007/978-3-642-48318-9',
+    citations: {
+      ieee: 'C.-L. Hwang and K. Yoon, Multiple Attribute Decision Making: Methods and Applications. Berlin, Heidelberg: Springer-Verlag, 1981, doi: 10.1007/978-3-642-48318-9.',
+      apa: 'Hwang, C. L., & Yoon, K. (1981). Multiple Attribute Decision Making: Methods and Applications. Springer-Verlag, Berlin/Heidelberg. https://doi.org/10.1007/978-3-642-48318-9',
+      bibtex: `@book{hwang1981multiple,
+  author    = {Hwang, Ching-Lai and Yoon, Kwangsun},
+  title     = {Multiple Attribute Decision Making: Methods and Applications},
+  publisher = {Springer-Verlag},
+  address   = {Berlin, Heidelberg},
+  year      = {1981},
+  doi       = {10.1007/978-3-642-48318-9}
+}`,
+      chicago: 'Hwang, Ching-Lai, and Kwangsun Yoon. 1981. Multiple Attribute Decision Making: Methods and Applications. Berlin: Springer-Verlag. https://doi.org/10.1007/978-3-642-48318-9.',
+    },
   },
   vikor: {
     name: 'VIKOR · VlseKriterijumska Optimizacija I Kompromisno Resenje',
@@ -105,6 +135,21 @@ export const METHOD_SPECS: Record<MethodKey, MethodDoc> = {
       },
     ],
     citationApa: 'Opricovic, S., & Tzeng, G. H. (2004). Compromise solution by MCDM methods: A comparative analysis of VIKOR and TOPSIS. European Journal of Operational Research, 156(2), 445–455. https://doi.org/10.1016/S0377-2217(03)00020-1',
+    citations: {
+      ieee: 'S. Opricovic and G.-H. Tzeng, "Compromise solution by MCDM methods: A comparative analysis of VIKOR and TOPSIS," European Journal of Operational Research, vol. 156, no. 2, pp. 445–455, 2004, doi: 10.1016/S0377-2217(03)00020-1.',
+      apa: 'Opricovic, S., & Tzeng, G. H. (2004). Compromise solution by MCDM methods: A comparative analysis of VIKOR and TOPSIS. European Journal of Operational Research, 156(2), 445–455. https://doi.org/10.1016/S0377-2217(03)00020-1',
+      bibtex: `@article{opricovic2004compromise,
+  author    = {Opricovic, Serafim and Tzeng, Gwo-Hshiung},
+  title     = {Compromise solution by MCDM methods: A comparative analysis of VIKOR and TOPSIS},
+  journal   = {European Journal of Operational Research},
+  volume    = {156},
+  number    = {2},
+  pages     = {445--455},
+  year      = {2004},
+  doi       = {10.1016/S0377-2217(03)00020-1}
+}`,
+      chicago: 'Opricovic, Serafim, and Gwo-Hshiung Tzeng. 2004. "Compromise Solution by MCDM Methods: A Comparative Analysis of VIKOR and TOPSIS." European Journal of Operational Research 156 (2): 445–455. https://doi.org/10.1016/S0377-2217(03)00020-1.',
+    },
   },
   promethee: {
     name: 'PROMETHEE II · Preference Ranking Organization METHod',
@@ -134,6 +179,21 @@ export const METHOD_SPECS: Record<MethodKey, MethodDoc> = {
       },
     ],
     citationApa: 'Brans, J. P., & Vincke, P. (1985). A preference ranking organisation method: The PROMETHEE method for multiple criteria decision-making. Management Science, 31(6), 647–656. https://doi.org/10.1287/mnsc.31.6.647',
+    citations: {
+      ieee: 'J.-P. Brans and P. Vincke, "A preference ranking organisation method: The PROMETHEE method for multiple criteria decision-making," Management Science, vol. 31, no. 6, pp. 647–656, 1985, doi: 10.1287/mnsc.31.6.647.',
+      apa: 'Brans, J. P., & Vincke, P. (1985). A preference ranking organisation method: The PROMETHEE method for multiple criteria decision-making. Management Science, 31(6), 647–656. https://doi.org/10.1287/mnsc.31.6.647',
+      bibtex: `@article{brans1985preference,
+  author    = {Brans, Jean-Pierre and Vincke, Philippe},
+  title     = {A preference ranking organisation method: The {PROMETHEE} method for multiple criteria decision-making},
+  journal   = {Management Science},
+  volume    = {31},
+  number    = {6},
+  pages     = {647--656},
+  year      = {1985},
+  doi       = {10.1287/mnsc.31.6.647}
+}`,
+      chicago: 'Brans, Jean-Pierre, and Philippe Vincke. 1985. "A Preference Ranking Organisation Method: The PROMETHEE Method for Multiple Criteria Decision-Making." Management Science 31 (6): 647–656. https://doi.org/10.1287/mnsc.31.6.647.',
+    },
   },
   electre: {
     name: 'ELECTRE · ELimination Et Choix Traduisant la REalité',
@@ -163,6 +223,21 @@ export const METHOD_SPECS: Record<MethodKey, MethodDoc> = {
       },
     ],
     citationApa: 'Roy, B. (1991). The outranking approach and the foundations of ELECTRE methods. Theory and Decision, 31(1), 49–73. https://doi.org/10.1007/BF00134132',
+    citations: {
+      ieee: 'B. Roy, "The outranking approach and the foundations of ELECTRE methods," Theory and Decision, vol. 31, no. 1, pp. 49–73, 1991, doi: 10.1007/BF00134132.',
+      apa: 'Roy, B. (1991). The outranking approach and the foundations of ELECTRE methods. Theory and Decision, 31(1), 49–73. https://doi.org/10.1007/BF00134132',
+      bibtex: `@article{roy1991outranking,
+  author    = {Roy, Bernard},
+  title     = {The outranking approach and the foundations of {ELECTRE} methods},
+  journal   = {Theory and Decision},
+  volume    = {31},
+  number    = {1},
+  pages     = {49--73},
+  year      = {1991},
+  doi       = {10.1007/BF00134132}
+}`,
+      chicago: 'Roy, Bernard. 1991. "The Outranking Approach and the Foundations of ELECTRE Methods." Theory and Decision 31 (1): 49–73. https://doi.org/10.1007/BF00134132.',
+    },
   },
   saw: {
     name: 'SAW · Simple Additive Weighting',
@@ -192,6 +267,20 @@ export const METHOD_SPECS: Record<MethodKey, MethodDoc> = {
       },
     ],
     citationApa: 'MacCrimmon, K. R. (1968). Decisionmaking among multiple-attribute alternatives: A survey and consolidated approach. RAND Corporation Memorandum RM-4823-PR.',
+    citations: {
+      ieee: 'K. R. MacCrimmon, "Decisionmaking among multiple-attribute alternatives: A survey and consolidated approach," RAND Corporation, Santa Monica, CA, Tech. Rep. RM-4823-PR, 1968.',
+      apa: 'MacCrimmon, K. R. (1968). Decisionmaking among multiple-attribute alternatives: A survey and consolidated approach (RAND Memorandum RM-4823-PR). RAND Corporation.',
+      bibtex: `@techreport{maccrimmon1968decisionmaking,
+  author      = {MacCrimmon, Kenneth R.},
+  title       = {Decisionmaking among multiple-attribute alternatives: A survey and consolidated approach},
+  institution = {RAND Corporation},
+  address     = {Santa Monica, CA},
+  number      = {RM-4823-PR},
+  year        = {1968},
+  url         = {https://www.rand.org/pubs/memoranda/RM4823.html}
+}`,
+      chicago: 'MacCrimmon, Kenneth R. 1968. "Decisionmaking among Multiple-Attribute Alternatives: A Survey and Consolidated Approach." RAND Memorandum RM-4823-PR. Santa Monica, CA: RAND Corporation.',
+    },
   },
   fuzzy_topsis: {
     name: 'Fuzzy TOPSIS · Números Difusos Triangulares (TFN)',
@@ -221,7 +310,29 @@ export const METHOD_SPECS: Record<MethodKey, MethodDoc> = {
       },
     ],
     citationApa: 'Chen, C. T. (2000). Extensions of the TOPSIS for group decision-making under fuzzy environment. Fuzzy Sets and Systems, 114(1), 1–9. https://doi.org/10.1016/S0165-0114(97)00377-1',
+    citations: {
+      ieee: 'C.-T. Chen, "Extensions of the TOPSIS for group decision-making under fuzzy environment," Fuzzy Sets and Systems, vol. 114, no. 1, pp. 1–9, 2000, doi: 10.1016/S0165-0114(97)00377-1.',
+      apa: 'Chen, C. T. (2000). Extensions of the TOPSIS for group decision-making under fuzzy environment. Fuzzy Sets and Systems, 114(1), 1–9. https://doi.org/10.1016/S0165-0114(97)00377-1',
+      bibtex: `@article{chen2000extensions,
+  author    = {Chen, Chen-Tung},
+  title     = {Extensions of the {TOPSIS} for group decision-making under fuzzy environment},
+  journal   = {Fuzzy Sets and Systems},
+  volume    = {114},
+  number    = {1},
+  pages     = {1--9},
+  year      = {2000},
+  doi       = {10.1016/S0165-0114(97)00377-1}
+}`,
+      chicago: 'Chen, Chen-Tung. 2000. "Extensions of the TOPSIS for Group Decision-Making under Fuzzy Environment." Fuzzy Sets and Systems 114 (1): 1–9. https://doi.org/10.1016/S0165-0114(97)00377-1.',
+    },
   },
+};
+
+const FORMAT_LABELS: Record<CitationFormat, string> = {
+  ieee: 'IEEE',
+  apa: 'APA 7.ª',
+  bibtex: 'BibTeX',
+  chicago: 'Chicago',
 };
 
 export default function ScientificMethodModal({
@@ -232,6 +343,8 @@ export default function ScientificMethodModal({
   onClose: () => void;
 }) {
   const method = METHOD_SPECS[methodKey] || METHOD_SPECS.topsis;
+  const [format, setFormat] = useState<CitationFormat>('ieee');
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -241,15 +354,28 @@ export default function ScientificMethodModal({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [onClose]);
 
+  useEffect(() => {
+    if (!toastMsg) return;
+    const timer = setTimeout(() => setToastMsg(null), 2800);
+    return () => clearTimeout(timer);
+  }, [toastMsg]);
+
+  const activeCitation = method.citations[format];
+
+  function copyCitation() {
+    navigator.clipboard?.writeText(activeCitation);
+    setToastMsg(`Cita en formato ${FORMAT_LABELS[format]} copiada al portapapeles`);
+  }
+
   return (
     <div
       className="modal-overlay"
       style={{
         position: 'fixed',
         inset: 0,
-        background: 'rgba(7, 10, 16, 0.82)',
-        backdropFilter: 'blur(10px)',
-        WebkitBackdropFilter: 'blur(10px)',
+        background: 'rgba(7, 10, 16, 0.84)',
+        backdropFilter: 'blur(12px)',
+        WebkitBackdropFilter: 'blur(12px)',
         zIndex: 2000,
         display: 'flex',
         alignItems: 'center',
@@ -260,13 +386,61 @@ export default function ScientificMethodModal({
         if (e.target === e.currentTarget) onClose();
       }}
     >
+      {/* Toast Notificación Glassmórfica («Toast Lindo») */}
+      {toastMsg && (
+        <div
+          role="status"
+          aria-live="polite"
+          style={{
+            position: 'fixed',
+            top: 24,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: 'rgba(17, 24, 39, 0.95)',
+            border: '1px solid rgba(0, 229, 255, 0.5)',
+            boxShadow: '0 12px 35px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 229, 255, 0.25)',
+            borderRadius: 12,
+            padding: '12px 20px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            zIndex: 3000,
+            backdropFilter: 'blur(16px)',
+            WebkitBackdropFilter: 'blur(16px)',
+            animation: 'toastSlideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+          }}
+        >
+          <div
+            style={{
+              width: 26,
+              height: 26,
+              borderRadius: '50%',
+              background: 'rgba(0, 229, 255, 0.2)',
+              border: '1px solid #00E5FF',
+              color: '#00E5FF',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 14,
+              fontWeight: 700,
+            }}
+          >
+            ✓
+          </div>
+          <div>
+            <div style={{ fontSize: 13.5, fontWeight: 700, color: '#FFFFFF' }}>{toastMsg}</div>
+            <div style={{ fontSize: 11.5, color: '#94A3B8' }}>Lista para pegar en tu artículo o Overleaf</div>
+          </div>
+        </div>
+      )}
+
       <div
         style={{
           background: 'var(--surface)',
           border: '1px solid rgba(255, 255, 255, 0.12)',
           borderTop: `4px solid ${method.color}`,
           borderRadius: 14,
-          maxWidth: 680,
+          maxWidth: 700,
           width: '100%',
           maxHeight: '90vh',
           overflowY: 'auto',
@@ -275,6 +449,7 @@ export default function ScientificMethodModal({
           display: 'grid',
           gap: 20,
           animation: 'fadeIn 0.2s ease-out',
+          position: 'relative',
         }}
       >
         {/* Encabezado */}
@@ -328,25 +503,100 @@ export default function ScientificMethodModal({
           {method.summary}
         </p>
 
-        {/* Referencia Formal */}
+        {/* Selector de Formato de Cita Bibliográfica */}
         <div
           style={{
             background: 'var(--surface2)',
             border: '1px solid var(--line)',
-            borderRadius: 8,
-            padding: '14px 16px',
+            borderRadius: 10,
+            padding: '16px 18px',
             display: 'grid',
-            gap: 6,
+            gap: 12,
           }}
         >
-          <div style={{ fontSize: 11, fontFamily: 'var(--f-mono)', textTransform: 'uppercase', color: 'var(--muted)', letterSpacing: '0.05em' }}>
-            Referencia Bibliográfica del Artículo (APA 7.ª ed.)
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+            <div style={{ fontSize: 11.5, fontFamily: 'var(--f-mono)', textTransform: 'uppercase', color: 'var(--muted)', letterSpacing: '0.06em', fontWeight: 600 }}>
+              Formato de Cita para Publicación:
+            </div>
+            {/* Tabs de formatos */}
+            <div style={{ display: 'flex', gap: 6 }}>
+              {(['ieee', 'apa', 'bibtex', 'chicago'] as CitationFormat[]).map((fmt) => {
+                const isActive = format === fmt;
+                return (
+                  <button
+                    key={fmt}
+                    type="button"
+                    onClick={() => setFormat(fmt)}
+                    style={{
+                      appearance: 'none',
+                      background: isActive ? method.color : 'rgba(255, 255, 255, 0.05)',
+                      color: isActive ? '#0B0F17' : 'var(--muted)',
+                      border: `1px solid ${isActive ? method.color : 'var(--line)'}`,
+                      padding: '4px 10px',
+                      borderRadius: 6,
+                      fontSize: 11.5,
+                      fontFamily: 'var(--f-mono)',
+                      fontWeight: isActive ? 700 : 500,
+                      cursor: 'pointer',
+                      transition: 'all 0.18s ease',
+                    }}
+                  >
+                    {FORMAT_LABELS[fmt]}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-          <div style={{ fontSize: 13, fontFamily: 'var(--f-mono)', color: 'var(--ink)', lineHeight: 1.5 }}>
-            {method.citationApa}
+
+          {/* Caja con la cita en el formato elegido */}
+          <div
+            style={{
+              fontSize: format === 'bibtex' ? 12 : 13,
+              fontFamily: 'var(--f-mono)',
+              color: 'var(--ink)',
+              lineHeight: 1.55,
+              background: 'rgba(0, 0, 0, 0.35)',
+              padding: '12px 14px',
+              borderRadius: 6,
+              border: '1px solid rgba(255, 255, 255, 0.06)',
+              whiteSpace: format === 'bibtex' ? 'pre' : 'normal',
+              overflowX: 'auto',
+            }}
+          >
+            {activeCitation}
           </div>
-          <div style={{ fontSize: 12, color: method.color, fontFamily: 'var(--f-mono)', marginTop: 2 }}>
-            DOI: {method.doi}
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, color: 'var(--muted)', fontFamily: 'var(--f-mono)' }}>
+            <span>DOI: <b style={{ color: method.color }}>{method.doi}</b></span>
+            <button
+              type="button"
+              onClick={copyCitation}
+              style={{
+                background: 'rgba(255, 255, 255, 0.06)',
+                border: '1px solid var(--line)',
+                color: 'var(--ink)',
+                padding: '4px 12px',
+                borderRadius: 5,
+                fontSize: 12,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                fontFamily: 'var(--f-body)',
+                fontWeight: 600,
+                transition: 'all 0.18s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = method.color;
+                e.currentTarget.style.color = method.color;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = 'var(--line)';
+                e.currentTarget.style.color = 'var(--ink)';
+              }}
+            >
+              📋 Copiar cita en {FORMAT_LABELS[format]}
+            </button>
           </div>
         </div>
 
@@ -395,12 +645,10 @@ export default function ScientificMethodModal({
           <button
             type="button"
             className="btn sm"
-            onClick={() => {
-              navigator.clipboard?.writeText(method.citationApa);
-              alert('Cita bibliográfica copiada al portapapeles en formato APA');
-            }}
+            onClick={copyCitation}
+            style={{ fontWeight: 600 }}
           >
-            Copiar Cita APA
+            Copiar {FORMAT_LABELS[format]}
           </button>
           <a
             href={method.doiUrl}
@@ -419,6 +667,19 @@ export default function ScientificMethodModal({
           </a>
         </div>
       </div>
+
+      <style jsx global>{`
+        @keyframes toastSlideDown {
+          from {
+            opacity: 0;
+            transform: translate(-50%, -16px);
+          }
+          to {
+            opacity: 1;
+            transform: translate(-50%, 0);
+          }
+        }
+      `}</style>
     </div>
   );
 }

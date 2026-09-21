@@ -45,11 +45,21 @@ export default function PublicView({ token }: { token: string }) {
       </div>
       <div className="panel">
         <header>
-          <div className="eyebrow">Resultados AHP</div>
+          <div className="eyebrow">Resultados {(data.project.method ?? 'ahp').toUpperCase()}</div>
           <h1 style={{ fontSize: 30 }}>{data.project.title}</h1>
           {data.project.objective && <p className="muted" style={{ maxWidth: '70ch' }}><b>Objetivo:</b> {data.project.objective}</p>}
         </header>
-        <Results criteria={data.project.criteria} alternatives={data.project.alternatives} experts={data.experts} judgments={data.judgments} method={data.project.method} decisionMatrix={data.project.decision_matrix} />
+        <Results
+          criteria={data.project.criteria}
+          alternatives={data.project.alternatives}
+          experts={data.experts}
+          judgments={data.judgments}
+          method={data.project.method}
+          weightingMethod={data.project.weighting_method ?? 'ahp'}
+          decisionMatrix={data.project.decision_matrix}
+          projectTitle={data.project.title}
+          projectObjective={data.project.objective}
+        />
       </div>
     </div>
   );

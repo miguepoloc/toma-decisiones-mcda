@@ -271,7 +271,7 @@ export default function Results({ criteria, alternatives, experts, judgments, me
                     <tbody>
                       <tr><td className="muted">Peso del criterio</td>{syn.wr.map((w, i) => <td key={i} className="n">{w.toFixed(4)}</td>)}<td /><td /></tr>
                       {syn.rows.map((row, i) => (
-                        <tr key={i} className={row.rank === 1 && !syn.tie ? 'win' : ''}>
+                        <tr key={i} className={row.rank === 1 && !syn.tie ? 'row-winner' : ''}>
                           <td>{row.name}</td>{row.loc.map((x, j) => <td key={j} className="n">{x.toFixed(4)}</td>)}
                           <td className="n">{row.g.toFixed(4)}</td><td className="n">{row.rank}</td>
                         </tr>
@@ -329,7 +329,7 @@ export default function Results({ criteria, alternatives, experts, judgments, me
         decisionMatrix={dm}
         baseWeights={critWeights}
         method={method as MethodKey}
-        ahpSynthRows={syn.rows.map((r) => ({ name: r.name, score: r.g, rank: r.rank }))}
+        ahpSynthRows={syn.rows.map((r) => ({ name: r.name, score: r.g, rank: r.rank, loc: r.loc }))}
       />
 
       <div className="card res">
