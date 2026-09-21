@@ -7,20 +7,18 @@ export const metadata = { title: 'Cómo funciona · Plataforma MCDA' };
 export default async function TutorialPage() {
   const supabase = await createClient();
   let logged = false;
+  let userEmail: string | undefined;
   try {
     const { data } = await supabase.auth.getUser();
     logged = !!data.user;
+    userEmail = data.user?.email;
   } catch { /* sin configurar */ }
   const primaryHref = logged ? '/dashboard' : '/login';
   const primaryLabel = logged ? 'Ir a mis proyectos' : 'Entrar o crear cuenta';
 
   return (
     <div className="wrap">
-      <Topbar badge="GUÍA" subtitle="← Ir al inicio">
-        <div className="acts">
-          <Link className="btn sm primary" href={primaryHref}>{primaryLabel}</Link>
-        </div>
-      </Topbar>
+      <Topbar badge="GUÍA" subtitle="← Ir al inicio" loggedIn={logged} userEmail={userEmail} />
 
       <div className="ttl">
         <div className="eyebrow">Guía completa</div>

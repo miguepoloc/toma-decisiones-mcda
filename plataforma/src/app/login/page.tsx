@@ -67,9 +67,7 @@ function LoginForm() {
 
   return (
     <div className="wrap">
-      <Topbar badge="ACCESO" subtitle="← Ir al inicio">
-        <Link className="btn sm" href="/tutorial">Cómo funciona</Link>
-      </Topbar>
+      <Topbar badge="ACCESO" subtitle="← Ir al inicio" hideAuthAction />
 
       <div className="authgrid">
         <div className="authpromo">

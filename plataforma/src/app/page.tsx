@@ -8,9 +8,11 @@ const famVar = (v: string): CSSProperties => ({ '--fam': v } as CSSProperties);
 export default async function Home() {
   const supabase = await createClient();
   let logged = false;
+  let userEmail: string | undefined;
   try {
     const { data } = await supabase.auth.getUser();
     logged = !!data.user;
+    userEmail = data.user?.email;
   } catch { /* sin configurar */ }
   const primaryHref = logged ? '/dashboard' : '/login';
   const primaryLabel = logged ? 'Ir a mis proyectos' : 'Entrar o crear cuenta';
@@ -18,13 +20,7 @@ export default async function Home() {
   return (
     <>
       <div className="wrap">
-        <Topbar badge="v2.0" subtitle="Ingeniería de Decisión">
-          <div className="acts">
-            <Link className="btn sm" href="/metodo">¿Qué método uso?</Link>
-            <Link className="btn sm" href="/tutorial">Cómo funciona</Link>
-            <Link className="btn sm primary" href={primaryHref}>{primaryLabel}</Link>
-          </div>
-        </Topbar>
+        <Topbar badge="v2.0" subtitle="Ingeniería de Decisión" loggedIn={logged} userEmail={userEmail} />
 
         <div className="lhero">
           <div>

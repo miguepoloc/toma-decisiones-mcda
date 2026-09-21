@@ -1,22 +1,48 @@
+'use client';
+
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
 import Logo from './Logo';
+import SignOutButton from './SignOutButton';
 
-/** Barra superior compartida por todas las páginas: logo + "Plataforma MCDA" + badge + subtítulo,
- * más lo que cada página necesite a la derecha (link, botón, usuario…) vía `children`. */
+const NAV_LINKS = [
+  { href: '/', label: 'Inicio' },
+  { href: '/metodo', label: '¿Qué método uso?' },
+  { href: '/tutorial', label: 'Cómo funciona' },
+];
+
+/** Barra superior compartida por TODAS las páginas: mismo logo, misma navegación (Inicio / ¿Qué
+ * método uso? / Cómo funciona) y el mismo control de sesión a la derecha en todas partes — entra a
+ * `/login` si no hay sesión, muestra correo + «Mis proyectos» + «Salir» si la hay. `cta` reemplaza ese
+ * control por un botón propio de la página (p. ej. la guía de método precarga el método elegido al
+ * crear proyecto); `showNav`/`hideAuthAction` lo apagan para flujos anónimos por token (experto,
+ * vista pública) donde no aplica o distraería de la tarea. */
 export default function Topbar({
   badge,
   subtitle,
   href = '/',
   title = 'Plataforma MCDA · Inicio',
+  loggedIn = false,
+  userEmail,
+  showNav = true,
+  hideAuthAction = false,
+  cta,
   children,
 }: {
   badge: string;
   subtitle: string;
   href?: string;
   title?: string;
+  loggedIn?: boolean;
+  userEmail?: string;
+  showNav?: boolean;
+  hideAuthAction?: boolean;
+  cta?: { href: string; label: string };
   children?: ReactNode;
 }) {
+  const pathname = usePathname();
+
   return (
     <div className="topbar">
       <Link className="brand" href={href} title={title}>
@@ -36,7 +62,36 @@ export default function Topbar({
           <span className="brand-sub">{subtitle}</span>
         </div>
       </Link>
-      {children}
+
+      <div className="topbar-right">
+        {showNav && (
+          <nav className="topbar-nav" aria-label="Navegación principal">
+            {NAV_LINKS.map((l) => {
+              const active = pathname === l.href;
+              return (
+                <Link key={l.href} href={l.href} className={'navlink' + (active ? ' active' : '')} aria-current={active ? 'page' : undefined}>
+                  {l.label}
+                </Link>
+              );
+            })}
+          </nav>
+        )}
+
+        <div className="topbar-actions">
+          {children}
+          {!hideAuthAction && (cta ? (
+            <Link className="btn sm primary" href={cta.href}>{cta.label}</Link>
+          ) : loggedIn ? (
+            <div className="user">
+              {userEmail && <span style={{ fontFamily: 'var(--f-mono)', fontSize: 12 }}>{userEmail}</span>}
+              {pathname !== '/dashboard' && <Link className="btn sm" href="/dashboard">Mis proyectos</Link>}
+              <SignOutButton />
+            </div>
+          ) : (
+            <Link className="btn sm primary" href="/login">Entrar o crear cuenta</Link>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

@@ -1,7 +1,6 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import NewProject from '@/components/NewProject';
-import SignOutButton from '@/components/SignOutButton';
 import Topbar from '@/components/Topbar';
 import ProjectList from '@/components/ProjectList';
 
@@ -16,12 +15,7 @@ export default async function Dashboard() {
 
   return (
     <div className="wrap">
-      <Topbar badge="PANEL" subtitle="Toma de Decisiones Multicriterio">
-        <div className="user">
-          <span style={{ fontFamily: 'var(--f-mono)', fontSize: 12 }}>{user.email}</span>
-          <SignOutButton />
-        </div>
-      </Topbar>
+      <Topbar badge="PANEL" subtitle="Toma de Decisiones Multicriterio" loggedIn userEmail={user.email} />
       <div className="panel">
         <h1 style={{ fontSize: 30 }}>Mis proyectos</h1>
         <ProjectList initial={projects ?? []} />

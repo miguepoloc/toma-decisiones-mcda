@@ -51,9 +51,7 @@ function UpdatePasswordForm() {
 
   return (
     <div className="wrap">
-      <Topbar badge="SEGURIDAD" subtitle="← Ir al inicio">
-        <Link className="btn sm" href="/login">Iniciar sesión</Link>
-      </Topbar>
+      <Topbar badge="SEGURIDAD" subtitle="← Ir al inicio" />
 
       <div style={{ maxWidth: 440, margin: '48px auto 80px', display: 'grid', gap: 18 }}>
         <div>

@@ -229,9 +229,15 @@ a{color:var(--accent)}
 .topbar .brand .brand-sub{font-size:11px;color:var(--muted);font-weight:500;display:block;margin-top:1px}
 .topbar .brand:hover .brand-sub{color:var(--accent)}
 .topbar .user{display:flex;gap:12px;align-items:center;font-size:13px;color:var(--muted)}
+.topbar-right{display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center;justify-content:flex-end;flex:1}
+.topbar-nav{display:flex;flex-wrap:wrap;gap:2px 4px;align-items:center}
+.topbar-nav .navlink{font:600 13px var(--f-body);color:var(--muted);text-decoration:none;padding:7px 12px;border-radius:7px;white-space:nowrap;transition:all .2s ease}
+.topbar-nav .navlink:hover{color:var(--ink);background:rgba(255,255,255,0.05)}
+.topbar-nav .navlink.active{color:var(--ink);background:rgba(255,255,255,0.08)}
+.topbar-actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
 .hero{display:grid;gap:14px;max-width:640px;padding-block:40px}
-.tabsbar{display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--line);margin-bottom:24px;padding-bottom:2px}
-.tabsbar button{appearance:none;font:600 14px var(--f-body);background:transparent;color:var(--muted);border:0;border-bottom:2px solid transparent;padding:10px 16px;cursor:pointer;border-radius:6px 6px 0 0;display:inline-flex;align-items:center;gap:8px;transition:all .2s ease}
+.tabsbar{display:flex;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;gap:6px;border-bottom:1px solid var(--line);margin-bottom:24px;padding-bottom:2px}
+.tabsbar button{appearance:none;font:600 14px var(--f-body);background:transparent;color:var(--muted);border:0;border-bottom:2px solid transparent;padding:10px 16px;cursor:pointer;border-radius:6px 6px 0 0;display:inline-flex;align-items:center;gap:8px;transition:all .2s ease;white-space:nowrap;flex:none}
 .tabsbar button:hover{color:var(--ink);background:rgba(255,255,255,0.03)}
 .tabsbar button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent);background:rgba(255,255,255,0.05);font-weight:700}
 .plist{display:grid;gap:12px}

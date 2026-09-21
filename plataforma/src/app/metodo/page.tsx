@@ -154,12 +154,12 @@ export default function MetodoPage() {
   return (
     <div className="wrap">
       {/* Sticky Header */}
-      <Topbar badge="TEORÍA" subtitle="← Ir al inicio">
-        <div style={{ display: 'flex', gap: 10 }}>
-          <Link className="btn sm" href="/tutorial">Tutorial</Link>
-          <Link className="btn sm primary" href={getCreateUrl()}>{isLoggedIn ? 'Ir al panel' : 'Crear proyecto'}</Link>
-        </div>
-      </Topbar>
+      <Topbar
+        badge="TEORÍA"
+        subtitle="← Ir al inicio"
+        loggedIn={isLoggedIn}
+        cta={{ href: getCreateUrl(), label: isLoggedIn ? 'Ir al panel' : 'Crear proyecto' }}
+      />
 
       <div className="ttl">
         <div className="eyebrow">Guía de Selección Metodológica</div>

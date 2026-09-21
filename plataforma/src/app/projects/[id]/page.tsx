@@ -1,7 +1,6 @@
 import { notFound, redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import ProjectWorkspace from '@/components/ProjectWorkspace';
-import SignOutButton from '@/components/SignOutButton';
 import Topbar from '@/components/Topbar';
 import type { ExpertRow, JudgmentRow, ProjectRow } from '@/lib/types';
 
@@ -23,12 +22,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
 
   return (
     <div className="wrap">
-      <Topbar badge="PRO" subtitle="← Mis proyectos" href="/dashboard" title="Volver al panel de proyectos">
-        <div className="user">
-          <span style={{ fontFamily: 'var(--f-mono)', fontSize: 12 }}>{user.email}</span>
-          <SignOutButton />
-        </div>
-      </Topbar>
+      <Topbar badge="PRO" subtitle="← Mis proyectos" href="/dashboard" title="Volver al panel de proyectos" loggedIn userEmail={user.email} />
       <ProjectWorkspace
         initialProject={project as ProjectRow}
         initialExperts={(experts ?? []) as ExpertRow[]}

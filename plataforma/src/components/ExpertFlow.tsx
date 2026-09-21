@@ -45,7 +45,7 @@ export default function ExpertFlow({ token }: { token: string }) {
 
   return (
     <div className="wrap">
-      <Topbar badge="EXPERTO" subtitle="Panel de Consulta">
+      <Topbar badge="EXPERTO" subtitle="Panel de Consulta" showNav={false} hideAuthAction>
         <span className="muted" style={{ fontSize: 13, background: 'var(--surface2)', padding: '6px 12px', borderRadius: 8, border: '1px solid var(--line)' }}>
           Respondiendo como: <b>{data.expert.name}</b>{data.expert.role_desc ? ` · ${data.expert.role_desc}` : ''}
         </span>
