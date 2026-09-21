@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Suspense, useState } from 'react';
+import { Suspense, useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient, supabaseConfigurado } from '@/lib/supabase/client';
 import Logo from '@/components/Logo';
@@ -16,6 +16,16 @@ function LoginForm() {
   const [msg, setMsg] = useState('');
   const [msgType, setMsgType] = useState<'err' | 'ok'>('err');
   const [busy, setBusy] = useState(false);
+
+  // Si ya está autenticado, redirigir directamente al destino sin mostrar el formulario de login
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => {
+      if (data?.user) {
+        router.replace(next);
+      }
+    });
+  }, [next, router]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();

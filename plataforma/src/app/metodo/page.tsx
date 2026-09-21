@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { createClient } from '@/lib/supabase/client';
 import Logo from '@/components/Logo';
 import ScientificMethodModal, { METHOD_SPECS, type MethodKey } from '@/components/ScientificMethodModal';
 
@@ -81,44 +82,44 @@ const QUESTIONS: Record<'q1' | 'q1b' | 'q2' | 'q3', QuestionConfig> = {
     options: [
       {
         badge: 'A',
-        title: 'Sí, prefiero que lo señale si no hay evidencia suficiente',
-        desc: 'Filtrado no compensatorio: valida concordancia y umbrales de veto estricto sin forzar una suma.',
+        title: 'Sí, acepto relaciones de superación e incomparabilidad',
+        desc: 'Quiero usar umbrales de concordancia y veto estricto (no compensatorio).',
         target: 'electre',
-        tag: 'SUPERACIÓN',
+        tag: 'NO COMPENSATORIO',
       },
       {
         badge: 'B',
-        title: 'No, requiero un ranking completo obligatorio',
-        desc: 'Necesito una posición del 1 al N para todas las alternativas analizadas.',
+        title: 'No, necesito un orden total estricto (1.º, 2.º, 3.º...)',
+        desc: 'Todas las alternativas deben recibir una posición final definida en un ranking unificado.',
         target: 'q3',
-        tag: 'ORDEN COMPLETO',
+        tag: 'ORDEN TOTAL',
       },
     ],
   },
   q3: {
     number: 4,
-    title: '¿Qué principio de preferencia prefieres aplicar entre alternativas?',
-    subtitle: 'Elige el concepto matemático central de comparación:',
-    progressPercent: 100,
+    title: '¿Cuál es el principio rector de tu problema de decisión?',
+    subtitle: 'Elige entre compromiso social equilibrado o distancia a una solución de referencia:',
+    progressPercent: 90,
     options: [
       {
         badge: 'A',
-        title: 'Distancia a una combinación ideal y anti-ideal',
-        desc: 'Buscar la alternativa más cercana a la mejor solución posible y más lejana a la peor (TOPSIS).',
-        target: 'topsis',
-        tag: 'DISTANCIA IDEAL',
-      },
-      {
-        badge: 'B',
-        title: 'Solución de compromiso (evitar el peor desempeño individual)',
-        desc: 'Maximizar el beneficio grupal pero penalizar fuertemente si una opción falla en un criterio clave (VIKOR).',
+        title: 'Acuerdo negociado o compromiso entre partes en conflicto',
+        desc: 'Maximizar la utilidad de la mayoría minimizando el pesar o rechazo de los opositores (índices S, R, Q).',
         target: 'vikor',
         tag: 'COMPROMISO',
       },
       {
+        badge: 'B',
+        title: 'Distancia simultánea a la mejor y peor situación posible',
+        desc: 'Estar lo más cerca posible de la alternativa ideal positiva y lo más lejos de la anti-ideal.',
+        target: 'topsis',
+        tag: 'DISTANCIA IDEAL',
+      },
+      {
         badge: 'C',
-        title: 'Comparación par a par criterio por criterio con flujos de preferencia',
-        desc: 'Medir la intensidad de superación entre cada par de opciones para calcular flujos netos (PROMETHEE II).',
+        title: 'Intensidad de preferencia y flujos netos de dominancia',
+        desc: 'Comparar el desbalance de superación entre pares con funciones de preferencia generalizadas.',
         target: 'promethee',
         tag: 'FLUJOS NETOS',
       },
@@ -129,6 +130,22 @@ const QUESTIONS: Record<'q1' | 'q1b' | 'q2' | 'q3', QuestionConfig> = {
 export default function MetodoPage() {
   const [step, setStep] = useState<Step>('q1');
   const [modalMethod, setModalMethod] = useState<MethodKey | null>(null);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => {
+      if (data?.user) setIsLoggedIn(true);
+    });
+  }, []);
+
+  function getCreateUrl(methodKey?: string) {
+    if (isLoggedIn) {
+      return methodKey ? `/dashboard?new_method=${methodKey}` : '/dashboard';
+    }
+    const target = methodKey ? `/dashboard?new_method=${methodKey}` : '/dashboard';
+    return `/login?next=${encodeURIComponent(target)}`;
+  }
 
   const isQuestion = step === 'q1' || step === 'q1b' || step === 'q2' || step === 'q3';
   const currentQ = isQuestion ? QUESTIONS[step] : null;
@@ -150,7 +167,7 @@ export default function MetodoPage() {
         </Link>
         <div style={{ display: 'flex', gap: 10 }}>
           <Link className="btn sm" href="/tutorial">Tutorial</Link>
-          <Link className="btn sm primary" href="/login">Crear proyecto</Link>
+          <Link className="btn sm primary" href={getCreateUrl()}>{isLoggedIn ? 'Ir al panel' : 'Crear proyecto'}</Link>
         </div>
       </div>
 
@@ -363,9 +380,9 @@ export default function MetodoPage() {
                 Abrir artículo original (DOI) ↗
               </a>
               <Link
-                href="/login"
+                href={getCreateUrl(step)}
                 className="btn sm primary"
-                style={{ marginLeft: 'auto', textDecoration: 'none' }}
+                style={{ marginLeft: 'auto', textDecoration: 'none', fontWeight: 700 }}
               >
                 Crear proyecto con este método →
               </Link>
@@ -505,7 +522,7 @@ export default function MetodoPage() {
         <h2>¿Listo para modelar tu caso de estudio?</h2>
         <p>Crea tu modelo, asigna criterios y calcula el ranking óptimo con cualquiera de los métodos multicriterio.</p>
         <div className="acts">
-          <Link className="btn primary" href="/login">Crear proyecto</Link>
+          <Link className="btn primary" href={getCreateUrl()}>{isLoggedIn ? 'Ir al panel de proyectos' : 'Crear proyecto'}</Link>
           <Link className="btn" href="/tutorial">Ver tutorial paso a paso</Link>
         </div>
       </div>

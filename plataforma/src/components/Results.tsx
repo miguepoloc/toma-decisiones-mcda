@@ -270,12 +270,53 @@ export default function Results({ criteria, alternatives, experts, judgments, me
                     <thead><tr><th>Estrategia</th>{criteria.map((c) => <th key={c.id} className="n">{c.name}</th>)}<th className="n">Global</th><th className="n">Rank</th></tr></thead>
                     <tbody>
                       <tr><td className="muted">Peso del criterio</td>{syn.wr.map((w, i) => <td key={i} className="n">{w.toFixed(4)}</td>)}<td /><td /></tr>
-                      {syn.rows.map((row, i) => (
-                        <tr key={i} className={row.rank === 1 && !syn.tie ? 'row-winner' : ''}>
-                          <td>{row.name}</td>{row.loc.map((x, j) => <td key={j} className="n">{x.toFixed(4)}</td>)}
-                          <td className="n">{row.g.toFixed(4)}</td><td className="n">{row.rank}</td>
-                        </tr>
-                      ))}
+                      {syn.order.map((idx) => {
+                        const row = syn.rows[idx];
+                        const isWinner = row.rank === 1 && !syn.tie;
+                        return (
+                          <tr key={idx} className={isWinner ? 'row-winner' : ''}>
+                            <td>
+                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                                <span style={{ fontWeight: isWinner ? 700 : 500, color: isWinner ? '#FFF' : undefined }}>
+                                  {row.name}
+                                </span>
+                                {isWinner && (
+                                  <span
+                                    style={{
+                                      fontSize: 10.5,
+                                      fontFamily: 'var(--f-mono)',
+                                      fontWeight: 700,
+                                      color: '#00E5FF',
+                                      background: 'rgba(0, 229, 255, 0.14)',
+                                      border: '1px solid rgba(0, 229, 255, 0.4)',
+                                      padding: '2px 7px',
+                                      borderRadius: 4,
+                                      textTransform: 'uppercase',
+                                      letterSpacing: '0.04em',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: 4,
+                                    }}
+                                  >
+                                    ★ Ganador
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            {row.loc.map((x, j) => (
+                              <td key={j} className="n" style={{ color: isWinner ? 'var(--ink)' : undefined, fontWeight: isWinner ? 600 : undefined }}>
+                                {x.toFixed(4)}
+                              </td>
+                            ))}
+                            <td className="n" style={{ fontWeight: 700, color: isWinner ? '#00E5FF' : undefined }}>
+                              {row.g.toFixed(4)}
+                            </td>
+                            <td className="n" style={{ fontWeight: 700, color: isWinner ? '#00E5FF' : 'var(--muted)' }}>
+                              {isWinner ? '👑 #1' : `#${row.rank}`}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

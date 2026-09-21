@@ -268,11 +268,17 @@ export default function SensitivitySimulator({
               </tr>
             </thead>
             <tbody>
-              {alternatives.map((alt) => {
-                const bRow = baseResult.find((r) => r.name === alt.name);
-                const sRow = simResult.find((r) => r.name === alt.name);
-                const bRank = bRow?.rank ?? 0;
-                const sRank = sRow?.rank ?? 0;
+              {[...alternatives]
+                .sort((a, b) => {
+                  const rA = simResult.find((r) => r.name === a.name)?.rank ?? 999;
+                  const rB = simResult.find((r) => r.name === b.name)?.rank ?? 999;
+                  return rA - rB;
+                })
+                .map((alt) => {
+                  const bRow = baseResult.find((r) => r.name === alt.name);
+                  const sRow = simResult.find((r) => r.name === alt.name);
+                  const bRank = bRow?.rank ?? 0;
+                  const sRank = sRow?.rank ?? 0;
                 const rankDiff = bRank - sRank; // Si bRank=2 y sRank=1, subió +1 puesto
 
                 return (
