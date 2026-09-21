@@ -17,13 +17,16 @@ mantiene/despliega.
 | **Cualquier persona** | Solo ve un proyecto si el dueño lo hace **público** y le comparte el enlace `/p/<token>`. La vista pública muestra resultados, sin nombres de expertos, sin sus enlaces y sin la Parte A. |
 
 Privacidad por diseño: las tablas tienen *Row Level Security*; el dueño solo ve lo suyo, y los expertos y el público entran
-únicamente por funciones SQL que validan un token secreto (ver `supabase/migrations/0001_init.sql`).
+únicamente por funciones SQL que validan un token secreto (ver `supabase/migrations/20240101000001_init.sql`), con límite
+de frecuencia por token desde `20240101000006_rate_limit_and_constraints.sql`.
 
 ## Puesta en marcha (≈ 20 minutos)
 
 ### 1. Supabase
 1. Crea un proyecto en <https://supabase.com> (plan gratuito sirve para un curso).
-2. **SQL Editor** → pega y ejecuta todo `supabase/migrations/0001_init.sql`.
+2. **SQL Editor** → pega y ejecuta, en orden, los 6 archivos de `supabase/migrations/` (`20240101000001_init.sql` …
+   `20240101000006_rate_limit_and_constraints.sql`). Si el proyecto de Supabase está conectado a GitHub (Settings →
+   Integrations), esto se aplica solo con cada push a `main` — ver "Despliegue actual" abajo.
 3. **Project Settings → API**: copia *Project URL* y la clave *anon / publishable*.
 4. **Authentication → URL Configuration**: en *Site URL* pon la URL de Vercel (o `http://localhost:3000` en desarrollo) y en
    *Redirect URLs* agrega `https://TU-DOMINIO/auth/callback` y `http://localhost:3000/auth/callback`.
@@ -47,8 +50,8 @@ npm run typecheck
 4. Despliega. Luego actualiza *Site URL* y *Redirect URLs* en Supabase con el dominio real.
 
 ## Despliegue actual (19-20 sep 2026)
-- **Supabase**: proyecto `hymmznfylafdldfngxcu` (`https://hymmznfylafdldfngxcu.supabase.co`), migración `0001_init.sql` ya
-  ejecutada. Claves en `.env.local` (gitignored) y en Vercel.
+- **Supabase**: proyecto `hymmznfylafdldfngxcu` (`https://hymmznfylafdldfngxcu.supabase.co`), las 6 migraciones ya
+  ejecutadas. Claves en `.env.local` (gitignored) y en Vercel.
 - **Vercel**: proyecto `plataforma` en el scope `migue-polos-projects`. Dominio de producción:
   **`mcda-decisions.vercel.app`** (`mcda.vercel.app` estaba tomado por otra cuenta).
   - **Trampa real con la que se perdió tiempo:** Vercel activa protección SSO (`ssoProtection: all_except_custom_domains`)
@@ -71,9 +74,11 @@ El Excel que descarga la plataforma usa el mismo formato, así que también se p
 ## Estructura
 ```
 plataforma/
-├─ supabase/migrations/                0001_init.sql (tablas, RLS, funciones por token) + 0002_decision_matrix.sql
-│                                      (method/decision_matrix en projects) + 0003_more_methods.sql (amplía method
-│                                      a los 5), ver Visión
+├─ supabase/migrations/                20240101000001_init.sql (tablas, RLS, funciones por token) +
+│                                      000002_decision_matrix (method/decision_matrix) + 000003/000004_*_methods
+│                                      (amplían method a los 7) + 000005_public_get_weighting_method +
+│                                      000006_rate_limit_and_constraints (límite de frecuencia por token +
+│                                      longitud máxima en texto libre), ver Visión
 ├─ src/app/                            Páginas: /, /tutorial, /metodo, /login, /dashboard, /projects/[id], /e/[token], /p/[token]
 │                                      icon.tsx, apple-icon.tsx (favicon generado con next/og, ver Historial)
 ├─ src/components/                     JudgmentEditor, DecisionMatrixEditor, Results, PrioritizationEditor,
@@ -96,15 +101,20 @@ plataforma/
   la intensidad de Saaty es `|value| + 1`. `sheet` es `crit` o `alt:<id del criterio>`.
 
 ## Qué está verificado y qué no
-Verificado aquí: compila (`next build`), el chequeo de tipos pasa, la matemática de los 5 métodos da los mismos
-números que sus notebooks de referencia (`npm test`), el Excel de cada método tiene las fórmulas correctas y sus
-valores cacheados coinciden con esa misma matemática (`npm run test:excel`, un `check-excel-<método>.ts` por
-método) y la ida y vuelta con el formato de la herramienta HTML funciona. Para PROMETHEE y ELECTRE, además, se forzó
-un recálculo real en LibreOffice headless (no solo el valor cacheado) antes de dar las fórmulas por buenas — ver
-"Historial de cambios", 20 sep 2026 noche, el hallazgo de `MEDIAN`/`MAX` sobre una expresión-arreglo. Las rutas
+Verificado aquí: compila (`next build`), el chequeo de tipos pasa, la matemática de los 7 métodos de ranking
+(AHP/TOPSIS/VIKOR/ELECTRE/PROMETHEE/SAW/Fuzzy TOPSIS) y de los 2 métodos de ponderación (CRITIC/Entropía) da los
+mismos números que sus notebooks/casos de referencia (`npm test`, un `check-*.ts` por método), el Excel de cada
+uno de los 7 métodos de ranking tiene las fórmulas correctas y sus valores cacheados coinciden con esa misma
+matemática (`npm run test:excel`, un `check-excel-<método>.ts` por método) y la ida y vuelta con el formato de la
+herramienta HTML funciona. Para PROMETHEE/ELECTRE (a mano) y SAW/Fuzzy TOPSIS (automatizado, `npm run
+test:excel:recalc`), además, se forzó un recálculo real en LibreOffice headless (no solo el valor cacheado) antes
+de dar las fórmulas por buenas — ver "Historial de cambios", 20 sep 2026 noche, el hallazgo de `MEDIAN`/`MAX`
+sobre una expresión-arreglo. TOPSIS y VIKOR no han pasado por ese mismo recálculo real todavía (solo por el
+cacheado-vs-JS de `check-excel-topsis.ts`/`check-excel-vikor.ts`) — sus fórmulas son más simples (sin
+`MEDIAN`/`MAX` sobre expresión-arreglo), pero sigue siendo una verificación pendiente, no hecha. Las rutas
 protegidas redirigen a `/login`.
 
-**Ya hay un Supabase real desplegado** (proyecto `hymmznfylafdldfngxcu`, migración `0001_init.sql` ejecutada, variables de entorno
+**Ya hay un Supabase real desplegado** (proyecto `hymmznfylafdldfngxcu`, las 6 migraciones ejecutadas, variables de entorno
 puestas en local y en Vercel — production, preview y development) y la app corre en producción en
 <https://mcda-decisions.vercel.app>. Lo que **todavía no se caminó explícitamente de punta a punta** es el checklist de RLS: la lectura
 del SQL (políticas + funciones `SECURITY DEFINER`) se ve correcta, pero eso no reemplaza probarlo contra Postgres real. Pendiente:
@@ -115,6 +125,38 @@ del SQL (políticas + funciones `SECURITY DEFINER`) se ve correcta, pero eso no 
 5. Descargar el Excel y abrirlo.
 
 ## Historial de cambios
+
+**20 sep 2026 (auditoría de diseño/código/seguridad/UX de la plataforma):**
+- **Seguridad**: nueva migración `20240101000006_rate_limit_and_constraints.sql` — límite de frecuencia
+  por token (tabla `rate_limit_log` + función `_rate_limit()`) en `expert_get`/`expert_save`/
+  `expert_submit`/`public_get`, y tope de longitud en `title`/`objective`/`name`/`role_desc` (antes solo
+  truncado cosmético en la UI, sin cota en la base). `src/lib/errors.ts` (`friendlyError()`) traduce los
+  16 puntos donde se mostraba `error.message` crudo de Postgres al estudiante a mensajes en español; el
+  error real solo va a la consola. `scripts/check-rls.ts` (`npm run test:rls`) camina de punta a punta el
+  checklist de RLS que este mismo README marcaba como nunca probado contra Postgres real (cuentas
+  cruzadas, enlace de experto, toggle público, y ahora también el límite de frecuencia).
+- **Accesibilidad**: `ScientificMethodModal` y `ExecutiveReportModal` no tenían `role="dialog"`,
+  `aria-modal` ni trampa de foco (a diferencia del modal de borrar proyecto en `ProjectList.tsx`, que sí
+  los tenía) — corregido en ambos, con foco inicial en el panel y Tab/Shift+Tab contenido dentro.
+- **`<Topbar />` compartido**: el bloque logo + "Plataforma MCDA" + badge + subtítulo estaba copiado casi
+  idéntico en 9 archivos (landing, login, dashboard, proyecto, tutorial, método, update-password,
+  ExpertFlow, PublicView). Ahora es un solo componente (`src/components/Topbar.tsx`) con `badge`/
+  `subtitle`/`href`/`children` (para lo que cada página necesite a la derecha).
+- **`excel.ts` dividido**: las 975 líneas que mezclaban helpers compartidos (`colL`/`qs`/`W`/estilos por
+  color) con las 7 hojas por método ahora son `excel-core.ts` (compartido + Criterios + Matriz de
+  decisión) y un `excel-<método>-sheet.ts` por cada uno de TOPSIS/VIKOR/PROMETHEE/ELECTRE/SAW/Fuzzy
+  TOPSIS; `excel.ts` solo orquesta (`buildWorkbook`/`buildPrioWorkbook`). Mismo output exacto, verificado
+  con `npm test` + `npm run test:excel` + `npm run test:excel:recalc` antes y después.
+- **SAW y Fuzzy TOPSIS ya tienen su `check-excel-*.ts`** (antes solo los otros 5 métodos): valores
+  cacheados contra `sawSynthesis()`/`fuzzyTopsisSynthesis()`, ida y vuelta por `_datos`, y —nuevo,
+  `scripts/check-excel-recalc.ts` (`npm run test:excel:recalc`)— un recálculo real en LibreOffice
+  headless (arruina a propósito el valor cacheado de cada celda con fórmula y confirma que LibreOffice la
+  recalcula al valor correcto), automatizando el mismo mecanismo que hasta hoy solo se había corrido a
+  mano para VIKOR/PROMETHEE/ELECTRE (ver más abajo, "20 sep 2026 noche").
+- **Caso IoT/Palmor como plantilla**: `NewProject.tsx` trae un checkbox "Empezar con el caso de ejemplo
+  del curso" que precarga los 4 criterios y 4 alternativas reales de Sesiones 1-3 (y la matriz de datos,
+  para los métodos que no sean AHP/Fuzzy TOPSIS) en vez de "Criterio 1/2/3" — antes todo proyecto nuevo
+  arrancaba en blanco.
 
 **20 sep 2026 (noche, cierre del roadmap de Excel):**
 - **VIKOR, PROMETHEE y ELECTRE ya exportan a Excel con fórmulas vivas** (`vikorSheet()`, `prometheeSheet()`,
@@ -206,9 +248,12 @@ del SQL (políticas + funciones `SECURITY DEFINER`) se ve correcta, pero eso no 
 
 ## Visión: plataforma multicriterio completa
 
-**20 sep 2026: decidido con el docente y construido.** Cinco métodos ya funcionando: **AHP** (el original), **TOPSIS**,
-**VIKOR**, **PROMETHEE** y **ELECTRE** (`src/lib/{topsis,vikor,promethee,electre}.ts`, cada uno verificado contra su
-notebook de referencia del curso con valores exactos — `npm test` corre los 5). Un proyecto elige `method` en la
+**20 sep 2026: decidido con el docente y construido; ampliado después con SAW, Fuzzy TOPSIS y 2 métodos de
+ponderación objetiva.** Siete métodos de ranking ya funcionando: **AHP** (el original), **TOPSIS**, **VIKOR**,
+**PROMETHEE**, **ELECTRE**, **SAW** y **Fuzzy TOPSIS** (`src/lib/{topsis,vikor,promethee,electre,saw,fuzzy_topsis}.ts`;
+los 5 primeros verificados contra su notebook de referencia del curso con valores exactos vía `npm test` — SAW y
+Fuzzy TOPSIS todavía no tienen su `check-*.ts`, ver "Falta" abajo). Además, `weighting_method` (`src/lib/weights.ts`)
+deja elegir **CRITIC** o **Entropía** como alternativa a pesos derivados de AHP. Un proyecto elige `method` en la
 pestaña «Proyecto» (el peso de criterios sigue saliendo siempre de la hoja Criterios, sin importar el método); con
 cualquier método que no sea AHP aparece una pestaña «Matriz de decisión» donde el dueño escribe el valor real de cada
 alternativa por criterio (beneficio/costo), y los expertos solo pesan criterios (ya no comparan alternativas de a
@@ -222,18 +267,30 @@ un par puede quedar **incomparable**, con c*=0.65/d*=0.30 como convención del c
 aparte (relaciones + tabla de concordancia/discordancia), no como una lista ordenada con barras.
 
 **Asistente "¿qué método uso?"** en `/metodo`: árbol de 3 preguntas (¿datos cuantitativos? → ¿aceptas incomparabilidad?
-→ ¿qué te importa más?) que termina en uno de los 5 métodos, más tabla comparativa. Enlazado desde landing, tutorial y
+→ ¿qué te importa más?) que termina en uno de los 7 métodos, más tabla comparativa. Enlazado desde landing, tutorial y
 el selector de método del proyecto.
 
-**Falta:** solo ANP — la pieza que de verdad requiere un modelo de datos distinto (supermatriz/red de dependencias,
-no una matriz de decisión más), pendiente de una conversación de diseño aparte. Los otros 5 métodos ya tienen Excel
-propio con fórmulas vivas y color de acento propio (ver "Historial de cambios", 20 sep 2026 noche).
+**Falta:**
+1. **ANP** — la pieza que de verdad requiere un modelo de datos distinto (supermatriz/red de dependencias, no una
+   matriz de decisión más). Ver auditoría (sección "ANP" del informe) para una propuesta de alcance mínimo viable.
+2. **TOPSIS y VIKOR sin recálculo real en LibreOffice** — sí tienen `check-excel-*.ts` (cacheado vs. JS), pero no
+   pasaron por el mismo recálculo forzado en LibreOffice headless que ya corrieron PROMETHEE/ELECTRE/SAW/Fuzzy
+   TOPSIS (`npm run test:excel:recalc`, hoy solo cubre estos 2 últimos).
+3. **Rol de profesor** — el docente no puede ver los proyectos de sus estudiantes desde la plataforma todavía
+   (decidido con el docente, 20 sep 2026: no es prioridad mientras la calificación se haga sobre el Excel/informe
+   que cada estudiante entrega aparte, ver `evaluacion_v1.md` del curso).
 
-**Migraciones que hay que tener corridas contra Supabase real:**
-`supabase/migrations/0002_decision_matrix.sql` (agrega `method`/`decision_matrix` a `projects`, actualiza
-`expert_get`/`public_get`) y `0003_more_methods.sql` (amplía el `check` de `method` a los 5). Sin correrlas, la app no
-truena (se degrada a comportarse como AHP), pero el selector de método no puede guardar los 4 nuevos. Desde el 20 sep
-2026 la integración GitHub↔Supabase del proyecto (Settings → Integrations → GitHub, Working directory = `plataforma`,
+Los 7 métodos ya tienen Excel propio con fórmulas vivas y color de acento propio (ver "Historial de cambios",
+20 sep 2026 noche).
+
+**Migraciones que hay que tener corridas contra Supabase real:** las 6 de `supabase/migrations/`, en orden —
+`20240101000002_decision_matrix.sql` (agrega `method`/`decision_matrix`), `...000003`/`...000004_new_methods.sql`
+(amplían el `check` de `method` a los 7 y agregan `weighting_method`), `...000005_public_get_weighting_method.sql`,
+y `...000006_rate_limit_and_constraints.sql` (límite de frecuencia por token en `expert_get`/`expert_save`/
+`expert_submit`/`public_get`, y longitud máxima en `title`/`objective`/`name`/`role_desc` — agregada en la auditoría
+de seguridad del 20 sep 2026, ver más abajo). Sin correrlas, la app no truena (se degrada a comportarse como AHP sin
+límite de frecuencia), pero el selector de método no puede guardar los métodos nuevos. Desde el 20 sep 2026 la
+integración GitHub↔Supabase del proyecto (Settings → Integrations → GitHub, Working directory = `plataforma`,
 Deploy to production activado, rama `main`) las aplica sola al hacer push — no hace falta pegarlas a mano en el SQL
 Editor.
 

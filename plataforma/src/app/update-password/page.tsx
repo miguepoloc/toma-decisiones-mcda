@@ -4,7 +4,8 @@ import Link from 'next/link';
 import { Suspense, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient, supabaseConfigurado } from '@/lib/supabase/client';
-import Logo from '@/components/Logo';
+import { friendlyError } from '@/lib/errors';
+import Topbar from '@/components/Topbar';
 
 function UpdatePasswordForm() {
   const router = useRouter();
@@ -40,7 +41,7 @@ function UpdatePasswordForm() {
     const { error } = await supabase.auth.updateUser({ password });
 
     if (error) {
-      setMsg(error.message);
+      setMsg(friendlyError(error, 'No se pudo actualizar la contraseña.'));
       setBusy(false);
     } else {
       setIsSuccess(true);
@@ -50,19 +51,9 @@ function UpdatePasswordForm() {
 
   return (
     <div className="wrap">
-      <div className="topbar">
-        <Link className="brand" href="/" title="Plataforma MCDA · Inicio">
-          <Logo size={26} />
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, lineHeight: 1.2 }}>
-              <span>Plataforma MCDA</span>
-              <span style={{ fontSize: 10, fontFamily: 'var(--f-mono)', padding: '1px 5px', borderRadius: 4, background: 'rgba(255,255,255,0.1)', color: 'var(--muted)' }}>SEGURIDAD</span>
-            </div>
-            <span className="brand-sub">← Ir al inicio</span>
-          </div>
-        </Link>
+      <Topbar badge="SEGURIDAD" subtitle="← Ir al inicio">
         <Link className="btn sm" href="/login">Iniciar sesión</Link>
-      </div>
+      </Topbar>
 
       <div style={{ maxWidth: 440, margin: '48px auto 80px', display: 'grid', gap: 18 }}>
         <div>

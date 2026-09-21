@@ -1,12 +1,12 @@
 'use client';
 
-import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { friendlyError } from '@/lib/errors';
 import type { ExpertGet } from '@/lib/types';
 import { indexJudgments } from '@/lib/ahp';
 import JudgmentEditor from './JudgmentEditor';
-import Logo from './Logo';
+import Topbar from './Topbar';
 
 export default function ExpertFlow({ token }: { token: string }) {
   const supabase = useMemo(() => createClient(), []);
@@ -39,27 +39,17 @@ export default function ExpertFlow({ token }: { token: string }) {
 
   async function submit() {
     const { error } = await supabase.rpc('expert_submit', { p_token: token });
-    if (error) setMsg(error.message);
+    if (error) setMsg(friendlyError(error, 'No se pudieron enviar tus respuestas.'));
     else { setStatus('submitted'); setConfirm(false); window.scrollTo({ top: 0 }); }
   }
 
   return (
     <div className="wrap">
-      <div className="topbar">
-        <Link className="brand" href="/" title="Plataforma MCDA · Inicio">
-          <Logo size={26} />
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, lineHeight: 1.2 }}>
-              <span>Plataforma MCDA</span>
-              <span style={{ fontSize: 10, fontFamily: 'var(--f-mono)', padding: '1px 5px', borderRadius: 4, background: 'rgba(255,255,255,0.1)', color: 'var(--muted)' }}>EXPERTO</span>
-            </div>
-            <span className="brand-sub">Panel de Consulta</span>
-          </div>
-        </Link>
+      <Topbar badge="EXPERTO" subtitle="Panel de Consulta">
         <span className="muted" style={{ fontSize: 13, background: 'var(--surface2)', padding: '6px 12px', borderRadius: 8, border: '1px solid var(--line)' }}>
           Respondiendo como: <b>{data.expert.name}</b>{data.expert.role_desc ? ` · ${data.expert.role_desc}` : ''}
         </span>
-      </div>
+      </Topbar>
       <div className="panel">
         <header>
           <div className="eyebrow">Consulta a expertos</div>

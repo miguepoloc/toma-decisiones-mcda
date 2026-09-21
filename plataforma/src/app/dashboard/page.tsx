@@ -1,9 +1,8 @@
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import NewProject from '@/components/NewProject';
 import SignOutButton from '@/components/SignOutButton';
-import Logo from '@/components/Logo';
+import Topbar from '@/components/Topbar';
 import ProjectList from '@/components/ProjectList';
 
 export const dynamic = 'force-dynamic';
@@ -17,22 +16,12 @@ export default async function Dashboard() {
 
   return (
     <div className="wrap">
-      <div className="topbar">
-        <Link className="brand" href="/" title="Plataforma MCDA · Inicio">
-          <Logo size={26} />
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, lineHeight: 1.2 }}>
-              <span>Plataforma MCDA</span>
-              <span style={{ fontSize: 10, fontFamily: 'var(--f-mono)', padding: '1px 5px', borderRadius: 4, background: 'rgba(255,255,255,0.1)', color: 'var(--muted)' }}>PANEL</span>
-            </div>
-            <span className="brand-sub">Toma de Decisiones Multicriterio</span>
-          </div>
-        </Link>
+      <Topbar badge="PANEL" subtitle="Toma de Decisiones Multicriterio">
         <div className="user">
           <span style={{ fontFamily: 'var(--f-mono)', fontSize: 12 }}>{user.email}</span>
           <SignOutButton />
         </div>
-      </div>
+      </Topbar>
       <div className="panel">
         <h1 style={{ fontSize: 30 }}>Mis proyectos</h1>
         <ProjectList initial={projects ?? []} />

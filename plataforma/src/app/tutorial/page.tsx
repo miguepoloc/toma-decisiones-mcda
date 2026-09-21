@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
-import Logo from '@/components/Logo';
+import Topbar from '@/components/Topbar';
 
 export const metadata = { title: 'Cómo funciona · Plataforma MCDA' };
 
@@ -16,21 +16,11 @@ export default async function TutorialPage() {
 
   return (
     <div className="wrap">
-      <div className="topbar">
-        <Link className="brand" href="/" title="Plataforma MCDA · Inicio">
-          <Logo size={26} />
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, lineHeight: 1.2 }}>
-              <span>Plataforma MCDA</span>
-              <span style={{ fontSize: 10, fontFamily: 'var(--f-mono)', padding: '1px 5px', borderRadius: 4, background: 'rgba(255,255,255,0.1)', color: 'var(--muted)' }}>GUÍA</span>
-            </div>
-            <span className="brand-sub">← Ir al inicio</span>
-          </div>
-        </Link>
+      <Topbar badge="GUÍA" subtitle="← Ir al inicio">
         <div className="acts">
           <Link className="btn sm primary" href={primaryHref}>{primaryLabel}</Link>
         </div>
-      </div>
+      </Topbar>
 
       <div className="ttl">
         <div className="eyebrow">Guía completa</div>

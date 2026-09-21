@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 export type MethodKey = 'ahp' | 'topsis' | 'vikor' | 'promethee' | 'electre' | 'saw' | 'fuzzy_topsis';
 export type CitationFormat = 'ieee' | 'apa' | 'bibtex' | 'chicago';
@@ -345,14 +345,28 @@ export default function ScientificMethodModal({
   const method = METHOD_SPECS[methodKey] || METHOD_SPECS.topsis;
   const [format, setFormat] = useState<CitationFormat>('ieee');
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') { onClose(); return; }
+      if (e.key !== 'Tab' || !panelRef.current) return;
+      const focusables = panelRef.current.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])'
+      );
+      if (focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
     }
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [onClose]);
+
+  useEffect(() => {
+    panelRef.current?.focus();
+  }, []);
 
   useEffect(() => {
     if (!toastMsg) return;
@@ -435,6 +449,11 @@ export default function ScientificMethodModal({
       )}
 
       <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="smm-title"
+        tabIndex={-1}
         style={{
           background: 'var(--surface)',
           border: '1px solid rgba(255, 255, 255, 0.12)',
@@ -475,7 +494,7 @@ export default function ScientificMethodModal({
                 FUNDAMENTO MATEMÁTICO
               </span>
             </div>
-            <h2 style={{ fontSize: 22, margin: 0, color: 'var(--ink)' }}>{method.name}</h2>
+            <h2 id="smm-title" style={{ fontSize: 22, margin: 0, color: 'var(--ink)' }}>{method.name}</h2>
           </div>
           <button
             type="button"

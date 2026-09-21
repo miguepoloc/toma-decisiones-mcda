@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import Logo from '@/components/Logo';
+import Topbar from '@/components/Topbar';
 import ScientificMethodModal, { METHOD_SPECS, type MethodKey } from '@/components/ScientificMethodModal';
 
 type Step = 'q1' | 'q1b' | 'q2' | 'q3' | MethodKey;
@@ -154,22 +154,12 @@ export default function MetodoPage() {
   return (
     <div className="wrap">
       {/* Sticky Header */}
-      <div className="topbar">
-        <Link className="brand" href="/" title="Plataforma MCDA · Inicio">
-          <Logo size={26} />
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, lineHeight: 1.2 }}>
-              <span>Plataforma MCDA</span>
-              <span style={{ fontSize: 10, fontFamily: 'var(--f-mono)', padding: '1px 5px', borderRadius: 4, background: 'rgba(255,255,255,0.1)', color: 'var(--muted)' }}>TEORÍA</span>
-            </div>
-            <span className="brand-sub">← Ir al inicio</span>
-          </div>
-        </Link>
+      <Topbar badge="TEORÍA" subtitle="← Ir al inicio">
         <div style={{ display: 'flex', gap: 10 }}>
           <Link className="btn sm" href="/tutorial">Tutorial</Link>
           <Link className="btn sm primary" href={getCreateUrl()}>{isLoggedIn ? 'Ir al panel' : 'Crear proyecto'}</Link>
         </div>
-      </div>
+      </Topbar>
 
       <div className="ttl">
         <div className="eyebrow">Guía de Selección Metodológica</div>

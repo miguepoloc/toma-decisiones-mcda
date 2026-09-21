@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import type { CSSProperties } from 'react';
 import { createClient } from '@/lib/supabase/server';
-import Logo from '@/components/Logo';
+import Topbar from '@/components/Topbar';
 
 const famVar = (v: string): CSSProperties => ({ '--fam': v } as CSSProperties);
 
@@ -18,23 +18,13 @@ export default async function Home() {
   return (
     <>
       <div className="wrap">
-        <div className="topbar">
-          <Link className="brand" href="/" title="Plataforma MCDA · Inicio">
-            <Logo size={26} />
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, lineHeight: 1.2 }}>
-                <span>Plataforma MCDA</span>
-                <span style={{ fontSize: 10, fontFamily: 'var(--f-mono)', padding: '1px 5px', borderRadius: 4, background: 'rgba(255,255,255,0.1)', color: 'var(--muted)' }}>v2.0</span>
-              </div>
-              <span className="brand-sub">Ingeniería de Decisión</span>
-            </div>
-          </Link>
+        <Topbar badge="v2.0" subtitle="Ingeniería de Decisión">
           <div className="acts">
             <Link className="btn sm" href="/metodo">¿Qué método uso?</Link>
             <Link className="btn sm" href="/tutorial">Cómo funciona</Link>
             <Link className="btn sm primary" href={primaryHref}>{primaryLabel}</Link>
           </div>
-        </div>
+        </Topbar>
 
         <div className="lhero">
           <div>

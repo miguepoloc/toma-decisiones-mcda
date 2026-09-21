@@ -1,11 +1,10 @@
 'use client';
 
-import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import type { PublicGet } from '@/lib/types';
 import Results from './Results';
-import Logo from './Logo';
+import Topbar from './Topbar';
 
 export default function PublicView({ token }: { token: string }) {
   const supabase = useMemo(() => createClient(), []);
@@ -28,21 +27,11 @@ export default function PublicView({ token }: { token: string }) {
   }
   return (
     <div className="wrap">
-      <div className="topbar">
-        <Link className="brand" href="/" title="Plataforma MCDA · Inicio">
-          <Logo size={26} />
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, lineHeight: 1.2 }}>
-              <span>Plataforma MCDA</span>
-              <span style={{ fontSize: 10, fontFamily: 'var(--f-mono)', padding: '1px 5px', borderRadius: 4, background: 'rgba(255,255,255,0.1)', color: 'var(--muted)' }}>PÚBLICO</span>
-            </div>
-            <span className="brand-sub">Vista de Resultados</span>
-          </div>
-        </Link>
+      <Topbar badge="PÚBLICO" subtitle="Vista de Resultados">
         <span className="muted" style={{ fontSize: 13, background: 'var(--surface2)', padding: '6px 12px', borderRadius: 8, border: '1px solid var(--line)' }}>
           Vista pública de solo lectura
         </span>
-      </div>
+      </Topbar>
       <div className="panel">
         <header>
           <div className="eyebrow">Resultados {(data.project.method ?? 'ahp').toUpperCase()}</div>

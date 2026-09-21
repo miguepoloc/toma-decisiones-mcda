@@ -4,7 +4,8 @@ import Link from 'next/link';
 import { Suspense, useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient, supabaseConfigurado } from '@/lib/supabase/client';
-import Logo from '@/components/Logo';
+import { friendlyError } from '@/lib/errors';
+import Topbar from '@/components/Topbar';
 
 function LoginForm() {
   const router = useRouter();
@@ -36,14 +37,14 @@ function LoginForm() {
 
     if (mode === 'in') {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) setMsg(error.message === 'Invalid login credentials' ? 'Correo o contraseña incorrectos.' : error.message);
+      if (error) setMsg(friendlyError(error, 'No se pudo iniciar sesión. Intenta de nuevo.'));
       else { router.push(next); router.refresh(); }
     } else if (mode === 'up') {
       const { data, error } = await supabase.auth.signUp({
         email, password,
         options: { data: { full_name: name }, emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}` },
       });
-      if (error) setMsg(error.message);
+      if (error) setMsg(friendlyError(error, 'No se pudo crear la cuenta. Intenta de nuevo.'));
       else if (data.session) { router.push(next); router.refresh(); }
       else {
         setMsgType('ok');
@@ -55,7 +56,7 @@ function LoginForm() {
         redirectTo: `${window.location.origin}/auth/callback?next=/update-password`,
       });
       if (error) {
-        setMsg(error.message);
+        setMsg(friendlyError(error, 'No se pudo enviar el enlace de recuperación.'));
       } else {
         setMsgType('ok');
         setMsg('Enlace de recuperación enviado. Revisa tu correo electrónico (incluida la carpeta de spam o correo no deseado).');
@@ -66,19 +67,9 @@ function LoginForm() {
 
   return (
     <div className="wrap">
-      <div className="topbar">
-        <Link className="brand" href="/" title="Plataforma MCDA · Inicio">
-          <Logo size={26} />
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, lineHeight: 1.2 }}>
-              <span>Plataforma MCDA</span>
-              <span style={{ fontSize: 10, fontFamily: 'var(--f-mono)', padding: '1px 5px', borderRadius: 4, background: 'rgba(255,255,255,0.1)', color: 'var(--muted)' }}>ACCESO</span>
-            </div>
-            <span className="brand-sub">← Ir al inicio</span>
-          </div>
-        </Link>
+      <Topbar badge="ACCESO" subtitle="← Ir al inicio">
         <Link className="btn sm" href="/tutorial">Cómo funciona</Link>
-      </div>
+      </Topbar>
 
       <div className="authgrid">
         <div className="authpromo">

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { friendlyError } from '@/lib/errors';
 
 type Row = { id: string; title: string; objective: string; is_public: boolean };
 
@@ -58,7 +59,7 @@ export default function ProjectList({ initial }: { initial: Row[] }) {
     setBusy(true);
     const { error } = await createClient().from('projects').delete().eq('id', target.id);
     setBusy(false);
-    if (error) { setMsg(error.message); setTarget(null); return; }
+    if (error) { setMsg(friendlyError(error, 'No se pudo eliminar el proyecto.')); setTarget(null); return; }
     setProjects((prev) => prev.filter((p) => p.id !== target.id));
     setTarget(null);
   }
@@ -87,7 +88,7 @@ export default function ProjectList({ initial }: { initial: Row[] }) {
       .single();
 
     if (fetchErr || !orig) {
-      setMsg(fetchErr?.message ?? 'No se pudo leer el proyecto original');
+      setMsg(fetchErr ? friendlyError(fetchErr, 'No se pudo leer el proyecto original.') : 'No se pudo leer el proyecto original.');
       setBusy(false);
       return;
     }
@@ -110,7 +111,7 @@ export default function ProjectList({ initial }: { initial: Row[] }) {
       .single();
 
     if (insertErr || !copyRow) {
-      setMsg(insertErr?.message ?? 'Error al duplicar el proyecto');
+      setMsg(insertErr ? friendlyError(insertErr, 'Error al duplicar el proyecto.') : 'Error al duplicar el proyecto.');
       setBusy(false);
       return;
     }

@@ -6,6 +6,7 @@ import { hexToken, uid, type Alternative, type Criterion, type ExpertRow, type J
 import { indexJudgments, type JMap } from '@/lib/ahp';
 import { finalists, normalizePrio, type PrioState } from '@/lib/prio';
 import { downloadExcel, downloadPrioExcel } from '@/lib/excel';
+import { friendlyError } from '@/lib/errors';
 import { normalizeMatrix, setCell as setMatrixCell, setType as setMatrixType, type MatrixType } from '@/lib/topsis';
 import JudgmentEditor from './JudgmentEditor';
 import PrioritizationEditor from './PrioritizationEditor';
@@ -74,7 +75,7 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
     if (!Object.keys(p).length) return;
     setSave('saving');
     const { error } = await supabase.from('projects').update(p).eq('id', initialProject.id);
-    if (error) { setSave('error'); setSaveErr(error.message); pending.current = { ...p, ...pending.current }; }
+    if (error) { setSave('error'); setSaveErr(friendlyError(error, 'No se pudo guardar.')); pending.current = { ...p, ...pending.current }; }
     else setSave('saved');
   }, [supabase, initialProject.id]);
 
@@ -136,14 +137,14 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
     if (!name) return;
     const { data, error } = await supabase.from('experts')
       .insert({ project_id: project.id, name, role_desc: nuevo.role.trim(), position: experts.length }).select().single();
-    if (error || !data) { setMsg(error?.message ?? 'No se pudo agregar'); return; }
+    if (error || !data) { setMsg(error ? friendlyError(error, 'No se pudo agregar.') : 'No se pudo agregar.'); return; }
     setExperts((p) => [...p, data as ExpertRow]);
     setNuevo({ name: '', role: '' });
   }
   async function updateExpert(id: string, p: Partial<ExpertRow>) {
     setExperts((prev) => prev.map((e) => (e.id === id ? { ...e, ...p } : e)));
     const { error } = await supabase.from('experts').update(p).eq('id', id);
-    if (error) setMsg(error.message);
+    if (error) setMsg(friendlyError(error, 'No se pudo actualizar el experto.'));
   }
   async function removeExpert(id: string) {
     await supabase.from('experts').delete().eq('id', id);

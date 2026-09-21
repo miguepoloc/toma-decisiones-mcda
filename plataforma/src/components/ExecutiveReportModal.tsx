@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import type { Criterion, Alternative, DecisionMatrix } from '@/lib/types';
 import { METHOD_SPECS, type MethodKey } from './ScientificMethodModal';
 import { getCell, getType } from '@/lib/topsis';
@@ -35,14 +35,28 @@ export default function ExecutiveReportModal({
     month: 'long',
     day: 'numeric',
   });
+  const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') { onClose(); return; }
+      if (e.key !== 'Tab' || !panelRef.current) return;
+      const focusables = panelRef.current.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])'
+      );
+      if (focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
     }
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [onClose]);
+
+  useEffect(() => {
+    panelRef.current?.focus();
+  }, []);
 
   return (
     <div
@@ -65,6 +79,11 @@ export default function ExecutiveReportModal({
     >
       <div
         id="executive-report-container"
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="exec-report-title"
+        tabIndex={-1}
         style={{
           background: '#FFFFFF',
           color: '#0F172A',
@@ -134,7 +153,7 @@ export default function ExecutiveReportModal({
               <div style={{ fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#0284C7' }}>
                 Universidad del Magdalena · Facultad de Ingeniería
               </div>
-              <h1 style={{ fontSize: 22, fontWeight: 800, margin: '4px 0 2px', color: '#0F172A' }}>
+              <h1 id="exec-report-title" style={{ fontSize: 22, fontWeight: 800, margin: '4px 0 2px', color: '#0F172A' }}>
                 Dictamen Ejecutivo de Decisión Multicriterio (MCDA)
               </h1>
               <div style={{ fontSize: 13, color: '#64748B' }}>

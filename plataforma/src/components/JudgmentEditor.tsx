@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Alternative, Criterion, Method } from '@/lib/types';
+import { friendlyError } from '@/lib/errors';
 import {
   CRIT_SHEET, altSheet, analyze, answeredCount, expertMatrix, pairsOf, phrase, getV, setV, sheetItems,
   type JMap,
@@ -53,7 +54,7 @@ export default function JudgmentEditor({ criteria, alternatives, method = 'ahp',
     setSave('saving');
     onSet(sh, key, value)
       .then(() => { if (--inflight.current === 0) setSave('saved'); })
-      .catch((e: unknown) => { inflight.current = Math.max(0, inflight.current - 1); setSave('error'); setErr(e instanceof Error ? e.message : 'No se pudo guardar'); });
+      .catch((e: unknown) => { inflight.current = Math.max(0, inflight.current - 1); setSave('error'); setErr(friendlyError(e, 'No se pudo guardar.')); });
   }
 
   function change(i: number, j: number, v: number) {

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { fromLegacy, isLegacy, type Imported } from './legacy.ts';
+import { friendlyError } from './errors.ts';
 
 /** Lee un respaldo de la herramienta HTML: .json o el .xlsx descargado (hoja oculta _datos). */
 export async function parseLegacyFile(file: File): Promise<Imported | null> {
@@ -42,7 +43,7 @@ export async function createFromImport(
     })
     .select('id')
     .single();
-  if (error || !proj) return { error: error?.message ?? 'No se pudo crear el proyecto' };
+  if (error || !proj) return { error: error ? friendlyError(error, 'No se pudo crear el proyecto.') : 'No se pudo crear el proyecto.' };
 
   const { data: exps, error: e2 } = await supabase
     .from('experts')
@@ -57,7 +58,7 @@ export async function createFromImport(
       })),
     )
     .select('id, position');
-  if (e2 || !exps) return { id: proj.id, error: e2?.message };
+  if (e2 || !exps) return { id: proj.id, error: e2 ? friendlyError(e2, 'No se pudieron importar los expertos.') : undefined };
 
   const byPos = new Map(exps.map((x: { id: string; position: number }) => [x.position, x.id]));
   const rows = imp.judgments.flatMap((j) => {
@@ -67,7 +68,7 @@ export async function createFromImport(
   });
   for (let i = 0; i < rows.length; i += 500) {
     const { error: e3 } = await supabase.from('judgments').insert(rows.slice(i, i + 500));
-    if (e3) return { id: proj.id, error: e3.message };
+    if (e3) return { id: proj.id, error: friendlyError(e3, 'No se pudieron importar los juicios.') };
   }
   return { id: proj.id };
 }

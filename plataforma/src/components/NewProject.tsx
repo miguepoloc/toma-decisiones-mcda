@@ -3,9 +3,11 @@
 import { useRef, useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { friendlyError } from '@/lib/errors';
 import { createFromImport, parseLegacyFile } from '@/lib/importer';
 import { blankPrio } from '@/lib/prio';
 import { uid } from '@/lib/types';
+import { blankMatrix, setCell, setType } from '@/lib/topsis';
 import type { MethodKey } from '@/components/ScientificMethodModal';
 
 const METHOD_LABELS: Record<MethodKey, string> = {
@@ -18,6 +20,24 @@ const METHOD_LABELS: Record<MethodKey, string> = {
   fuzzy_topsis: 'Fuzzy TOPSIS · Lógica Difusa',
 };
 
+// Caso guiado del curso (Sesiones 1-3): elegir tecnología de comunicación IoT/WSN para una red de
+// sensores agroclimáticos en Palmor, Sierra Nevada de Santa Marta — mismos criterios/alternativas/datos
+// que `Investigacion_didactica_IoT_WSN/PLAN_INVESTIGACION.md` y el Excel guiado de la Sesión 2
+// (`s2_ahp_excel/Ejercicio.xlsx`). Da a un estudiante un proyecto con datos reales del curso en vez de
+// "Criterio 1/2/3" al crear su primer proyecto — no reemplaza su propio problema de tesis.
+const IOT_PALMOR_TITLE = 'Selección de tecnología IoT — Palmor (ejemplo del curso)';
+const IOT_PALMOR_OBJECTIVE = 'Elegir la tecnología de comunicación (LoRaWAN, GSM/GPRS, Sigfox o Zigbee) para una red de sensores agroclimáticos en Palmor, Sierra Nevada de Santa Marta.';
+const IOT_PALMOR_CRITERIA = [
+  { name: 'Alcance de comunicación', hint: 'Distancia máxima confiable entre el nodo sensor y el gateway/estación base, en km.' },
+  { name: 'Autonomía energética', hint: 'Vida útil estimada de la batería del nodo antes de requerir recambio o recarga, en años.' },
+  { name: 'Infraestructura/cobertura comercial', hint: 'Disponibilidad de cobertura comercial ya desplegada en Colombia (1 = nula, 5 = amplia).' },
+  { name: 'Madurez/viabilidad comercial', hint: 'Qué tan probada y sostenible comercialmente está la tecnología para este uso (1 = incipiente, 5 = consolidada).' },
+];
+const IOT_PALMOR_ALTERNATIVES = ['LoRaWAN', 'GSM/GPRS', 'Sigfox', 'Zigbee'];
+// [Alcance (km), Autonomía (años), Infraestructura (1-5), Madurez (1-5)] — las 4 son de beneficio
+// (más es mejor). Mismo dataset que scripts/check-topsis.ts y los demás check-*.ts de la plataforma.
+const IOT_PALMOR_MATRIX = [[10, 8, 2, 5], [10.5, 0.5, 3, 2], [40, 2, 5, 2], [0.07, 1.5, 2, 4]];
+
 function NewProjectForm({ userId }: { userId: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -27,6 +47,7 @@ function NewProjectForm({ userId }: { userId: string }) {
   const [title, setTitle] = useState('');
   const [objective, setObjective] = useState('');
   const [method, setMethod] = useState<MethodKey>(validMethod);
+  const [useIotCase, setUseIotCase] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const file = useRef<HTMLInputElement>(null);
@@ -39,20 +60,35 @@ function NewProjectForm({ userId }: { userId: string }) {
 
   async function create(e: React.FormEvent) {
     e.preventDefault();
-    if (!title.trim()) return;
+    const finalTitle = title.trim() || (useIotCase ? IOT_PALMOR_TITLE : '');
+    if (!finalTitle) return;
     setBusy(true);
     setMsg('');
+    const criteria = useIotCase
+      ? IOT_PALMOR_CRITERIA.map((c) => ({ id: uid('k'), name: c.name, hint: c.hint, src: null }))
+      : [1, 2, 3].map((i) => ({ id: uid('k'), name: 'Criterio ' + i, hint: '', src: null }));
+    const alternatives = useIotCase
+      ? IOT_PALMOR_ALTERNATIVES.map((name) => ({ id: uid('a'), name }))
+      : [1, 2, 3].map((i) => ({ id: uid('a'), name: 'Alternativa ' + i }));
+    // Fuzzy TOPSIS necesita etiquetas lingüísticas (VP/P/F/G/VG), no los valores numéricos de este
+    // caso — se deja sin matriz precargada para ese método, igual que un proyecto en blanco.
+    let decisionMatrix = blankMatrix();
+    if (useIotCase && method !== 'ahp' && method !== 'fuzzy_topsis') {
+      alternatives.forEach((a, i) => criteria.forEach((c, j) => { decisionMatrix = setCell(decisionMatrix, a.id, c.id, IOT_PALMOR_MATRIX[i][j]); }));
+      criteria.forEach((c) => { decisionMatrix = setType(decisionMatrix, c.id, 'max'); });
+    }
     const { data, error } = await createClient().from('projects').insert({
       owner_id: userId,
-      title: title.trim(),
-      objective: objective.trim(),
+      title: finalTitle,
+      objective: objective.trim() || (useIotCase ? IOT_PALMOR_OBJECTIVE : ''),
       method,
-      criteria: [1, 2, 3].map((i) => ({ id: uid('k'), name: 'Criterio ' + i, hint: '', src: null })),
-      alternatives: [1, 2, 3].map((i) => ({ id: uid('a'), name: 'Alternativa ' + i })),
+      criteria,
+      alternatives,
+      decision_matrix: decisionMatrix,
       prioritization: blankPrio(),
     }).select('id').single();
     setBusy(false);
-    if (error || !data) setMsg(error?.message ?? 'No se pudo crear el proyecto');
+    if (error || !data) setMsg(error ? friendlyError(error, 'No se pudo crear el proyecto.') : 'No se pudo crear el proyecto.');
     else router.push(`/projects/${data.id}`);
   }
 
@@ -122,6 +158,21 @@ function NewProjectForm({ userId }: { userId: string }) {
               <span>✓</span> Preseleccionado según tu test metodológico ({rawMethod.toUpperCase()})
             </div>
           )}
+        </div>
+        <div>
+          <label className="lbl" style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={useIotCase}
+              onChange={(e) => setUseIotCase(e.target.checked)}
+              style={{ marginTop: 3 }}
+            />
+            <span>
+              Empezar con el caso de ejemplo del curso: tecnología IoT para Palmor (LoRaWAN/GSM-GPRS/Sigfox/Zigbee,
+              Sesiones 1-3). Precarga criterios, alternativas{method !== 'ahp' && method !== 'fuzzy_topsis' ? ' y la matriz de datos' : ''} —
+              tú decides si lo usas para explorar la plataforma o reemplazas todo por tu propio problema de tesis.
+            </span>
+          </label>
         </div>
         <div className="acts">
           <button className="btn primary" type="submit" disabled={busy}>
