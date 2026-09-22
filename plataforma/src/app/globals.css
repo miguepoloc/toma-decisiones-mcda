@@ -403,3 +403,12 @@ a{color:var(--accent)}
 .authcard{width:100%;max-width:400px;margin-inline:auto;display:grid;gap:14px}
 .authcard .card{border-top:3px solid var(--accent)}
 .authcard h1{font-size:24px}
+
+/* ---- admin ---- */
+.stat-group{display:grid;gap:10px}
+.stat-group h2{font-size:15px}
+.stat-grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(190px,1fr))}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px 20px;display:grid;gap:4px}
+.stat .n{font:700 32px var(--f-mono);color:var(--accent);line-height:1}
+.stat .l{font:500 12px var(--f-mono);letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.stat .sub{font-size:13px;color:var(--muted);margin-top:2px}

@@ -69,6 +69,23 @@ export type PublicGet = {
   judgments: JudgmentRow[];
 };
 
+/** Lo que devuelve admin_stats() (20240101000007_admin_stats.sql): solo agregados numéricos
+ * across-owner, nunca datos de un proyecto individual. La función revisa el email del solicitante
+ * por sí misma, así que si esto llega aquí es porque el RPC ya lo autorizó. */
+export type AdminStats = {
+  proyectos_total: number;
+  proyectos_publicos: number;
+  proyectos_privados: number;
+  usuarios_total: number;
+  expertos_total: number;
+  expertos_pending: number;
+  expertos_in_progress: number;
+  expertos_submitted: number;
+  criterios_total: number;
+  alternativas_total: number;
+  juicios_total: number;
+};
+
 export const uid = (prefix = 'x') => prefix + Math.random().toString(36).slice(2, 8);
 export const hexToken = () =>
   Array.from(crypto.getRandomValues(new Uint8Array(18)), (b) => b.toString(16).padStart(2, '0')).join('');

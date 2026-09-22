@@ -78,8 +78,10 @@ plataforma/
 │                                      000002_decision_matrix (method/decision_matrix) + 000003/000004_*_methods
 │                                      (amplían method a los 7) + 000005_public_get_weighting_method +
 │                                      000006_rate_limit_and_constraints (límite de frecuencia por token +
-│                                      longitud máxima en texto libre), ver Visión
-├─ src/app/                            Páginas: /, /tutorial, /metodo, /login, /dashboard, /projects/[id], /e/[token], /p/[token]
+│                                      longitud máxima en texto libre) + 000007_admin_stats (backoffice de solo
+│                                      el docente, ver Visión)
+├─ src/app/                            Páginas: /, /tutorial, /metodo, /login, /dashboard, /projects/[id], /e/[token],
+│                                      /p/[token], /admin (backoffice, solo REDACTED_EMAIL, sin link en el nav)
 │                                      icon.tsx, apple-icon.tsx (favicon generado con next/og, ver Historial)
 ├─ src/components/                     JudgmentEditor, DecisionMatrixEditor, Results, PrioritizationEditor,
 │                                      ProjectWorkspace, Logo, …
@@ -114,8 +116,10 @@ cacheado-vs-JS de `check-excel-topsis.ts`/`check-excel-vikor.ts`) — sus fórmu
 `MEDIAN`/`MAX` sobre expresión-arreglo), pero sigue siendo una verificación pendiente, no hecha. Las rutas
 protegidas redirigen a `/login`.
 
-**Ya hay un Supabase real desplegado** (proyecto `hymmznfylafdldfngxcu`, las 6 migraciones ejecutadas, variables de entorno
-puestas en local y en Vercel — production, preview y development) y la app corre en producción en
+**Ya hay un Supabase real desplegado** (proyecto `hymmznfylafdldfngxcu`, las 6 primeras migraciones ejecutadas —
+`20240101000007_admin_stats.sql` (22 sep 2026) todavía **no**, hay que correrla a mano en el SQL Editor antes de
+que `/admin` funcione en producción —, variables de entorno puestas en local y en Vercel — production, preview y
+development) y la app corre en producción en
 <https://mcda.tools>. Lo que **todavía no se caminó explícitamente de punta a punta** es el checklist de RLS: la lectura
 del SQL (políticas + funciones `SECURITY DEFINER`) se ve correcta, pero eso no reemplaza probarlo contra Postgres real. Pendiente:
 1. Crear cuenta e iniciar sesión.
@@ -125,6 +129,18 @@ del SQL (políticas + funciones `SECURITY DEFINER`) se ve correcta, pero eso no 
 5. Descargar el Excel y abrirlo.
 
 ## Historial de cambios
+
+**22 sep 2026 (backoffice admin, solo lectura):** nueva ruta `/admin`, visible solo para
+`REDACTED_EMAIL` — no hay link a ella en `Topbar`. Muestra únicamente agregados numéricos
+(proyectos totales/públicos/privados, usuarios registrados, expertos por estado, suma de criterios/
+alternativas, total de juicios), nunca datos de un proyecto individual de otro usuario. La autorización
+vive en una sola función SQL `security definer`, `admin_stats()` (`20240101000007_admin_stats.sql`),
+que compara `auth.email()` contra el correo del docente y solo entonces agrega `count()`/`sum()` sobre
+`projects`/`profiles`/`experts`/`judgments` — mismo patrón que `expert_get`/`public_get`, sin tocar RLS
+ni agregar ninguna clave de servicio nueva al proyecto. La página (`src/app/admin/page.tsx`) llama esa
+función vía `supabase.rpc('admin_stats')`; si quien pide no es el admin, la función lanza una excepción
+y la página redirige a `/dashboard` sin distinguir "no autorizado" de "no encontrado". **Pendiente**:
+la migración todavía no se ha corrido contra el Supabase real (ver "Qué está verificado y qué no").
 
 **20 sep 2026 (auditoría de diseño/código/seguridad/UX de la plataforma):**
 - **Seguridad**: nueva migración `20240101000006_rate_limit_and_constraints.sql` — límite de frecuencia
