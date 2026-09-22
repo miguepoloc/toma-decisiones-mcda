@@ -3,7 +3,7 @@
 Versión "con servidor" de las herramientas HTML de este repositorio: **priorización de criterios** (Sesión 1) y **AHP con
 varios expertos** (Sesión 2), con cuentas, base de datos, enlaces para expertos y resultados públicos opcionales.
 
-**En producción:** <https://mcda-decisions.vercel.app> — landing (`/`) explica qué hace y para quién; `/tutorial` trae la
+**En producción:** <https://mcda.tools> — landing (`/`) explica qué hace y para quién; `/tutorial` trae la
 guía paso a paso; `/login` es donde el estudiante crea cuenta. Nadie necesita este README para usarla, es para quien la
 mantiene/despliega.
 
@@ -53,7 +53,7 @@ npm run typecheck
 - **Supabase**: proyecto `hymmznfylafdldfngxcu` (`https://hymmznfylafdldfngxcu.supabase.co`), las 6 migraciones ya
   ejecutadas. Claves en `.env.local` (gitignored) y en Vercel.
 - **Vercel**: proyecto `plataforma` en el scope `migue-polos-projects`. Dominio de producción:
-  **`mcda-decisions.vercel.app`** (`mcda.vercel.app` estaba tomado por otra cuenta).
+  **`mcda.tools`** (comprado directo en Vercel, 22 sep 2026).
   - **Trampa real con la que se perdió tiempo:** Vercel activa protección SSO (`ssoProtection: all_except_custom_domains`)
     para *cualquier* alias que no esté registrado como **Domain** del proyecto (Settings → Domains), aunque apunte al mismo
     deployment que el dominio de producción "de verdad". Un alias creado con `vercel alias set` (CLI) NO cuenta como Domain
@@ -63,8 +63,8 @@ npm run typecheck
   - Variable de entorno `preview` por rama de Git: `vercel env add NOMBRE preview --value X --yes` a veces la rechaza
     pidiendo desambiguar rama incluso con `--yes` (bug/rareza del CLI 53.x); si pasa, se agrega manualmente desde el
     dashboard con el checkbox de "aplicar a todos los entornos".
-- **Supabase Auth → URL Configuration**: agregar tanto `http://localhost:3000/auth/callback` (dev) como
-  `https://mcda-decisions.vercel.app/auth/callback` (prod) en *Redirect URLs*, no reemplazar uno por el otro.
+- **Supabase Auth → URL Configuration**: *Site URL* en `https://mcda.tools`. En *Redirect URLs*, agregar
+  `http://localhost:3000/auth/callback` (dev) y `https://mcda.tools/auth/callback` (prod).
 
 ## Traer tu trabajo de la herramienta HTML
 En *Mis proyectos* → **Importar de la herramienta HTML**: sube el respaldo `.json` o el `.xlsx` que descargaste de
@@ -116,7 +116,7 @@ protegidas redirigen a `/login`.
 
 **Ya hay un Supabase real desplegado** (proyecto `hymmznfylafdldfngxcu`, las 6 migraciones ejecutadas, variables de entorno
 puestas en local y en Vercel — production, preview y development) y la app corre en producción en
-<https://mcda-decisions.vercel.app>. Lo que **todavía no se caminó explícitamente de punta a punta** es el checklist de RLS: la lectura
+<https://mcda.tools>. Lo que **todavía no se caminó explícitamente de punta a punta** es el checklist de RLS: la lectura
 del SQL (políticas + funciones `SECURITY DEFINER`) se ve correcta, pero eso no reemplaza probarlo contra Postgres real. Pendiente:
 1. Crear cuenta e iniciar sesión.
 2. Crear un proyecto, agregar un experto y abrir su enlace en una ventana de incógnito: responder y enviar.

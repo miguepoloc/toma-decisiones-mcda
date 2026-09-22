@@ -28,10 +28,15 @@ Plantillas HTML modernas, responsive y con la estética oficial **Academic Pro &
 
 ---
 
-### 2. Configurar el Remitente (Sender Name y Email)
-En **Authentication** → **Email Templates** (o **SMTP Settings**):
-- **Sender Name**: `Plataforma MCDA`
-- **Sender Email**: Tu correo de envío (o el proporcionado por Supabase / Resend / SendGrid).
+### 2. Configurar el SMTP (Resend)
+En **Authentication** → **Emails** → **SMTP Settings**, con *Enable custom SMTP* activado:
+- **Sender email address**: `noreply@mcda.tools`
+- **Sender name**: `Plataforma MCDA`
+- **Host**: `smtp.resend.com`
+- **Port number**: `465`
+- **Username**: `resend` (literal, no el usuario de la cuenta de Resend)
+- **Password**: la API key de Resend (**Domains → mcda.tools**, verificado vía la integración automática con Vercel;
+  **API Keys → Create API Key**, permiso *Sending access*). Solo se muestra una vez al crearla.
 
 ---
 
@@ -40,10 +45,9 @@ Para que el flujo de restablecimiento de contraseña y confirmación funcione co
 1. En el menú de Supabase, ve a **Authentication** → **URL Configuration**.
 2. Verifica o agrega las siguientes URLs en **Redirect URLs**:
    - `http://localhost:3000/auth/callback`
-   - `https://mcda-decisions.vercel.app/auth/callback`
-   - `https://TU-DOMINIO-PERSONALIZADO/auth/callback` (si aplica)
+   - `https://mcda.tools/auth/callback`
 3. En **Site URL**:
-   - Para producción: `https://mcda-decisions.vercel.app`
+   - Para producción: `https://mcda.tools`
    - Para local: `http://localhost:3000`
 
 ---
