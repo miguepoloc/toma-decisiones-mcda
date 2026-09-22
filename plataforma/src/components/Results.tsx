@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type CSSProperties } from 'react';
 import type { Alternative, Criterion, DecisionMatrix, JudgmentRow, Method, WeightingMethod } from '@/lib/types';
 import {
   CRIT_SHEET, altSheet, aggMatrix, fmt, getV, indexJudgments, pairsOf, phrase, sheetItems, sheetResult, synthesis,
@@ -19,6 +19,10 @@ import type { MethodKey } from './ScientificMethodModal';
 export type ExpertLite = { id: string; label: string };
 
 type Props = {
+  /** 'single': resultado del método elegido del proyecto (pestaña "Resultados").
+   * 'compare': los 6 métodos lado a lado (pestaña "Comparativa"), cada uno independiente del `method`
+   * actual — ver el comentario junto a `compareViews` más abajo. */
+  mode: 'single' | 'compare';
   criteria: Criterion[];
   alternatives: Alternative[];
   experts: ExpertLite[];
@@ -38,6 +42,83 @@ const METHOD_LABEL: Record<Method, string> = {
   ahp: 'AHP', topsis: 'TOPSIS', vikor: 'VIKOR', electre: 'ELECTRE', promethee: 'PROMETHEE',
   saw: 'SAW', fuzzy_topsis: 'Fuzzy TOPSIS',
 };
+type QuantMethodKey = 'topsis' | 'vikor' | 'promethee' | 'saw' | 'fuzzy_topsis';
+const QUANT_KEYS: QuantMethodKey[] = ['topsis', 'vikor', 'promethee', 'saw', 'fuzzy_topsis'];
+const METHOD_COLOR: Record<QuantMethodKey, string> = {
+  topsis: 'var(--m-topsis)', vikor: 'var(--m-vikor)', promethee: 'var(--m-promethee)', saw: 'var(--m-saw)', fuzzy_topsis: 'var(--m-fuzzy)',
+};
+/** Color de acento + texto legible sobre ese acento, uno por método (mismos `--m-*` que ya usan las
+ * tarjetas de selección de método y la Comparativa) — se usa para que la pestaña "Resultados" (vista
+ * de un solo método) se vea del color de ESE método en vez del cian genérico de `--accent`. */
+const METHOD_ACCENT: Record<Method, { color: string; ink: string }> = {
+  ahp: { color: 'var(--m-ahp)', ink: '#FFFFFF' },
+  topsis: { color: 'var(--m-topsis)', ink: '#0B0F17' },
+  vikor: { color: 'var(--m-vikor)', ink: '#0B0F17' },
+  promethee: { color: 'var(--m-promethee)', ink: '#FFFFFF' },
+  electre: { color: 'var(--m-electre)', ink: '#0B0F17' },
+  saw: { color: 'var(--m-saw)', ink: '#0B0F17' },
+  fuzzy_topsis: { color: 'var(--m-fuzzy)', ink: '#0B0F17' },
+};
+
+/** El mismo override de `--accent`/`--accent-soft`/`--accent-ink` que usa la vista "Resultados" de
+ * abajo, exportado para que `ProjectWorkspace.tsx` pueda pintar del color del método los botones de
+ * descarga que viven fuera de este componente (hermanos de `<Results mode="single">`, no dentro). */
+export function accentStyleFor(method: Method): CSSProperties {
+  return {
+    '--accent': METHOD_ACCENT[method].color,
+    '--accent-soft': `color-mix(in srgb, ${METHOD_ACCENT[method].color} 16%, transparent)`,
+    '--accent-ink': METHOD_ACCENT[method].ink,
+  } as CSSProperties;
+}
+
+type QuantRow = { name: string; value: number; rank: number };
+type QuantView = { rows: QuantRow[]; order: number[]; tie: boolean; higherBetter: boolean; bar: (v: number) => number; fmt: (v: number) => string; unit: string };
+
+/** Vista de ranking numérico para cualquiera de los 5 métodos que reciben la misma matriz de decisión
+ * (TOPSIS/VIKOR/PROMETHEE/SAW/Fuzzy TOPSIS): se usa tanto para el método elegido del proyecto como para
+ * ponerlos los 5 lado a lado en "Comparar los 6 métodos". AHP no pasa por aquí (no usa matriz de decisión)
+ * y ELECTRE tampoco (no da un ranking total, ver elecSyn/electrePanel). */
+function quantViewFor(
+  key: Method,
+  topSyn: ReturnType<typeof topsisSynthesis>,
+  vikSyn: ReturnType<typeof vikorSynthesis>,
+  promSyn: ReturnType<typeof prometheeSynthesis>,
+  sawSyn: ReturnType<typeof sawSynthesis>,
+  fuzzyTopSyn: ReturnType<typeof fuzzyTopsisSynthesis>,
+): QuantView {
+  if (key === 'topsis') {
+    return {
+      rows: topSyn.rows.map((r) => ({ name: r.name, value: r.c, rank: r.rank })), order: topSyn.order, tie: topSyn.tie,
+      higherBetter: true, bar: (v: number) => v * 100, fmt: (v: number) => v.toFixed(4), unit: 'cercanía (0 a 1, mayor es mejor)',
+    };
+  }
+  if (key === 'vikor') {
+    return {
+      rows: vikSyn.rows.map((r) => ({ name: r.name, value: r.q, rank: r.rank })), order: vikSyn.order, tie: vikSyn.tie,
+      higherBetter: false, bar: (v: number) => (1 - v) * 100, fmt: (v: number) => 'Q ' + v.toFixed(4), unit: 'Q (0 a 1, MENOR es mejor)',
+    };
+  }
+  if (key === 'saw') {
+    return {
+      rows: sawSyn.rows, order: sawSyn.order, tie: sawSyn.tie,
+      higherBetter: true, bar: (v: number) => v * 100, fmt: (v: number) => v.toFixed(4), unit: 'puntaje SAW (0 a 1, mayor es mejor)',
+    };
+  }
+  if (key === 'fuzzy_topsis') {
+    return {
+      rows: fuzzyTopSyn.rows, order: fuzzyTopSyn.order, tie: fuzzyTopSyn.tie,
+      higherBetter: true, bar: (v: number) => v * 100, fmt: (v: number) => 'CC ' + v.toFixed(4), unit: 'coef. de cercanía CC (0 a 1, mayor es mejor)',
+    };
+  }
+  // promethee (también el "else" para 'ahp'/'electre', que nunca renderizan este resultado)
+  const phis = promSyn.rows.map((r) => r.phi);
+  const lo = Math.min(...phis, 0), hi = Math.max(...phis, 0);
+  const span = hi - lo || 1;
+  return {
+    rows: promSyn.rows.map((r) => ({ name: r.name, value: r.phi, rank: r.rank })), order: promSyn.order, tie: promSyn.tie,
+    higherBetter: true, bar: (v: number) => ((v - lo) / span) * 100, fmt: (v: number) => (v >= 0 ? '+' : '') + v.toFixed(3), unit: 'flujo neto φ (mayor es mejor)',
+  };
+}
 
 function Table({ names, M, f }: { names: string[]; M: number[][]; f: (x: number) => string }) {
   return (
@@ -50,7 +131,7 @@ function Table({ names, M, f }: { names: string[]; M: number[][]; f: (x: number)
   );
 }
 
-export default function Results({ criteria, alternatives, experts, judgments, method = 'ahp', weightingMethod = 'ahp', decisionMatrix, showPerExpert, projectTitle = 'Proyecto MCDA', projectObjective = '' }: Props) {
+export default function Results({ mode, criteria, alternatives, experts, judgments, method = 'ahp', weightingMethod = 'ahp', decisionMatrix, showPerExpert, projectTitle = 'Proyecto MCDA', projectObjective = '' }: Props) {
   const [showReportModal, setShowReportModal] = useState(false);
   const idx = useMemo(() => indexJudgments(judgments), [judgments]);
   const withData = useMemo(() => experts.filter((e) => Object.keys(idx[e.id] ?? {}).length > 0).map((e) => e.id), [experts, idx]);
@@ -82,42 +163,36 @@ export default function Results({ criteria, alternatives, experts, judgments, me
     ? alternatives.some((a) => criteria.some((c) => typeof dm.values[a.id]?.[c.id] === 'string'))
     : alternatives.some((a) => criteria.some((c) => getCell(dm, a.id, c.id) != null));
 
-  // Filas normalizadas para los 3 métodos de "ranking numérico" (TOPSIS/VIKOR/PROMETHEE): cada uno
-  // define su propio valor, si mayor-es-mejor, y cómo mostrarlo — el resto de la UI es compartida.
-  const quant = useMemo(() => {
-    if (method === 'topsis') {
-      return {
-        rows: topSyn.rows.map((r) => ({ name: r.name, value: r.c, rank: r.rank })), order: topSyn.order, tie: topSyn.tie,
-        higherBetter: true, bar: (v: number) => v * 100, fmt: (v: number) => v.toFixed(4), unit: 'cercanía (0 a 1, mayor es mejor)',
-      };
-    }
-    if (method === 'vikor') {
-      return {
-        rows: vikSyn.rows.map((r) => ({ name: r.name, value: r.q, rank: r.rank })), order: vikSyn.order, tie: vikSyn.tie,
-        higherBetter: false, bar: (v: number) => (1 - v) * 100, fmt: (v: number) => 'Q ' + v.toFixed(4), unit: 'Q (0 a 1, MENOR es mejor)',
-      };
-    }
-    if (method === 'saw') {
-      return {
-        rows: sawSyn.rows, order: sawSyn.order, tie: sawSyn.tie,
-        higherBetter: true, bar: (v: number) => v * 100, fmt: (v: number) => v.toFixed(4), unit: 'puntaje SAW (0 a 1, mayor es mejor)',
-      };
-    }
-    if (method === 'fuzzy_topsis') {
-      return {
-        rows: fuzzyTopSyn.rows, order: fuzzyTopSyn.order, tie: fuzzyTopSyn.tie,
-        higherBetter: true, bar: (v: number) => v * 100, fmt: (v: number) => 'CC ' + v.toFixed(4), unit: 'coef. de cercanía CC (0 a 1, mayor es mejor)',
-      };
-    }
-    // promethee
-    const phis = promSyn.rows.map((r) => r.phi);
-    const lo = Math.min(...phis, 0), hi = Math.max(...phis, 0);
-    const span = hi - lo || 1;
-    return {
-      rows: promSyn.rows.map((r) => ({ name: r.name, value: r.phi, rank: r.rank })), order: promSyn.order, tie: promSyn.tie,
-      higherBetter: true, bar: (v: number) => ((v - lo) / span) * 100, fmt: (v: number) => (v >= 0 ? '+' : '') + v.toFixed(3), unit: 'flujo neto φ (mayor es mejor)',
+  // Vista de ranking numérico del método elegido del proyecto (pestaña "Método elegido").
+  const quant = useMemo(() => quantViewFor(method, topSyn, vikSyn, promSyn, sawSyn, fuzzyTopSyn), [method, topSyn, vikSyn, promSyn, sawSyn, fuzzyTopSyn]);
+  // Los 6 métodos lado a lado (pestaña "Comparar"): AHP se calcula siempre desde los juicios (`syn`,
+  // independiente de `method`) igual que los otros 5 se calculan siempre desde la matriz de decisión
+  // (independiente de `method`) — un proyecto puede tener ambos tipos de datos a la vez si cambió de
+  // método alguna vez, así que ningún método se excluye por el `method` actual, cada uno se apaga solo
+  // vía su propio `tie` cuando no tiene datos suficientes (igual que ya hacía Fuzzy TOPSIS sin etiquetas).
+  const compareViews = useMemo(() => {
+    const maxAhpG = Math.max(...syn.rows.map((r) => r.g), 0.0001) * 1.08;
+    const ahpView = {
+      key: 'ahp' as const, label: 'AHP', color: 'var(--m-ahp)',
+      rows: syn.rows.map((r) => ({ name: r.name, value: r.g, rank: r.rank })), order: syn.order, tie: syn.tie,
+      higherBetter: true, bar: (v: number) => Math.max(0, Math.min(100, (v / maxAhpG) * 100)), fmt: (v: number) => v.toFixed(4), unit: 'prioridad global (mayor es mejor)',
     };
-  }, [method, topSyn, vikSyn, promSyn, sawSyn, fuzzyTopSyn]);
+    const quantViews = QUANT_KEYS.map((k) => ({ key: k, label: METHOD_LABEL[k], color: METHOD_COLOR[k], ...quantViewFor(k, topSyn, vikSyn, promSyn, sawSyn, fuzzyTopSyn) }));
+    return [ahpView, ...quantViews];
+  }, [syn, topSyn, vikSyn, promSyn, sawSyn, fuzzyTopSyn]);
+  const decidableViews = compareViews.filter((m) => !m.tie);
+  // Alternativa que más veces queda #1 entre los métodos con datos suficientes; null si hay empate en el conteo.
+  const topWinner = useMemo(() => {
+    const counts = new Map<string, number>();
+    decidableViews.forEach((m) => {
+      const first = m.rows.find((r) => r.rank === 1);
+      if (first) counts.set(first.name, (counts.get(first.name) ?? 0) + 1);
+    });
+    const entries = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+    if (!entries.length) return null;
+    const [name, count] = entries[0];
+    return entries.filter(([, c]) => c === count).length > 1 ? null : { name, count };
+  }, [decidableViews]);
 
   const sheets = method === 'ahp'
     ? [{ key: CRIT_SHEET, label: 'Criterios' }, ...criteria.map((c) => ({ key: altSheet(c.id), label: c.name }))]
@@ -132,35 +207,95 @@ export default function Results({ criteria, alternatives, experts, judgments, me
   const vm = viewExpert ? (idx[viewExpert.id]?.[sheet] ?? {}) : {};
   const vr = viewExpert ? sheetResult(sheet, items, [viewExpert.id], idx) : null;
 
-  if (method !== 'ahp' ? !dmFilled : !withData.length) {
+  const blocked = mode === 'single' ? (method !== 'ahp' ? !dmFilled : !withData.length) : decidableViews.length === 0;
+  if (blocked) {
     return (
       <div className="card muted">
-        {method !== 'ahp'
-          ? 'Todavía no hay datos en la matriz de decisión. Complétala en su pestaña para ver resultados.'
-          : 'Todavía no hay juicios. Cuando tú o tus expertos respondan, aquí aparecerán los resultados.'}
+        {mode === 'compare'
+          ? 'Todavía no hay datos para comparar. Ningún método tiene información suficiente: llena los juicios por pares de al menos un experto (para AHP) y/o la matriz de decisión con valores reales (pestaña «Matriz de decisión», solo visible con un método distinto de AHP) para ver el ranking de cada uno lado a lado.'
+          : method !== 'ahp'
+            ? 'Todavía no hay datos en la matriz de decisión. Complétala en su pestaña para ver resultados.'
+            : 'Todavía no hay juicios. Cuando tú o tus expertos respondan, aquí aparecerán los resultados.'}
       </div>
     );
   }
 
   const maxG = Math.max(...syn.rows.map((x) => x.g), 0.0001) * 1.08;
 
+  // Panel de ELECTRE: se usa tanto en la vista "Método elegido" (si method === 'electre') como,
+  // sin condición, dentro de "Comparar los 6 métodos" — ELECTRE no pasa por quantViewFor (no da
+  // un ranking total), así que se muestra siempre aparte con sus relaciones/incomparables.
+  const electrePanel = (
+    <>
+      <div className="card win">
+        <span className="eyebrow">ELECTRE no da un solo ganador</span>
+        <span className="big">Relación de superación ({elecSyn.relations.length} relación{elecSyn.relations.length === 1 ? '' : 'es'})</span>
+        <span className="muted" style={{ fontSize: 13 }}>c* (concordancia mínima) {elecSyn.result.cStar.toFixed(2)} · d* (discordancia máxima) {elecSyn.result.dStar.toFixed(2)} — convención del curso.</span>
+      </div>
+      <div className="card">
+        <h3 style={{ marginBottom: 10 }}>Quién supera a quién</h3>
+        {elecSyn.relations.length ? (
+          <ul style={{ paddingLeft: 18, fontSize: 14, display: 'grid', gap: 4 }}>
+            {elecSyn.relations.map((rel) => <li key={rel.winner + rel.loser}><b>{rel.winner}</b> supera a <b>{rel.loser}</b></li>)}
+          </ul>
+        ) : <p className="muted">Ninguna alternativa supera a otra con estos umbrales — sube d* o baja c* si esperabas más relaciones.</p>}
+        {elecSyn.incomparable.length > 0 && (
+          <>
+            <h3 style={{ marginTop: 16, marginBottom: 6 }}>Incomparables (ninguna supera a la otra)</h3>
+            <ul style={{ paddingLeft: 18, fontSize: 14 }}>
+              {elecSyn.incomparable.map(([a, b]) => <li key={a + b}>{a} y {b}</li>)}
+            </ul>
+            <p className="muted" style={{ fontSize: 13, marginTop: 6 }}>No es una falla del método: significa que los datos no alcanzan para preferir una sobre la otra con estos umbrales.</p>
+          </>
+        )}
+      </div>
+      <div className="card res">
+        <h3>Matrices de concordancia y discordancia</h3>
+        <details open>
+          <summary>Ver detalle</summary>
+          <h4>Concordancia (fila supera a columna si ≥ {elecSyn.result.cStar.toFixed(2)})</h4>
+          <Table names={elecSyn.names} M={elecSyn.result.concordance} f={(x) => x.toFixed(2)} />
+          <h4>Discordancia (fila supera a columna si ≤ {elecSyn.result.dStar.toFixed(2)})</h4>
+          <Table names={elecSyn.names} M={elecSyn.result.discordance} f={(x) => x.toFixed(2)} />
+        </details>
+      </div>
+    </>
+  );
+
+  // En la vista de un solo método, --accent (y sus derivados) pasan a ser el color propio de ESE
+  // método en vez del cian genérico del resto de la plataforma — así la tarjeta de ganador, las barras
+  // de ranking y el botón de PDF se ven del color de AHP/TOPSIS/VIKOR/etc. En "Comparativa" se deja el
+  // acento neutro: ahí cada método ya tiene su propio punto de color por fila/columna.
+  const singleAccentStyle = mode === 'single' ? accentStyleFor(method) : undefined;
+
   return (
-    <div className="panel">
+    <div className="panel" style={singleAccentStyle}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 2 }}>
-        <div>
-          <h2 style={{ margin: 0, fontSize: 20 }}>Síntesis y Ranking de Resultados</h2>
-          <p className="muted" style={{ margin: '2px 0 0', fontSize: 13 }}>
-            Ponderación por {weightingMethod.toUpperCase()} · Algoritmo de ranking {METHOD_LABEL[method]}
-          </p>
-        </div>
-        <button
-          type="button"
-          className="btn sm primary"
-          onClick={() => setShowReportModal(true)}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 700 }}
-        >
-          📄 Generar Informe Ejecutivo (PDF)
-        </button>
+        {mode === 'single' ? (
+          <div>
+            <h2 style={{ margin: 0, fontSize: 20 }}>Síntesis y Ranking de Resultados</h2>
+            <p className="muted" style={{ margin: '2px 0 0', fontSize: 13 }}>
+              Ponderación por {weightingMethod.toUpperCase()} · Algoritmo de ranking {METHOD_LABEL[method]}
+            </p>
+          </div>
+        ) : (
+          <div>
+            <h2 style={{ margin: 0, fontSize: 20 }}>Comparativa de los 6 métodos</h2>
+            <p className="muted" style={{ margin: '2px 0 0', fontSize: 13 }}>
+              Mismos datos y los mismos pesos de criterio — el ranking de cada algoritmo, lado a lado.
+            </p>
+          </div>
+        )}
+        {mode === 'single' && (
+          <button
+            type="button"
+            className="btn sm primary"
+            onClick={() => setShowReportModal(true)}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 700 }}
+          >
+            📄 Generar Informe Ejecutivo (PDF)
+          </button>
+        )}
       </div>
 
       <div className="card">
@@ -179,42 +314,7 @@ export default function Results({ criteria, alternatives, experts, judgments, me
         </div>
       </div>
 
-      {method === 'electre' ? (
-        <>
-          <div className="card win">
-            <span className="eyebrow">ELECTRE no da un solo ganador</span>
-            <span className="big">Relación de superación ({elecSyn.relations.length} relación{elecSyn.relations.length === 1 ? '' : 'es'})</span>
-            <span className="muted" style={{ fontSize: 13 }}>c* (concordancia mínima) {elecSyn.result.cStar.toFixed(2)} · d* (discordancia máxima) {elecSyn.result.dStar.toFixed(2)} — convención del curso.</span>
-          </div>
-          <div className="card">
-            <h3 style={{ marginBottom: 10 }}>Quién supera a quién</h3>
-            {elecSyn.relations.length ? (
-              <ul style={{ paddingLeft: 18, fontSize: 14, display: 'grid', gap: 4 }}>
-                {elecSyn.relations.map((rel) => <li key={rel.winner + rel.loser}><b>{rel.winner}</b> supera a <b>{rel.loser}</b></li>)}
-              </ul>
-            ) : <p className="muted">Ninguna alternativa supera a otra con estos umbrales — sube d* o baja c* si esperabas más relaciones.</p>}
-            {elecSyn.incomparable.length > 0 && (
-              <>
-                <h3 style={{ marginTop: 16, marginBottom: 6 }}>Incomparables (ninguna supera a la otra)</h3>
-                <ul style={{ paddingLeft: 18, fontSize: 14 }}>
-                  {elecSyn.incomparable.map(([a, b]) => <li key={a + b}>{a} y {b}</li>)}
-                </ul>
-                <p className="muted" style={{ fontSize: 13, marginTop: 6 }}>No es una falla del método: significa que los datos no alcanzan para preferir una sobre la otra con estos umbrales.</p>
-              </>
-            )}
-          </div>
-          <div className="card res">
-            <h3>Matrices de concordancia y discordancia</h3>
-            <details open>
-              <summary>Ver detalle</summary>
-              <h4>Concordancia (fila supera a columna si ≥ {elecSyn.result.cStar.toFixed(2)})</h4>
-              <Table names={elecSyn.names} M={elecSyn.result.concordance} f={(x) => x.toFixed(2)} />
-              <h4>Discordancia (fila supera a columna si ≤ {elecSyn.result.dStar.toFixed(2)})</h4>
-              <Table names={elecSyn.names} M={elecSyn.result.discordance} f={(x) => x.toFixed(2)} />
-            </details>
-          </div>
-        </>
-      ) : (
+      {mode === 'single' && (method === 'electre' ? electrePanel : (
         <>
           <div className="card win">
             <span className="eyebrow">Ganador ({METHOD_LABEL[method]})</span>
@@ -286,9 +386,9 @@ export default function Results({ criteria, alternatives, experts, judgments, me
                                       fontSize: 10.5,
                                       fontFamily: 'var(--f-mono)',
                                       fontWeight: 700,
-                                      color: '#00E5FF',
-                                      background: 'rgba(0, 229, 255, 0.14)',
-                                      border: '1px solid rgba(0, 229, 255, 0.4)',
+                                      color: 'var(--accent)',
+                                      background: 'color-mix(in srgb, var(--accent) 14%, transparent)',
+                                      border: '1px solid color-mix(in srgb, var(--accent) 40%, transparent)',
                                       padding: '2px 7px',
                                       borderRadius: 4,
                                       textTransform: 'uppercase',
@@ -308,10 +408,10 @@ export default function Results({ criteria, alternatives, experts, judgments, me
                                 {x.toFixed(4)}
                               </td>
                             ))}
-                            <td className="n" style={{ fontWeight: 700, color: isWinner ? '#00E5FF' : undefined }}>
+                            <td className="n" style={{ fontWeight: 700, color: isWinner ? 'var(--accent)' : undefined }}>
                               {row.g.toFixed(4)}
                             </td>
-                            <td className="n" style={{ fontWeight: 700, color: isWinner ? '#00E5FF' : 'var(--muted)' }}>
+                            <td className="n" style={{ fontWeight: 700, color: isWinner ? 'var(--accent)' : 'var(--muted)' }}>
                               {isWinner ? '👑 #1' : `#${row.rank}`}
                             </td>
                           </tr>
@@ -361,17 +461,120 @@ export default function Results({ criteria, alternatives, experts, judgments, me
             </div>
           )}
         </>
+      ))}
+
+      {mode === 'compare' && (
+        <>
+          <div className="card win">
+            <span className="eyebrow">Ganador más frecuente</span>
+            {topWinner ? (
+              <span className="big">{topWinner.name} <span className="muted mono" style={{ fontSize: 13, fontWeight: 500 }}>— {topWinner.count} de {decidableViews.length} métodos</span></span>
+            ) : <span className="big">Sin consenso claro entre métodos</span>}
+          </div>
+
+            <div className="card">
+              <h3 style={{ marginBottom: 12 }}>Posición por método (1 = mejor)</h3>
+              <div className="tbl">
+                <table>
+                  <thead>
+                    <tr>
+                      <th></th>
+                      {compareViews.map((m) => (
+                        <th key={m.key} className="n">
+                          <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: 99, background: m.color, marginRight: 5 }} />{m.label}
+                        </th>
+                      ))}
+                      <th className="n">Consenso</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {alternatives.map((a) => {
+                      const firsts = compareViews.filter((m) => !m.tie && m.rows.find((row) => row.name === a.name)?.rank === 1).length;
+                      return (
+                        <tr key={a.id}>
+                          <td>{a.name}</td>
+                          {compareViews.map((m) => {
+                            const row = m.rows.find((rr) => rr.name === a.name);
+                            const isFirst = !m.tie && row?.rank === 1;
+                            return (
+                              <td key={m.key} className="n">
+                                {m.tie || !row
+                                  ? <span className="muted mono">—</span>
+                                  : <span className="mono" style={{ fontWeight: isFirst ? 700 : 500, color: isFirst ? 'var(--pass)' : 'var(--ink)' }}>#{row.rank}</span>}
+                              </td>
+                            );
+                          })}
+                          <td className="n muted" style={{ fontSize: 12.5 }}><b className="mono" style={{ color: 'var(--ink)' }}>{firsts}/{decidableViews.length}</b> en 1er lugar</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="card">
+              <h3 style={{ marginBottom: 14 }}>Puntaje normalizado por método (barra más larga = mejor)</h3>
+              <div style={{ display: 'grid', gap: 14 }}>
+                {alternatives.map((a) => {
+                  const ranksHere = compareViews
+                    .filter((m) => !m.tie)
+                    .map((m) => m.rows.find((row) => row.name === a.name)?.rank)
+                    .filter((x): x is number => x != null);
+                  const bestRank = ranksHere.length ? Math.min(...ranksHere) : null;
+                  return (
+                    <div key={a.id} style={{ display: 'grid', gap: 8, paddingBottom: 12, borderBottom: '1px solid var(--line)' }}>
+                      <div style={{ fontWeight: 700, fontSize: 14, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        {a.name}
+                        {bestRank && <span className="muted mono" style={{ fontSize: 11, background: 'var(--surface2)', border: '1px solid var(--line)', borderRadius: 99, padding: '1px 8px' }}>mejor posición #{bestRank}</span>}
+                      </div>
+                      {compareViews.map((m) => {
+                        const row = m.rows.find((rr) => rr.name === a.name);
+                        if (m.tie || !row) {
+                          return (
+                            <div key={m.key} style={{ display: 'grid', gridTemplateColumns: '120px 1fr 72px', gap: 10, alignItems: 'center' }}>
+                              <span className="muted" style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: 99, background: m.color, opacity: 0.35 }} />{m.label}
+                              </span>
+                              <span className="muted mono" style={{ fontSize: 11.5 }}>Sin datos suficientes</span>
+                              <span />
+                            </div>
+                          );
+                        }
+                        const pct = Math.max(0, Math.min(100, m.bar(row.value)));
+                        return (
+                          <div key={m.key} style={{ display: 'grid', gridTemplateColumns: '120px 1fr 72px', gap: 10, alignItems: 'center' }}>
+                            <span className="muted" style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: 99, background: m.color }} />{m.label}
+                            </span>
+                            <div style={{ position: 'relative', height: 16, background: 'var(--surface2)', borderRadius: 3, overflow: 'hidden' }}>
+                              <div style={{ position: 'absolute', inset: '0 auto 0 0', width: `${pct}%`, background: m.color, borderRadius: 3 }} />
+                            </div>
+                            <span className="mono" style={{ fontSize: 12, textAlign: 'right' }}>{m.fmt(row.value)}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {electrePanel}
+        </>
       )}
 
-      {/* Simulador de Sensibilidad What-If */}
-      <SensitivitySimulator
-        criteria={criteria}
-        alternatives={alternatives}
-        decisionMatrix={dm}
-        baseWeights={critWeights}
-        method={method as MethodKey}
-        ahpSynthRows={syn.rows.map((r) => ({ name: r.name, score: r.g, rank: r.rank, loc: r.loc }))}
-      />
+      {mode === 'single' && (
+        <>
+          {/* Simulador de Sensibilidad What-If */}
+          <SensitivitySimulator
+            criteria={criteria}
+            alternatives={alternatives}
+            decisionMatrix={dm}
+            baseWeights={critWeights}
+            method={method as MethodKey}
+            ahpSynthRows={syn.rows.map((r) => ({ name: r.name, score: r.g, rank: r.rank, loc: r.loc }))}
+          />
 
       <div className="card res">
         <h3>Detalle por hoja</h3>
@@ -432,6 +635,8 @@ export default function Results({ criteria, alternatives, experts, judgments, me
           }
           onClose={() => setShowReportModal(false)}
         />
+      )}
+        </>
       )}
     </div>
   );

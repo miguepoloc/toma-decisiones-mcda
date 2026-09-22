@@ -11,13 +11,13 @@ import { normalizeMatrix, setCell as setMatrixCell, setType as setMatrixType, ty
 import JudgmentEditor from './JudgmentEditor';
 import PrioritizationEditor from './PrioritizationEditor';
 import DecisionMatrixEditor from './DecisionMatrixEditor';
-import Results from './Results';
+import Results, { accentStyleFor } from './Results';
 import ScientificMethodModal, { type MethodKey } from './ScientificMethodModal';
 
 type Props = { initialProject: ProjectRow; initialExperts: ExpertRow[]; initialJudgments: JudgmentRow[] };
 type Patch = Partial<Pick<ProjectRow, 'title' | 'objective' | 'method' | 'weighting_method' | 'criteria' | 'alternatives' | 'decision_matrix' | 'prioritization' | 'is_public' | 'public_token'>>;
-const TABS_AHP = ['Proyecto', 'Priorización (A)', 'Expertos', 'Resultados', 'Compartir'];
-const TABS_MATRIX = ['Proyecto', 'Priorización (A)', 'Expertos', 'Matriz de decisión', 'Resultados', 'Compartir'];
+const TABS_AHP = ['Proyecto', 'Priorización (A)', 'Expertos', 'Resultados', 'Comparativa', 'Compartir'];
+const TABS_MATRIX = ['Proyecto', 'Priorización (A)', 'Expertos', 'Matriz de decisión', 'Resultados', 'Comparativa', 'Compartir'];
 const METHOD_OPTIONS: { key: Method; label: string; family: string; desc: string; citation: string }[] = [
   { key: 'ahp', label: 'AHP', family: 'Pares Saaty', desc: 'Tus expertos comparan las alternativas de a pares con la escala fundamental 1–9. Calcula autovalores y consistencia λmáx.', citation: 'Saaty, T. L. (1980). The Analytic Hierarchy Process. McGraw-Hill.' },
   { key: 'topsis', label: 'TOPSIS', family: 'Distancia Ideal', desc: 'Escribes el valor cuantitativo real de cada alternativa; ranquea por cercanía euclidiana a la solución ideal (PIS) y lejanía de la anti-ideal (NIS).', citation: 'Hwang, C. L., & Yoon, K. (1981). Multiple Attribute Decision Making. Springer-Verlag.' },
@@ -446,12 +446,31 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
       )}
 
       {tab === 'Resultados' && (
-        <div className="panel">
+        <div className="panel" style={accentStyleFor(project.method)}>
           <div className="acts">
             <button className="btn primary" type="button" onClick={exportExcel}>Descargar Excel</button>
             <button className="btn" type="button" onClick={exportPrioExcel}>Descargar Excel de priorización</button>
           </div>
           <Results
+            mode="single"
+            criteria={project.criteria}
+            alternatives={project.alternatives}
+            experts={experts.map((e) => ({ id: e.id, label: expertLabel(e) }))}
+            judgments={judgments}
+            method={project.method}
+            weightingMethod={project.weighting_method ?? 'ahp'}
+            decisionMatrix={project.decision_matrix}
+            showPerExpert
+            projectTitle={project.title}
+            projectObjective={project.objective}
+          />
+        </div>
+      )}
+
+      {tab === 'Comparativa' && (
+        <div className="panel">
+          <Results
+            mode="compare"
             criteria={project.criteria}
             alternatives={project.alternatives}
             experts={experts.map((e) => ({ id: e.id, label: expertLabel(e) }))}

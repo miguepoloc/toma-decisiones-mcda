@@ -107,7 +107,7 @@ export default function SensitivitySimulator({
     <div
       className="card"
       style={{
-        borderTop: '3px solid #00E5FF',
+        borderTop: '3px solid var(--accent)',
         display: 'grid',
         gap: 20,
         padding: '24px',
@@ -123,11 +123,11 @@ export default function SensitivitySimulator({
                 fontSize: 11,
                 fontFamily: 'var(--f-mono)',
                 fontWeight: 700,
-                color: '#00E5FF',
-                background: 'rgba(0, 229, 255, 0.1)',
+                color: 'var(--accent)',
+                background: 'color-mix(in srgb, var(--accent) 10%, transparent)',
                 padding: '2px 8px',
                 borderRadius: 4,
-                border: '1px solid rgba(0, 229, 255, 0.3)',
+                border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)',
               }}
             >
               ANÁLISIS DE SENSIBILIDAD «WHAT-IF»
@@ -221,7 +221,7 @@ export default function SensitivitySimulator({
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13 }}>
                 <span style={{ fontWeight: 600, color: 'var(--ink)' }}>{c.name}</span>
                 <div style={{ display: 'flex', gap: 6, alignItems: 'center', fontFamily: 'var(--f-mono)', fontSize: 12 }}>
-                  <b style={{ color: '#00E5FF' }}>{pct}%</b>
+                  <b style={{ color: 'var(--accent)' }}>{pct}%</b>
                   <span
                     style={{
                       fontSize: 11,
@@ -241,7 +241,7 @@ export default function SensitivitySimulator({
                 onChange={(e) => handleWeightChange(i, parseFloat(e.target.value))}
                 style={{
                   width: '100%',
-                  accentColor: '#00E5FF',
+                  accentColor: 'var(--accent)',
                   cursor: 'pointer',
                 }}
               />
@@ -282,7 +282,7 @@ export default function SensitivitySimulator({
                 const rankDiff = bRank - sRank; // Si bRank=2 y sRank=1, subió +1 puesto
 
                 return (
-                  <tr key={alt.id} style={{ background: sRank === 1 ? 'rgba(0, 229, 255, 0.05)' : undefined }}>
+                  <tr key={alt.id} style={{ background: sRank === 1 ? 'color-mix(in srgb, var(--accent) 5%, transparent)' : undefined }}>
                     <td style={{ fontWeight: sRank === 1 ? 700 : 500, color: sRank === 1 ? 'var(--ink)' : undefined }}>
                       {alt.name} {sRank === 1 && '👑'}
                     </td>
@@ -290,10 +290,10 @@ export default function SensitivitySimulator({
                     <td className="n" style={{ fontFamily: 'var(--f-mono)', color: 'var(--muted)' }}>
                       {bRow ? bRow.score.toFixed(4) : '—'}
                     </td>
-                    <td className="n" style={{ fontFamily: 'var(--f-mono)', fontWeight: 700, color: sRank === 1 ? '#00E5FF' : undefined }}>
+                    <td className="n" style={{ fontFamily: 'var(--f-mono)', fontWeight: 700, color: sRank === 1 ? 'var(--accent)' : undefined }}>
                       #{sRank}
                     </td>
-                    <td className="n" style={{ fontFamily: 'var(--f-mono)', color: '#00E5FF' }}>
+                    <td className="n" style={{ fontFamily: 'var(--f-mono)', color: 'var(--accent)' }}>
                       {sRow ? sRow.score.toFixed(4) : '—'}
                     </td>
                     <td className="n" style={{ fontFamily: 'var(--f-mono)' }}>

@@ -39,6 +39,7 @@ export default function PublicView({ token, loggedIn, userEmail }: { token: stri
           {data.project.objective && <p className="muted" style={{ maxWidth: '70ch' }}><b>Objetivo:</b> {data.project.objective}</p>}
         </header>
         <Results
+          mode="single"
           criteria={data.project.criteria}
           alternatives={data.project.alternatives}
           experts={data.experts}
