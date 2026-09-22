@@ -17,6 +17,16 @@ function LoginForm() {
   const [msg, setMsg] = useState('');
   const [msgType, setMsgType] = useState<'err' | 'ok'>('err');
   const [busy, setBusy] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+
+  // Cuenta regresiva tras enviar el enlace de recuperación: Supabase rechaza un segundo
+  // envío al mismo correo antes de 60s (SMTP Settings → Minimum interval per user), así que
+  // el botón refleja ese límite en vez de quedar habilitado de una.
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const id = setInterval(() => setCooldown((c) => c - 1), 1000);
+    return () => clearInterval(id);
+  }, [cooldown]);
 
   // Si ya está autenticado, redirigir directamente al destino sin mostrar el formulario de login
   useEffect(() => {
@@ -60,6 +70,7 @@ function LoginForm() {
       } else {
         setMsgType('ok');
         setMsg('Enlace de recuperación enviado. Revisa tu correo electrónico (incluida la carpeta de spam o correo no deseado).');
+        setCooldown(60);
       }
     }
     setBusy(false);
@@ -124,8 +135,12 @@ function LoginForm() {
                 <span><b>{msgType === 'ok' ? '✓ Enviado:' : 'Error:'}</b> {msg}</span>
               </div>
             )}
-            <button className="btn primary" type="submit" disabled={busy}>
-              {busy ? 'Un momento…' : mode === 'in' ? 'Entrar' : mode === 'up' ? 'Crear cuenta' : 'Enviar enlace de recuperación'}
+            <button className="btn primary" type="submit" disabled={busy || (mode === 'reset' && cooldown > 0)}>
+              {busy
+                ? 'Un momento…'
+                : mode === 'reset' && cooldown > 0
+                  ? `Reenviar en ${cooldown}s`
+                  : mode === 'in' ? 'Entrar' : mode === 'up' ? 'Crear cuenta' : 'Enviar enlace de recuperación'}
             </button>
           </form>
 
