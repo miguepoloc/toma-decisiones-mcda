@@ -50,8 +50,9 @@ npm run typecheck
 4. Despliega. Luego actualiza *Site URL* y *Redirect URLs* en Supabase con el dominio real.
 
 ## Despliegue actual (19-20 sep 2026)
-- **Supabase**: proyecto `hymmznfylafdldfngxcu` (`https://hymmznfylafdldfngxcu.supabase.co`), las 6 migraciones ya
-  ejecutadas. Claves en `.env.local` (gitignored) y en Vercel.
+- **Supabase**: proyecto `hymmznfylafdldfngxcu` (`https://hymmznfylafdldfngxcu.supabase.co`), migraciones 000001-000007
+  ya ejecutadas; 000008_admin_role (22 sep 2026) todavía no — ver nota en "Qué está verificado y qué no". Claves en
+  `.env.local` (gitignored) y en Vercel.
 - **Vercel**: proyecto `plataforma` en el scope `migue-polos-projects`. Dominio de producción:
   **`mcda.tools`** (comprado directo en Vercel, 22 sep 2026).
   - **Trampa real con la que se perdió tiempo:** Vercel activa protección SSO (`ssoProtection: all_except_custom_domains`)
@@ -78,10 +79,11 @@ plataforma/
 │                                      000002_decision_matrix (method/decision_matrix) + 000003/000004_*_methods
 │                                      (amplían method a los 7) + 000005_public_get_weighting_method +
 │                                      000006_rate_limit_and_constraints (límite de frecuencia por token +
-│                                      longitud máxima en texto libre) + 000007_admin_stats (backoffice de solo
-│                                      el docente, ver Visión)
+│                                      longitud máxima en texto libre) + 000007_admin_stats (backoffice, reemplazada
+│                                      por 000008) + 000008_admin_role (profiles.role 'user'|'admin', reemplaza el
+│                                      email hardcodeado de 000007; no siembra ningún admin, ver Visión)
 ├─ src/app/                            Páginas: /, /tutorial, /metodo, /login, /dashboard, /projects/[id], /e/[token],
-│                                      /p/[token], /admin (backoffice, solo REDACTED_EMAIL, sin link en el nav)
+│                                      /p/[token], /admin (backoffice, solo profiles.role = 'admin', sin link en el nav)
 │                                      icon.tsx, apple-icon.tsx (favicon generado con next/og, ver Historial)
 ├─ src/components/                     JudgmentEditor, DecisionMatrixEditor, Results, PrioritizationEditor,
 │                                      ProjectWorkspace, Logo, …
@@ -116,9 +118,10 @@ cacheado-vs-JS de `check-excel-topsis.ts`/`check-excel-vikor.ts`) — sus fórmu
 `MEDIAN`/`MAX` sobre expresión-arreglo), pero sigue siendo una verificación pendiente, no hecha. Las rutas
 protegidas redirigen a `/login`.
 
-**Ya hay un Supabase real desplegado** (proyecto `hymmznfylafdldfngxcu`, las 6 primeras migraciones ejecutadas —
-`20240101000007_admin_stats.sql` (22 sep 2026) todavía **no**, hay que correrla a mano en el SQL Editor antes de
-que `/admin` funcione en producción —, variables de entorno puestas en local y en Vercel — production, preview y
+**Ya hay un Supabase real desplegado** (proyecto `hymmznfylafdldfngxcu`, migraciones 000001-000007 ejecutadas —
+`20240101000008_admin_role.sql` (22 sep 2026) todavía **no**, hay que correrla a mano en el SQL Editor, y además
+otorgarte `role = 'admin'` a mano (ver esa migración, a propósito no siembra ningún admin) antes de que `/admin`
+vuelva a funcionar en producción —, variables de entorno puestas en local y en Vercel — production, preview y
 development) y la app corre en producción en
 <https://mcda.tools>. Lo que **todavía no se caminó explícitamente de punta a punta** es el checklist de RLS: la lectura
 del SQL (políticas + funciones `SECURITY DEFINER`) se ve correcta, pero eso no reemplaza probarlo contra Postgres real. Pendiente:
@@ -130,17 +133,29 @@ del SQL (políticas + funciones `SECURITY DEFINER`) se ve correcta, pero eso no 
 
 ## Historial de cambios
 
-**22 sep 2026 (backoffice admin, solo lectura):** nueva ruta `/admin`, visible solo para
-`REDACTED_EMAIL` — no hay link a ella en `Topbar`. Muestra únicamente agregados numéricos
-(proyectos totales/públicos/privados, usuarios registrados, expertos por estado, suma de criterios/
-alternativas, total de juicios), nunca datos de un proyecto individual de otro usuario. La autorización
-vive en una sola función SQL `security definer`, `admin_stats()` (`20240101000007_admin_stats.sql`),
-que compara `auth.email()` contra el correo del docente y solo entonces agrega `count()`/`sum()` sobre
-`projects`/`profiles`/`experts`/`judgments` — mismo patrón que `expert_get`/`public_get`, sin tocar RLS
-ni agregar ninguna clave de servicio nueva al proyecto. La página (`src/app/admin/page.tsx`) llama esa
-función vía `supabase.rpc('admin_stats')`; si quien pide no es el admin, la función lanza una excepción
-y la página redirige a `/dashboard` sin distinguir "no autorizado" de "no encontrado". **Pendiente**:
-la migración todavía no se ha corrido contra el Supabase real (ver "Qué está verificado y qué no").
+**22 sep 2026 (el admin deja de ser un email hardcodeado):** `20240101000007_admin_stats.sql`
+comparaba `auth.email()` contra un correo literal dentro de la función — funcionaba, pero significaba
+que "quién es admin" era texto fijo en un archivo de migración versionado. `20240101000008_admin_role.sql`
+lo reemplaza: agrega `profiles.role text default 'user' check (role in ('user','admin'))` y reescribe
+`admin_stats()` para revisar `role = 'admin'` en vez del correo. A propósito **no** siembra ningún admin
+en la migración (eso sí seguiría siendo un correo en git, solo que en un UPDATE en vez de un IF) — el
+primer admin se otorga a mano, una sola vez, con un UPDATE corrido directamente en el SQL Editor, que no
+queda en ningún archivo del repo. Para el segundo admin en adelante (p.ej. un co-instructor) ya no hace
+falta tocar SQL a mano: `promote_to_admin(p_email)`, otra función `security definer`, deja que cualquier
+admin YA existente promueva a alguien más por su correo. **Pendiente**: esta migración todavía no se ha
+corrido contra el Supabase real, y aunque se corra `/admin` seguirá redirigiendo hasta que se ejecute ese
+UPDATE manual (ver "Qué está verificado y qué no").
+
+**22 sep 2026 (backoffice admin, solo lectura):** nueva ruta `/admin` — no hay link a ella en `Topbar`.
+Muestra únicamente agregados numéricos (proyectos totales/públicos/privados, usuarios registrados,
+expertos por estado, suma de criterios/alternativas, total de juicios), nunca datos de un proyecto
+individual de otro usuario. La autorización vive en una sola función SQL `security definer`,
+`admin_stats()`, que agrega `count()`/`sum()` sobre `projects`/`profiles`/`experts`/`judgments` — mismo
+patrón que `expert_get`/`public_get`, sin tocar RLS ni agregar ninguna clave de servicio nueva al
+proyecto. La página (`src/app/admin/page.tsx`) llama esa función vía `supabase.rpc('admin_stats')`; si
+quien pide no es admin, la función lanza una excepción y la página redirige a `/dashboard` sin distinguir
+"no autorizado" de "no encontrado". (El chequeo de autorización original, por email hardcodeado, se
+reemplazó el mismo día — ver la entrada de arriba.)
 
 **20 sep 2026 (auditoría de diseño/código/seguridad/UX de la plataforma):**
 - **Seguridad**: nueva migración `20240101000006_rate_limit_and_constraints.sql` — límite de frecuencia

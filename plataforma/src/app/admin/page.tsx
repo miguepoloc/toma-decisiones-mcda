@@ -5,9 +5,9 @@ import type { AdminStats } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
-/** Backoffice de solo lectura, solo para el docente (ver admin_stats() en
- * 20240101000007_admin_stats.sql). No aparece en la navegación normal: quien no sea el admin
- * y llegue aquí (con o sin sesión) termina en /dashboard, sin indicio de que esta ruta existe. */
+/** Backoffice de solo lectura, solo para cuentas con profiles.role = 'admin' (ver admin_stats()
+ * en 20240101000008_admin_role.sql). No aparece en la navegación normal: quien no sea admin y
+ * llegue aquí (con o sin sesión) termina en /dashboard, sin indicio de que esta ruta existe. */
 export default async function AdminPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
