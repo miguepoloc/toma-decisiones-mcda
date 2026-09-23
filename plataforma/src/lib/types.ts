@@ -69,9 +69,11 @@ export type PublicGet = {
   judgments: JudgmentRow[];
 };
 
-/** Lo que devuelve admin_stats() (20240101000007_admin_stats.sql): solo agregados numéricos
- * across-owner, nunca datos de un proyecto individual. La función revisa el email del solicitante
- * por sí misma, así que si esto llega aquí es porque el RPC ya lo autorizó. */
+/** Lo que devuelve admin_stats() (20240101000009_admin_v2.sql, amplía 20240101000007/000008):
+ * agregados across-owner MÁS un puñado de listas con detalle individual (usuarios_historial,
+ * proyectos_historial, proyectos_abandonados), aprobadas explícitamente el 22 sep 2026 — ver
+ * README § Historial de cambios sobre por qué esto ya no es "solo agregados". La función revisa
+ * el rol del solicitante por sí misma, así que si esto llega aquí es porque el RPC ya lo autorizó. */
 export type AdminStats = {
   proyectos_total: number;
   proyectos_publicos: number;
@@ -84,6 +86,37 @@ export type AdminStats = {
   criterios_total: number;
   alternativas_total: number;
   juicios_total: number;
+  metodos: { metodo: Method; total: number }[];
+  ponderacion: { metodo: WeightingMethod; total: number }[];
+  expertos_filled_by: { quien: 'expert' | 'owner'; total: number }[];
+  embudo_expertos: {
+    invitados: number;
+    empezaron: number;
+    enviaron: number;
+    avg_dias_invitado_a_empezar: number | null;
+    avg_dias_empezar_a_enviar: number | null;
+  };
+  crecimiento_semanal: { semana: string; usuarios: number; proyectos: number; juicios: number }[];
+  proyectos_abandonados: {
+    id: string; titulo: string; dueño_email: string;
+    creado: string; actualizado: string; expertos_total: number;
+  }[];
+  usuarios_historial: { email: string; nombre: string | null; creado: string }[];
+  proyectos_historial: {
+    id: string; titulo: string; dueño_email: string; metodo: Method; publico: boolean; creado: string;
+  }[];
+  rate_limit_picos: { funcion: string; pico_por_minuto: number; limite: number; cerca_del_limite: boolean }[];
+  accesos_recientes: { email: string; fecha: string }[];
+};
+
+/** Lo que devuelve admin_ahp_raw() (20240101000009_admin_v2.sql): judgments crudos + criteria/
+ * alternatives por proyecto, para que el admin corra la MISMA lógica de ahp.ts (expertMatrix/
+ * analyze) en vez de reimplementarla en SQL. Ver computeAhpConsistency() en src/lib/admin.ts. */
+export type AdminAhpRawProject = {
+  project_id: string;
+  criteria: Criterion[];
+  alternatives: Alternative[];
+  judgments: JudgmentRow[];
 };
 
 export const uid = (prefix = 'x') => prefix + Math.random().toString(36).slice(2, 8);
