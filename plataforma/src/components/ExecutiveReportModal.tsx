@@ -3,7 +3,7 @@
 import { useEffect, useRef } from 'react';
 import type { Criterion, Alternative, DecisionMatrix } from '@/lib/types';
 import { METHOD_SPECS, type MethodKey } from './ScientificMethodModal';
-import { getCell, getType } from '@/lib/topsis';
+import { getCell, getKind, getTarget } from '@/lib/topsis';
 
 interface ExecutiveReportModalProps {
   projectTitle: string;
@@ -247,7 +247,10 @@ export default function ExecutiveReportModal({
                   <tr key={c.id} style={{ borderBottom: '1px solid #E2E8F0' }}>
                     <td style={{ padding: '8px 10px', fontWeight: 600 }}>{c.name}</td>
                     <td style={{ padding: '8px 10px', color: '#64748B' }}>
-                      {getType(decisionMatrix, c.id) === 'min' ? 'Minimizar (Costo)' : 'Maximizar (Beneficio)'}
+                      {(() => {
+                        const k = getKind(decisionMatrix, c.id), t = getTarget(decisionMatrix, c.id);
+                        return k === 'min' ? 'Minimizar (Costo)' : k === 'target' ? (t ? `Objetivo ${t.value}${t.tol ? ` ± ${t.tol}` : ''} (minimizar la distancia)` : 'Objetivo (sin valor definido)') : 'Maximizar (Beneficio)';
+                      })()}
                     </td>
                     <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'monospace' }}>{w.toFixed(4)}</td>
                     <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 700, color: '#0284C7', fontFamily: 'monospace' }}>

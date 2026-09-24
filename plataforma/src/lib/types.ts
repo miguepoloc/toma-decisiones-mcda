@@ -14,12 +14,24 @@ export type Method = 'ahp' | 'topsis' | 'vikor' | 'electre' | 'promethee' | 'saw
  * Solo aplica cuando method !== 'ahp'; AHP siempre deriva sus propios pesos. */
 export type WeightingMethod = 'ahp' | 'critic' | 'entropy';
 export type MatrixType = 'max' | 'min';
-/** { values: { <altId>: { <critId>: number | string } }, types: { <critId>: 'max'|'min' } }.
+/** Cómo se interpreta un criterio de la matriz de decisión: 'max' (beneficio, más es mejor), 'min' (costo, menos
+ * es mejor) o 'target' (objetivo, "nominal-the-best" de Taguchi: lo óptimo es un valor específico, ver
+ * `DecisionMatrix.targets`). Los métodos SOLO ven 'max'/'min': un criterio 'target' se convierte antes en su
+ * distancia al objetivo, que es un costo normal (ver `resolveTargets` en topsis.ts). */
+export type MatrixKind = MatrixType | 'target';
+/** Objetivo de un criterio 'target': la distancia de un valor x es max(0, |x − value| − tol), es decir 0 dentro
+ * de la banda value ± tol y la distancia al borde más cercano fuera de ella. tol = 0 → objetivo puntual. */
+export type TargetSpec = { value: number; tol: number };
+/** { values: { <altId>: { <critId>: number | string } }, types: { <critId>: 'max'|'min'|'target' } }.
  * Para fuzzy_topsis los valores son etiquetas lingüísticas ('VP'|'P'|'F'|'G'|'VG').
  * Para todos los demás métodos los valores son number. */
 export type DecisionMatrix = {
   values: Record<string, Record<string, number | string>>;
-  types: Record<string, MatrixType>;
+  types: Record<string, MatrixKind>;
+  /** Objetivo (y tolerancia) de cada criterio de tipo 'target'. Vive aquí, en el JSON de `decision_matrix`, sin
+   * migración (ver vikorV). Un criterio 'target' sin objetivo válido cuenta como neutro (distancia 0) y la
+   * interfaz avisa que falta. */
+  targets?: Record<string, TargetSpec>;
   /** Solo VIKOR: v = peso de la estrategia de mayoría (S) frente al arrepentimiento (R), en [0, 1].
    * No se deriva de los datos, lo elige quien decide (Alidrisi 2021: 0.5 = "consenso" por convención).
    * Vive aquí, dentro del JSON de `decision_matrix`, para que `public_get`/`expert_get`, los respaldos

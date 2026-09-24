@@ -5,7 +5,7 @@ import type { Alternative, Criterion, DecisionMatrix, JudgmentRow, Method, Weigh
 import {
   CRIT_SHEET, altSheet, aggMatrix, fmt, getV, indexJudgments, pairsOf, phrase, sheetItems, sheetResult, synthesis,
 } from '@/lib/ahp';
-import { getCell, getType, normalizeMatrix, topsisSynthesis } from '@/lib/topsis';
+import { getCell, getKind, getTarget, missingTargets, normalizeMatrix, resolveTargets, targetDistance, topsisSynthesis } from '@/lib/topsis';
 import { vikorSynthesis, vikorV } from '@/lib/vikor';
 import VikorPanel from './VikorPanel';
 import { prometheeSynthesis } from '@/lib/promethee';
@@ -155,11 +155,15 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
   // v de VIKOR: el dueño lo guarda en decision_matrix.vikorV (onChangeV); en la vista pública el selector
   // solo cambia una copia local, sin tocar el proyecto.
   const [vLocal, setVLocal] = useState<number | null>(null);
-  const dm = useMemo(() => {
+  // dmRaw = lo que ingresó el usuario (con tipo 'target' y su objetivo); dm = matriz EFECTIVA que leen todos los
+  // métodos: cada criterio de tipo objetivo ya convertido en su distancia al objetivo, como costo (resolveTargets).
+  const dmRaw = useMemo(() => {
     const base = normalizeMatrix(decisionMatrix);
     return !onChangeV && vLocal != null ? { ...base, vikorV: vLocal } : base;
   }, [decisionMatrix, onChangeV, vLocal]);
-  const vEff = vikorV(dm);
+  const dm = useMemo(() => resolveTargets(criteria, alternatives, dmRaw), [criteria, alternatives, dmRaw]);
+  const noTarget = useMemo(() => missingTargets(criteria, dmRaw), [criteria, dmRaw]);
+  const vEff = vikorV(dmRaw);
   const changeV = (v: number) => (onChangeV ? onChangeV(v) : setVLocal(v));
   const critWeights = useMemo(() => {
     if (method === 'ahp') return ahpWeights;
@@ -356,6 +360,7 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
             )}
           </div>
           {bad.length > 0 && <div className="banner"><span><b>Revisa la consistencia</b> (CR ≥ 0.10) en: {bad.join(', ')}.</span></div>}
+          {noTarget.length > 0 && <div className="banner"><span><b>Falta el valor objetivo</b> de: {noTarget.join(', ')}. Mientras no lo pongas, ese criterio no distingue entre alternativas (distancia 0 para todas). Complétalo en la pestaña «Matriz de decisión».</span></div>}
 
           {method === 'ahp' ? (
             <>
@@ -473,10 +478,16 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
                 <h4>Matriz de decisión (valores tal cual se ingresaron)</h4>
                 <div className="tbl" style={{ marginTop: 8 }}>
                   <table>
-                    <thead><tr><th></th>{criteria.map((c) => <th key={c.id} className="n">{c.name} · {getType(dm, c.id) === 'max' ? 'beneficio' : 'costo'}</th>)}</tr></thead>
+                    <thead><tr><th></th>{criteria.map((c) => {
+                      const k = getKind(dmRaw, c.id), t = getTarget(dmRaw, c.id);
+                      return <th key={c.id} className="n">{c.name} · {k === 'max' ? 'beneficio' : k === 'min' ? 'costo' : t ? `objetivo ${t.value}${t.tol ? ` ± ${t.tol}` : ''}` : 'objetivo (falta el valor)'}</th>;
+                    })}</tr></thead>
                     <tbody>
                       {alternatives.map((a) => (
-                        <tr key={a.id}><td>{a.name}</td>{criteria.map((c) => <td key={c.id} className="n">{getCell(dm, a.id, c.id) ?? '—'}</td>)}</tr>
+                        <tr key={a.id}><td>{a.name}</td>{criteria.map((c) => {
+                          const x = getCell(dmRaw, a.id, c.id), t = getTarget(dmRaw, c.id);
+                          return <td key={c.id} className="n">{x ?? '—'}{x != null && t && getKind(dmRaw, c.id) === 'target' ? <span className="muted"> (distancia {Number(targetDistance(x, t.value, t.tol).toPrecision(6))})</span> : null}</td>;
+                        })}</tr>
                       ))}
                     </tbody>
                   </table>
@@ -660,7 +671,7 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
           method={method as MethodKey}
           criteria={criteria}
           alternatives={alternatives}
-          decisionMatrix={dm}
+          decisionMatrix={dmRaw}
           weights={critWeights}
           rankingRows={
             method === 'ahp'

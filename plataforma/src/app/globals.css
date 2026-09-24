@@ -114,6 +114,7 @@ label.lbl{font:600 12px var(--f-mono);letter-spacing:.05em;text-transform:upperc
 .seg button:last-child{border-right:0}
 .seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
 .seg button.d[aria-pressed="true"]{background:var(--warn);color:#fff}
+.seg button.o[aria-pressed="true"]{background:#7C3AED;color:#fff}
 .tabs{display:flex;flex-wrap:wrap;gap:6px}
 .tabs button{appearance:none;font:500 13px var(--f-body);text-align:left;border:1px solid var(--line);background:var(--surface);color:var(--muted);padding:7px 12px;border-radius:4px;cursor:pointer;display:grid;line-height:1.3}
 .tabs button b{color:var(--ink);font-weight:600}
@@ -137,6 +138,26 @@ td{padding:7px 10px 7px 0;border-bottom:1px solid var(--line);vertical-align:top
 td.n,th.n{text-align:right;font-family:var(--f-mono);font-variant-numeric:tabular-nums}
 td input[type=text]{padding:5px 8px;font-size:13px}
 tr.win td{font-weight:600}
+/* editor de la matriz de decisión: columnas uniformes, tipo de criterio en un control de ancho completo,
+   parámetros del objetivo como filas propias (como en el Excel) y todo centrado sobre su columna */
+.mx table{table-layout:fixed}
+.mx th,.mx td{padding:10px 8px;vertical-align:top;text-align:center}
+.mx thead th{text-transform:none;letter-spacing:0;font:600 13px var(--f-body);color:var(--ink);vertical-align:top;padding-bottom:12px}
+.mx thead th:first-child,.mx th[scope=row]{width:200px;text-align:left;text-transform:none;letter-spacing:0;font:600 13px var(--f-body);color:var(--ink);border-bottom:1px solid var(--line)}
+.mx thead th:first-child{color:var(--muted);font:500 11px var(--f-mono);text-transform:uppercase;letter-spacing:.06em;vertical-align:bottom}
+.mx th.alt{padding-top:16px}
+.mx .crit-name{display:block;margin-bottom:8px;overflow-wrap:anywhere}
+.mx .seg{display:flex;width:100%;max-width:230px;margin:0 auto}
+.mx .seg button{flex:1 1 0;min-height:36px;padding:6px 4px;white-space:nowrap;font-size:12.5px}
+.mx input[type=number]{width:100%;max-width:150px;min-height:36px;padding:6px 10px;text-align:center}
+.mx input[aria-invalid=true]{border-color:var(--warn);box-shadow:0 0 0 3px var(--warn-soft)}
+.mx input:disabled{opacity:.45;cursor:not-allowed}
+.mx .mxh{display:block;margin-top:4px;padding:0;background:none;border:0;font:400 11.5px/1.35 var(--f-mono);color:var(--muted);font-variant-numeric:tabular-nums}
+.mx th[scope=row] .mxh{font-family:var(--f-body);font-weight:400}
+.mx tr.obj>*{background:color-mix(in srgb,#7C3AED 16%,var(--surface))}
+.mx tr.end>*{border-bottom:2px solid var(--line)}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+
 .legend{display:grid;gap:6px;font-size:14px}
 .legend div{display:grid;grid-template-columns:34px 1fr;gap:8px}
 .legend b{font-family:var(--f-mono);font-weight:500;color:var(--accent)}

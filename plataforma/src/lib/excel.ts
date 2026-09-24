@@ -9,6 +9,7 @@ import { altSheet, CRIT_SHEET, synthesis } from './ahp.ts';
 import { toLegacy, type Study } from './legacy.ts';
 import { alive, cols, f2, finalists, inIndep, mean, passes, ranked, scoreOf } from './prio.ts';
 import type { Method } from './types.ts';
+import { resolveTargets } from './topsis.ts';
 import { ahpSheet, colL, matrixSheet, qs, setPalette, stl, W } from './excel-core.ts';
 import { topsisSheet } from './excel-topsis-sheet.ts';
 import { vikorSheet } from './excel-vikor-sheet.ts';
@@ -83,9 +84,12 @@ export function buildWorkbook(XLSX: any, study: Study) {
     const matInfo = matrixSheet(S.criteria, S.alternatives, S.decisionMatrix, 'Matriz de decisión',
       isFuzzy
         ? 'Evaluaciones lingüísticas por alternativa y criterio (VP=Muy mala, P=Mala, F=Regular, G=Buena, VG=Muy buena). "Tipo" indica si más es mejor (Beneficio) o menos es mejor (Costo).'
-        : 'Valores reales por alternativa y criterio, tal como los cargaste en la plataforma. "Tipo" indica si más es mejor (Beneficio) o menos es mejor (Costo).');
+        : 'Valores reales por alternativa y criterio, tal como los cargaste en la plataforma. "Tipo" indica si más es mejor (Beneficio), menos es mejor (Costo) o si lo mejor es un valor específico (Objetivo, con su tolerancia).');
     add('Matriz de decisión', matInfo.ws);
-    const args = [S.criteria, S.alternatives, S.decisionMatrix, critInfo.w, matInfo, 'Matriz de decisión', critInfo] as const;
+    // Las hojas de cada método leen el bloque EFECTIVO de la matriz (criterios Objetivo ya convertidos en su
+    // distancia al objetivo, como costo), ver matrixSheet(): por eso reciben la matriz resuelta, no la cruda.
+    const dmEff = resolveTargets(S.criteria, S.alternatives, S.decisionMatrix);
+    const args = [S.criteria, S.alternatives, dmEff, critInfo.w, matInfo, 'Matriz de decisión', critInfo] as const;
     let sheet: ReturnType<typeof W>['ws'];
     if (S.method === 'fuzzy_topsis') {
       sheet = fuzzyTopsisSheet(S.criteria, S.alternatives, S.decisionMatrix, critInfo.w, critInfo);

@@ -138,6 +138,30 @@ del SQL (políticas + funciones `SECURITY DEFINER`) se ve correcta, pero eso no 
 
 ## Historial de cambios
 
+**24 sep 2026 (criterio de tipo OBJETIVO en la matriz de decisión; grill-me con el docente):** un estudiante quería
+ubicar paneles solares donde el voltaje de la red fuera 110 V, y la plataforma solo conocía beneficio (más es mejor)
+y costo (menos es mejor). Se agregó el tercer tipo, "nominal-the-best" de Taguchi (Sesión 3, diapositiva 34).
+Decisiones del grill-me: (1) el objetivo lleva una **tolerancia ±** opcional, distancia = `max(0, |x − objetivo| −
+tol)`: 0 dentro de la banda y distancia al borde fuera de ella (tol = 0 → valor exacto; sirve para "110 V ±5 %" y
+para rangos como el pH 5.5-7.0 del cacao, objetivo 6.25 ± 0.75); (2) el editor de la matriz tiene un tercer botón
+«Objetivo» (oculto en Fuzzy TOPSIS, que usa etiquetas) con dos campos, objetivo y tolerancia, y muestra la
+distancia bajo cada celda; (3) todos los métodos cuantitativos lo soportan, incluidos los pesos CRITIC/Entropía, con
+**una sola transformación previa**: `resolveTargets()` (topsis.ts) devuelve una matriz efectiva donde cada criterio
+objetivo se reemplaza por su distancia y pasa a `'min'`, así que TOPSIS/VIKOR/PROMETHEE/ELECTRE/SAW no cambiaron;
+(4) si falta el objetivo, la columna es neutra (distancia 0) y `Results` avisa «Falta el valor objetivo de…»;
+(5) se guarda dentro del JSON `decision_matrix` (`types[c] = 'target'` y `targets: {c: {value, tol}}`), sin
+migración, como `vikorV`; `getType()` trata 'target' como costo por seguridad, pero solo tiene sentido sobre la
+matriz ya resuelta; (6) el Excel agrega a la hoja «Matriz de decisión» las filas Objetivo y Tolerancia y un bloque de
+**matriz efectiva** con `=MAX(0,ABS(x−objetivo)−tol)`; `matrixSheet()` devuelve `rType`/`rData0` apuntando a ese
+bloque, así que las hojas de cada método no cambiaron y reciben la matriz resuelta para los valores cacheados.
+`Results` calcula sobre la matriz efectiva y muestra la cruda (con la distancia) en el detalle y en el Informe
+Ejecutivo. Verificado: `check-targets.ts` (nuevo, en `npm test`) reproduce el ejemplo inventado de los sitios
+solares del deck (objetivo 110 V: Ci [0.929, 0.866, 0.480, 0.049]; tratado mal como beneficio o costo gana el Sitio C,
+a 10 V del objetivo; con ±5 %: [0.941, 0.889, 0.614, 0.040]), la columna constante y el objetivo faltante en todos los
+métodos, y la persistencia; `check-excel-vikor.ts` comprueba la ida y vuelta por `_datos`; `check-excel-recalc.ts`
+recalcula en LibreOffice un caso solar con criterio objetivo (matriz efectiva y hoja VIKOR). Verificación visual:
+editor + resultados en una página temporal (borrada), captura con Chrome headless; sin probar contra Supabase real.
+
 **24 sep 2026 (VIKOR: selector de v, condiciones de compromiso y sensibilidad; grill-me con el docente):** la
 plataforma calculaba VIKOR con `v = 0.5` fijo (parámetro por defecto de `vikor()`, que `vikorSynthesis()` nunca pasaba;
 las fórmulas del Excel llevaban `0.5` escrito a mano, "sin UI para cambiarlo") y mostraba "gana el Q más bajo" aunque

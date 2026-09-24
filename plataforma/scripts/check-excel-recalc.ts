@@ -16,7 +16,7 @@ import XLSX from 'xlsx-js-style';
 import { buildWorkbook, colL } from '../src/lib/excel.ts';
 import { aggMatrix, analyze, indexJudgments, pairsOf } from '../src/lib/ahp.ts';
 import { normalizePrio, blankPrio } from '../src/lib/prio.ts';
-import { blankMatrix, setCell, setType, type DecisionMatrix } from '../src/lib/topsis.ts';
+import { blankMatrix, setCell, setTarget, setType, resolveTargets, type DecisionMatrix } from '../src/lib/topsis.ts';
 import { sawSynthesis } from '../src/lib/saw.ts';
 import { fuzzyTopsisSynthesis } from '../src/lib/fuzzy_topsis.ts';
 import { vikorSynthesis } from '../src/lib/vikor.ts';
@@ -162,14 +162,16 @@ setupProfile();
 // Dos casos: IoT/Palmor con v = 0.3 (ganador que cambia el Q respecto a v = 0.5) y el viaje (3 rutas, todos
 // costo) con v = 0.5, donde falla la condición 1 y hay conjunto de compromiso. Se arruinan las celdas con
 // fórmula y se compara lo que recalcula LibreOffice contra vikorSynthesis().
-for (const caso of ['iot', 'viaje'] as const) {
-  const criteria = (caso === 'iot' ? ['Alcance', 'Autonomía', 'Infraestructura', 'Madurez'] : ['Precio', 'Tiempo', 'Distancia']).map((name, i) => ({ id: 'k' + i, name, hint: '' }));
-  const alternatives = (caso === 'iot' ? ['LoRaWAN', 'GSM/GPRS', 'Sigfox', 'Zigbee'] : ['Ruta Norte', 'Ruta Centro', 'Ruta Sur']).map((name, i) => ({ id: 'a' + i, name }));
-  const dataset = caso === 'iot' ? [[10, 8, 2, 5], [10.5, 0.5, 3, 2], [40, 2, 5, 2], [0.07, 1.5, 2, 4]] : [[95, 3.5, 280], [65, 5.5, 260], [80, 4.5, 340]];
+for (const caso of ['iot', 'viaje', 'solar'] as const) {
+  const criteria = (caso === 'iot' ? ['Alcance', 'Autonomía', 'Infraestructura', 'Madurez'] : caso === 'solar' ? ['Voltaje (V)', 'Irradiación'] : ['Precio', 'Tiempo', 'Distancia']).map((name, i) => ({ id: 'k' + i, name, hint: '' }));
+  const alternatives = (caso === 'iot' ? ['LoRaWAN', 'GSM/GPRS', 'Sigfox', 'Zigbee'] : caso === 'solar' ? ['Sitio A', 'Sitio B', 'Sitio C', 'Sitio D'] : ['Ruta Norte', 'Ruta Centro', 'Ruta Sur']).map((name, i) => ({ id: 'a' + i, name }));
+  const dataset = caso === 'iot' ? [[10, 8, 2, 5], [10.5, 0.5, 3, 2], [40, 2, 5, 2], [0.07, 1.5, 2, 4]] : caso === 'solar' ? [[108, 5.2], [112, 4.6], [120, 5.8], [127, 5.0]] : [[95, 3.5, 280], [65, 5.5, 260], [80, 4.5, 340]];
   let dm: DecisionMatrix = blankMatrix();
   alternatives.forEach((a, i) => criteria.forEach((c, j) => { dm = setCell(dm, a.id, c.id, dataset[i][j]); }));
-  criteria.forEach((c) => { dm = setType(dm, c.id, caso === 'iot' ? 'max' : 'min'); });
+  criteria.forEach((c) => { dm = setType(dm, c.id, caso === 'iot' || caso === 'solar' ? 'max' : 'min'); });
   if (caso === 'iot') dm = { ...dm, vikorV: 0.3 };
+  // solar: el voltaje es un criterio OBJETIVO (110 V ± 5.5, es decir ±5 %), la irradiación es beneficio
+  if (caso === 'solar') { dm = setType(dm, 'k0', 'target'); dm = setTarget(dm, 'k0', { value: 110, tol: 5.5 }); }
   const experts = [{ id: 'e0', name: 'Experto 1', role_desc: 'Ingeniero de redes' }];
   const rows: { expert_id: string; sheet: string; pair_key: string; value: number }[] = [];
   pairsOf(criteria.length).forEach(([i, j], n) => rows.push({ expert_id: 'e0', sheet: 'crit', pair_key: `k${i}-k${j}`, value: ((n * 3) % 7) - 3 }));
@@ -178,14 +180,22 @@ for (const caso of ['iot', 'viaje'] as const) {
     idx: indexJudgments(rows), prio: normalizePrio(blankPrio()), method: 'vikor' as const, decisionMatrix: dm,
   };
   const wb = buildWorkbook(XLSX, study);
-  const nCorrupted = corruptCachedValues(wb, 'VIKOR') + corruptCachedValues(wb, 'Criterios');
+  const nCorrupted = corruptCachedValues(wb, 'VIKOR') + corruptCachedValues(wb, 'Criterios') + corruptCachedValues(wb, 'Matriz de decisión');
   const corruptPath = path.join(tmpdir(), `plataforma_recalc_vikor_${caso}.xlsx`);
   writeFileSync(corruptPath, XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' }));
   console.log(`VIKOR (${caso}): ${nCorrupted} celdas con fórmula arruinadas a propósito, recalculando en LibreOffice…`);
   const recalced = recalcViaLibreOffice(soffice, corruptPath, path.join(tmpdir(), `plataforma_recalc_out_vikor_${caso}`));
-  const ws = XLSX.read(readFileSync(recalced), { type: 'buffer' }).Sheets['VIKOR'];
+  const wbRe = XLSX.read(readFileSync(recalced), { type: 'buffer' });
+  const ws = wbRe.Sheets['VIKOR'];
+  if (caso === 'solar') {
+    // matriz efectiva de la hoja «Matriz de decisión»: recalculada por LibreOffice, distancia = MAX(0, |x − 110| − 5.5)
+    const wm = wbRe.Sheets['Matriz de decisión'];
+    const rEffData0 = 5 + alternatives.length + 1 + 1 + 2 + 1 + 1; // rDataRaw0 + n + (rTarget, rTol) ... ver matrixSheet()
+    alternatives.forEach((a, i) => ok(!!wm['B' + (rEffData0 + i)] && cerca(wm['B' + (rEffData0 + i)].v, Math.max(0, Math.abs(dataset[i][0] - 110) - 5.5), 1e-6), `[LibreOffice recalculó] Matriz efectiva: distancia del voltaje de ${a.name} = ${wm['B' + (rEffData0 + i)]?.v} (esperado ${Math.max(0, Math.abs(dataset[i][0] - 110) - 5.5)})`));
+  }
   const weights = analyze(aggMatrix(criteria, [Object.fromEntries(rows.filter((r) => r.sheet === 'crit').map((r) => [r.pair_key, r.value]))])).w;
-  const exp = vikorSynthesis(criteria, alternatives, dm, weights);
+  const dmEff = resolveTargets(criteria, alternatives, dm);
+  const exp = vikorSynthesis(criteria, alternatives, dmEff, weights);
   const m = criteria.length, n = alternatives.length, rV0 = 6, rRmax = rV0 + n + 3;
   const rVin = rRmax + 1, rDQ = rVin + 1, rDeltaQ = rDQ + 1, rC1 = rDeltaQ + 1, rC2 = rC1 + 1, rVerd = rC2 + 1;
   const cQ = colL(m + 3), cRk = colL(m + 4), cSet = colL(m + 5);

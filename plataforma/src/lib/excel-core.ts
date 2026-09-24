@@ -4,7 +4,7 @@
 // tenía 975 líneas mezclando esto con las 7 hojas por método) el 20 sep 2026, auditoría de plataforma.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { aggMatrix, analyze, expertMatrix, type Item, type JMap } from './ahp.ts';
-import { getCell, getType } from './topsis.ts';
+import { getCell, getKind, getTarget, getType, targetDistance } from './topsis.ts';
 import type { Alternative, Criterion, DecisionMatrix } from './types.ts';
 
 const C_G = 'D8F5E3', C_GR = '666666';
@@ -142,24 +142,60 @@ export function ahpSheet(items: Item[], maps: JMap[], exNames: string[], title: 
   return { ws: fin(colsW, [{ hpt: 30 }], [{ s: { r: 0, c: 1 }, e: { r: 0, c: Math.max(n, 4) } }]), rN0, vc, w: an.w };
 }
 
-/** Matriz de decisión cruda (alternativas x criterios) + tipo (beneficio/costo) por columna.
+/** Matriz de decisión cruda (alternativas x criterios) + tipo (beneficio/costo/objetivo) por columna.
  * Compartida por los 6 métodos que ranquean sobre datos reales en vez de juicios por pares
- * (TOPSIS/VIKOR/PROMETHEE/ELECTRE/SAW/Fuzzy TOPSIS; AHP no la usa, compara por pares). */
+ * (TOPSIS/VIKOR/PROMETHEE/ELECTRE/SAW/Fuzzy TOPSIS; AHP no la usa, compara por pares).
+ *
+ * Si algún criterio es de tipo OBJETIVO (lo óptimo es un valor específico, ej. 110 V), la hoja agrega las filas
+ * Objetivo y Tolerancia y un segundo bloque, la matriz EFECTIVA, donde esos criterios se reemplazan por su
+ * distancia al objetivo = MAX(0, |valor − objetivo| − tolerancia) con fórmulas vivas y cuentan como Costo. Las
+ * hojas de cada método leen SIEMPRE ese bloque (rType/rData0 apuntan a él), así que no saben que existe el tipo
+ * objetivo. Sin criterios objetivo el bloque efectivo es el mismo crudo, como siempre. */
 export function matrixSheet(criteria: Criterion[], alternatives: Alternative[], dm: DecisionMatrix, title: string, note: string) {
   const m = criteria.length, n = alternatives.length, { put, fin } = W();
-  const rHead = 3, rType = 4, rData0 = 5;
+  const rHead = 3, rTypeRaw = 4, rDataRaw0 = 5;
+  const hasTarget = criteria.some((c) => getKind(dm, c.id) === 'target');
   put(1, 0, title, { s: stl.title });
   put(1, 1, note, { s: stl.note });
   put(rHead, 0, 'Alternativa', { s: stl.hdrL });
   criteria.forEach((c, j) => put(rHead, 1 + j, c.name, { s: stl.hdr }));
-  put(rType, 0, 'Tipo (beneficio/costo)', { s: stl.b });
-  criteria.forEach((c, j) => put(rType, 1 + j, getType(dm, c.id) === 'min' ? 'Costo' : 'Beneficio', { s: stl.c }));
+  put(rTypeRaw, 0, hasTarget ? 'Tipo (beneficio/costo/objetivo)' : 'Tipo (beneficio/costo)', { s: stl.b });
+  const kindLabel = (id: string) => { const k = getKind(dm, id); return k === 'target' ? 'Objetivo' : k === 'min' ? 'Costo' : 'Beneficio'; };
+  criteria.forEach((c, j) => put(rTypeRaw, 1 + j, kindLabel(c.id), { s: stl.c }));
   alternatives.forEach((a, i) => {
-    const r = rData0 + i;
+    const r = rDataRaw0 + i;
     put(r, 0, a.name, { s: stl.hdrL });
     criteria.forEach((c, j) => put(r, 1 + j, getCell(dm, a.id, c.id) ?? 0, { s: stl.c, z: '0.0000' }));
   });
-  const colsW = [30, ...Array.from({ length: Math.max(m, 1) }, () => 16)];
+  let rType = rTypeRaw, rData0 = rDataRaw0;
+  if (hasTarget) {
+    const rTarget = rDataRaw0 + n + 1, rTol = rTarget + 1, rEffHead = rTol + 2, rEffType = rEffHead + 1, rEffData0 = rEffType + 1;
+    put(rTarget, 0, 'Objetivo (criterios de tipo Objetivo)', { s: stl.b });
+    put(rTol, 0, 'Tolerancia ± (0 = valor exacto)', { s: stl.b });
+    criteria.forEach((c, j) => {
+      const t = getTarget(dm, c.id);
+      if (getKind(dm, c.id) !== 'target') return;
+      put(rTarget, 1 + j, t ? t.value : '', { s: stl.key, z: '0.0000' });
+      put(rTol, 1 + j, t ? t.tol : '', { s: stl.key, z: '0.0000' });
+    });
+    put(rEffHead, 0, 'Matriz efectiva para el método: los criterios Objetivo se reemplazan por su distancia al objetivo, MAX(0, |valor − objetivo| − tolerancia), y cuentan como Costo. Los demás criterios se copian tal cual.', { s: stl.note });
+    put(rEffType, 0, 'Tipo efectivo (beneficio/costo)', { s: stl.b });
+    criteria.forEach((c, j) => put(rEffType, 1 + j, getType(dm, c.id) === 'min' ? 'Costo' : 'Beneficio', { s: stl.c }));
+    alternatives.forEach((a, i) => {
+      const r = rEffData0 + i, raw = rDataRaw0 + i;
+      put(r, 0, a.name, { s: stl.hdrL });
+      criteria.forEach((c, j) => {
+        const L = colL(1 + j), x = getCell(dm, a.id, c.id) ?? 0, t = getTarget(dm, c.id);
+        if (getKind(dm, c.id) === 'target') {
+          if (t) put(r, 1 + j, targetDistance(x, t.value, t.tol), { f: `MAX(0,ABS(${L}${raw}-${L}$${rTarget})-${L}$${rTol})`, s: stl.c, z: '0.0000' });
+          else put(r, 1 + j, 0, { s: stl.c, z: '0.0000' }); // sin objetivo válido: neutro, igual que resolveTargets()
+        } else put(r, 1 + j, x, { f: `${L}${raw}`, s: stl.c, z: '0.0000' });
+      });
+    });
+    rType = rEffType;
+    rData0 = rEffData0;
+  }
+  const colsW = [hasTarget ? 40 : 30, ...Array.from({ length: Math.max(m, 1) }, () => 16)];
   return { ws: fin(colsW, [{ hpt: 26 }], [{ s: { r: 0, c: 1 }, e: { r: 0, c: Math.max(m, 1) } }]), rHead, rType, rData0, m, n };
 }
 

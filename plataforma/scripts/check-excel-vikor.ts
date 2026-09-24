@@ -7,7 +7,7 @@ import { buildWorkbook } from '../src/lib/excel.ts';
 import { fromLegacy, isLegacy } from '../src/lib/legacy.ts';
 import { aggMatrix, analyze, indexJudgments, pairsOf } from '../src/lib/ahp.ts';
 import { normalizePrio, blankPrio } from '../src/lib/prio.ts';
-import { blankMatrix, setCell, setType, type DecisionMatrix } from '../src/lib/topsis.ts';
+import { blankMatrix, getKind, getTarget, setCell, setTarget, setType, type DecisionMatrix } from '../src/lib/topsis.ts';
 import { vikorSynthesis } from '../src/lib/vikor.ts';
 
 let fallos = 0;
@@ -76,6 +76,17 @@ ok(JSON.stringify(imp?.decisionMatrix?.values) === JSON.stringify(dm.values), 'd
   let t3 = ''; for (let r = 1; wb3b.Sheets['_datos']['A' + r]; r++) t3 += wb3b.Sheets['_datos']['A' + r].v;
   const imp3 = fromLegacy(JSON.parse(t3));
   ok(imp3.decisionMatrix.vikorV === 0.3, `vikorV sobrevive el viaje de ida y vuelta por _datos (= ${imp3.decisionMatrix.vikorV})`);
+}
+
+// ---- criterio OBJETIVO: el tipo y el objetivo sobreviven el respaldo _datos ----
+{
+  let dmT: DecisionMatrix = setType(dm, 'k0', 'target');
+  dmT = setTarget(dmT, 'k0', { value: 12, tol: 1.5 });
+  const wbT = buildWorkbook(XLSX, { ...study, decisionMatrix: dmT });
+  const wbTb = XLSX.read(XLSX.write(wbT, { bookType: 'xlsx', type: 'array' }), { type: 'array' });
+  let tt = ''; for (let r = 1; wbTb.Sheets['_datos']['A' + r]; r++) tt += wbTb.Sheets['_datos']['A' + r].v;
+  const impT = fromLegacy(JSON.parse(tt));
+  ok(getKind(impT.decisionMatrix, 'k0') === 'target' && getTarget(impT.decisionMatrix, 'k0')?.value === 12 && getTarget(impT.decisionMatrix, 'k0')?.tol === 1.5, 'tipo objetivo, valor y tolerancia sobreviven el viaje de ida y vuelta por _datos');
 }
 
 console.log(fallos ? `\n${fallos} prueba(s) fallaron` : '\nTodas las pruebas pasaron');

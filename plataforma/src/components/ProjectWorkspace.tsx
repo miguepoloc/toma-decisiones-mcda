@@ -7,7 +7,7 @@ import { indexJudgments, type JMap } from '@/lib/ahp';
 import { finalists, normalizePrio, type PrioState } from '@/lib/prio';
 import { downloadExcel, downloadPrioExcel } from '@/lib/excel';
 import { friendlyError } from '@/lib/errors';
-import { normalizeMatrix, setCell as setMatrixCell, setType as setMatrixType, type MatrixType } from '@/lib/topsis';
+import { normalizeMatrix, setCell as setMatrixCell, setTarget as setMatrixTarget, setType as setMatrixType, type MatrixKind, type TargetSpec } from '@/lib/topsis';
 import JudgmentEditor from './JudgmentEditor';
 import PrioritizationEditor from './PrioritizationEditor';
 import DecisionMatrixEditor from './DecisionMatrixEditor';
@@ -176,8 +176,12 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
     const row = { ...dm.values[altId], [critId]: label };
     patch({ decision_matrix: { ...dm, values: { ...dm.values, [altId]: row } } });
   }
-  function setDMType(critId: string, type: MatrixType) {
+  function setDMType(critId: string, type: MatrixKind) {
     patch({ decision_matrix: setMatrixType(dm, critId, type) }, true);
+  }
+  /** Objetivo (valor y tolerancia) de un criterio de tipo «Objetivo», dentro de decision_matrix (sin migración). */
+  function setDMTarget(critId: string, spec: TargetSpec) {
+    patch({ decision_matrix: setMatrixTarget(dm, critId, spec) });
   }
   /** v de VIKOR: se guarda dentro de decision_matrix (sin migración), ver types.ts. */
   function setVikorV(v: number) {
@@ -446,6 +450,7 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
           onSetCell={setDMCell}
           onSetFuzzyCell={setDMFuzzyCell}
           onSetType={setDMType}
+          onSetTarget={setDMTarget}
         />
       )}
 
