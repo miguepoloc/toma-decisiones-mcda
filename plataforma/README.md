@@ -117,9 +117,10 @@ matemática (`npm run test:excel`, un `check-excel-<método>.ts` por método) y 
 herramienta HTML funciona. Para PROMETHEE/ELECTRE (a mano) y SAW/Fuzzy TOPSIS (automatizado, `npm run
 test:excel:recalc`), además, se forzó un recálculo real en LibreOffice headless (no solo el valor cacheado) antes
 de dar las fórmulas por buenas — ver "Historial de cambios", 20 sep 2026 noche, el hallazgo de `MEDIAN`/`MAX`
-sobre una expresión-arreglo. TOPSIS y VIKOR no han pasado por ese mismo recálculo real todavía (solo por el
-cacheado-vs-JS de `check-excel-topsis.ts`/`check-excel-vikor.ts`) — sus fórmulas son más simples (sin
-`MEDIAN`/`MAX` sobre expresión-arreglo), pero sigue siendo una verificación pendiente, no hecha. Las rutas
+sobre una expresión-arreglo. VIKOR sí pasó por ese recálculo real desde el 24 sep 2026 (`check-excel-recalc.ts`, v
+editable + condiciones de Opricovic & Tzeng). TOPSIS no ha pasado todavía (solo por el cacheado-vs-JS de
+`check-excel-topsis.ts`) — sus fórmulas son más simples (sin `MEDIAN`/`MAX` sobre expresión-arreglo), pero sigue
+siendo una verificación pendiente, no hecha. Las rutas
 protegidas redirigen a `/login`.
 
 **Ya hay un Supabase real desplegado** (proyecto `hymmznfylafdldfngxcu`, migraciones 000001-000008 ejecutadas,
@@ -136,6 +137,31 @@ del SQL (políticas + funciones `SECURITY DEFINER`) se ve correcta, pero eso no 
 5. Descargar el Excel y abrirlo.
 
 ## Historial de cambios
+
+**24 sep 2026 (VIKOR: selector de v, condiciones de compromiso y sensibilidad; grill-me con el docente):** la
+plataforma calculaba VIKOR con `v = 0.5` fijo (parámetro por defecto de `vikor()`, que `vikorSynthesis()` nunca pasaba;
+las fórmulas del Excel llevaban `0.5` escrito a mano, "sin UI para cambiarlo") y mostraba "gana el Q más bajo" aunque
+el método no declarara un ganador único. Tras corregir esas dos cosas en el deck de la Sesión 3 (diapositivas 22-29
+y 47, `sesiones/sesion-03/`), se llevó lo mismo aquí. Decisiones del grill-me: (1) las tres piezas juntas: selector
+de v, verificación de las 2 condiciones de Opricovic & Tzeng (2004) y sensibilidad (tabla + gráfica); (2) v vive dentro
+del JSON `decision_matrix` como `vikorV` opcional (sin migración: `public_get`/`expert_get`, los respaldos `.json` y la
+hoja `_datos` ya lo transportan; falta o fuera de [0, 1] = 0.5, ver `normalizeMatrix()`); lo edita solo el dueño
+(`ProjectWorkspace` pasa `onChangeV` y se guarda con el debounce de siempre), en la vista pública el selector cambia
+solo la pantalla, sin tocar el proyecto; (3) el Excel tiene una celda de v editable (`B{rVin}` de la hoja VIKOR) a la
+que apuntan las fórmulas de Q, más DQ, ΔQ, condición 1, condición 2, veredicto y una columna «En conjunto de
+compromiso», todo con fórmulas vivas; (4) si falla la condición 1 el veredicto es un **conjunto de compromiso**
+(todas las alternativas con Q − Q(1º) < 1/(m−1)), si falla solo la 2 son el 1º y el 2º, y ese conjunto reemplaza
+al "Ganador" en `Results`, en el Informe Ejecutivo y en la pestaña Comparativa (donde el #1 de VIKOR sin ganador único
+se marca ◆ y no cuenta como primer lugar del consenso); (5) `VikorPanel.tsx` muestra el selector (con la aclaración
+explícita de que v NO se deriva de los datos y 0.5 es convención, Alidrisi 2021), el veredicto con sus 2 condiciones,
+una tabla de Q por v (0, 0.25, 0.5, 0.75, 1, el v actual y los v donde cambia el 1er lugar, ver
+`vikorFirstPlaceChanges()`: Q es lineal en v) y una gráfica SVG de Q según v, sin librería nueva. Verificado:
+`check-vikor.ts` reproduce las tablas del deck (viaje: Sur gana con v < 0.4, empate en 0.4 con Q = 0.400, Centro con
+v > 0.4, conjunto de 3 rutas con v = 0.5; caso real: Sigfox 1º con todo v y ganador único), `check-excel-vikor.ts`
+comprueba la celda de v y su ida y vuelta por `_datos`, y `check-excel-recalc.ts` ahora recalcula VIKOR en
+LibreOffice (celdas arruinadas a propósito) incluyendo v, DQ, ΔQ, condiciones, veredicto y la columna del conjunto.
+Verificación visual: `Results` con el panel renderizado en una página temporal (borrada) y captura con Chrome
+headless; no se probó todavía con un proyecto real en Supabase.
 
 **22 sep 2026 (backoffice v2 — auditoría CTO+CPO+UX):** una vez `/admin` funcionaba, se le pidió una
 revisión real de qué le falta — dos subagentes leyeron el schema/código real (no una lista genérica) y
@@ -349,9 +375,9 @@ el selector de método del proyecto.
 **Falta:**
 1. **ANP** — la pieza que de verdad requiere un modelo de datos distinto (supermatriz/red de dependencias, no una
    matriz de decisión más). Ver auditoría (sección "ANP" del informe) para una propuesta de alcance mínimo viable.
-2. **TOPSIS y VIKOR sin recálculo real en LibreOffice** — sí tienen `check-excel-*.ts` (cacheado vs. JS), pero no
-   pasaron por el mismo recálculo forzado en LibreOffice headless que ya corrieron PROMETHEE/ELECTRE/SAW/Fuzzy
-   TOPSIS (`npm run test:excel:recalc`, hoy solo cubre estos 2 últimos).
+2. **TOPSIS sin recálculo real en LibreOffice** — sí tiene `check-excel-topsis.ts` (cacheado vs. JS), pero no
+   pasó por el mismo recálculo forzado en LibreOffice headless que ya corrieron PROMETHEE/ELECTRE/SAW/Fuzzy
+   TOPSIS y VIKOR (`npm run test:excel:recalc`, hoy cubre SAW, Fuzzy TOPSIS y VIKOR).
 3. **Rol de profesor** — el docente no puede ver los proyectos de sus estudiantes desde la plataforma todavía
    (decidido con el docente, 20 sep 2026: no es prioridad mientras la calificación se haga sobre el Excel/informe
    que cada estudiante entrega aparte, ver `evaluacion_v1.md` del curso).

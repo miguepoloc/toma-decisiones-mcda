@@ -14,6 +14,10 @@ interface ExecutiveReportModalProps {
   decisionMatrix: DecisionMatrix;
   weights: number[];
   rankingRows: { name: string; score: number; rank: number }[];
+  /** Solo VIKOR: v usado (se declara en el informe, no sale de los datos). */
+  vikorV?: number;
+  /** Solo VIKOR: conjunto de compromiso cuando NO hay ganador único (falla C1 o C2 de Opricovic & Tzeng 2004). */
+  compromiseSet?: string[];
   onClose: () => void;
 }
 
@@ -26,6 +30,8 @@ export default function ExecutiveReportModal({
   decisionMatrix,
   weights,
   rankingRows,
+  vikorV,
+  compromiseSet,
   onClose,
 }: ExecutiveReportModalProps) {
   const methodDoc = METHOD_SPECS[method] || METHOD_SPECS.topsis;
@@ -186,7 +192,19 @@ export default function ExecutiveReportModal({
         </div>
 
         {/* Dictamen y Alternativa Ganadora */}
-        {winner && (
+        {winner && compromiseSet && compromiseSet.length > 1 ? (
+          <div style={{ background: '#FFFBEB', border: '1px solid #FCD34D', borderLeft: '5px solid #D97706', borderRadius: 8, padding: '16px 20px' }}>
+            <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', color: '#B45309', letterSpacing: '0.06em' }}>
+              Conjunto de compromiso (sin ganador único)
+            </div>
+            <div style={{ marginTop: 4 }}>
+              <span style={{ fontSize: 20, fontWeight: 800, color: '#78350F' }}>{compromiseSet.join(', ')}</span>
+            </div>
+            <p style={{ fontSize: 13, color: '#92400E', margin: '6px 0 0' }}>
+              Según <b>{methodDoc.name}</b>, ninguna alternativa cumple a la vez las condiciones de ventaja aceptable y estabilidad (Opricovic &amp; Tzeng, 2004), así que se recomienda considerar estas alternativas en conjunto. La de menor Q es <b>{winner.name}</b> ({winner.score.toFixed(4)}), pero no es un ganador único.
+            </p>
+          </div>
+        ) : winner && (
           <div style={{ background: '#F0FDF4', border: '1px solid #86EFAC', borderLeft: '5px solid #16A34A', borderRadius: 8, padding: '16px 20px' }}>
             <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', color: '#16A34A', letterSpacing: '0.06em' }}>
               Alternativa Seleccionada (Recomendación Óptima)
@@ -201,6 +219,11 @@ export default function ExecutiveReportModal({
               De acuerdo con la síntesis matemática del método <b>{methodDoc.name}</b>, esta alternativa representa el compromiso más favorable frente al vector de preferencias establecido.
             </p>
           </div>
+        )}
+        {vikorV != null && (
+          <p style={{ fontSize: 12.5, color: '#475569', margin: 0 }}>
+            <b>Parámetro v de VIKOR = {vikorV.toFixed(2)}.</b> No se deriva de los datos: lo fija quien decide (0.5 = «consenso», convención). El ranking puede cambiar con otros valores de v; ver la sensibilidad en la plataforma.
+          </p>
         )}
 
         {/* Sección 1: Ponderación de Criterios */}

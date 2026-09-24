@@ -2,3 +2,15 @@ numpy
 pandas
 matplotlib
 pyDecision
+
+# --- Sesión 5 (AHP+SIG), notebook 07: geoespacial ---
+rasterio
+geopandas
+shapely
+pyproj
+pystac-client
+planetary-computer
+contextily
+matplotlib-scalebar
+jupyter
+nbclient

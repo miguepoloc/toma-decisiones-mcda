@@ -6,7 +6,8 @@ import {
   CRIT_SHEET, altSheet, aggMatrix, fmt, getV, indexJudgments, pairsOf, phrase, sheetItems, sheetResult, synthesis,
 } from '@/lib/ahp';
 import { getCell, getType, normalizeMatrix, topsisSynthesis } from '@/lib/topsis';
-import { vikorSynthesis } from '@/lib/vikor';
+import { vikorSynthesis, vikorV } from '@/lib/vikor';
+import VikorPanel from './VikorPanel';
 import { prometheeSynthesis } from '@/lib/promethee';
 import { electreSynthesis } from '@/lib/electre';
 import { sawSynthesis } from '@/lib/saw';
@@ -36,6 +37,9 @@ type Props = {
   showPerExpert?: boolean;
   projectTitle?: string;
   projectObjective?: string;
+  /** Solo VIKOR. Si se pasa (dueño del proyecto), el selector de v se guarda en `decision_matrix.vikorV`.
+   * Si no (vista pública), el selector funciona solo en pantalla y no modifica el proyecto. */
+  onChangeV?: (v: number) => void;
 };
 
 const METHOD_LABEL: Record<Method, string> = {
@@ -72,7 +76,11 @@ export function accentStyleFor(method: Method): CSSProperties {
 }
 
 type QuantRow = { name: string; value: number; rank: number };
-type QuantView = { rows: QuantRow[]; order: number[]; tie: boolean; higherBetter: boolean; bar: (v: number) => number; fmt: (v: number) => string; unit: string };
+type QuantView = {
+  rows: QuantRow[]; order: number[]; tie: boolean; higherBetter: boolean; bar: (v: number) => number; fmt: (v: number) => string; unit: string;
+  /** Solo VIKOR: nombres del conjunto de compromiso cuando NO hay ganador único (falla C1 o C2). Su #1 no cuenta como primer lugar. */
+  soft?: string[];
+};
 
 /** Vista de ranking numérico para cualquiera de los 5 métodos que reciben la misma matriz de decisión
  * (TOPSIS/VIKOR/PROMETHEE/SAW/Fuzzy TOPSIS): se usa tanto para el método elegido del proyecto como para
@@ -96,6 +104,7 @@ function quantViewFor(
     return {
       rows: vikSyn.rows.map((r) => ({ name: r.name, value: r.q, rank: r.rank })), order: vikSyn.order, tie: vikSyn.tie,
       higherBetter: false, bar: (v: number) => (1 - v) * 100, fmt: (v: number) => 'Q ' + v.toFixed(4), unit: 'Q (0 a 1, MENOR es mejor)',
+      soft: vikSyn.verdict && vikSyn.verdict.kind !== 'unique' ? vikSyn.verdict.set.map((i) => vikSyn.rows[i].name) : undefined,
     };
   }
   if (key === 'saw') {
@@ -131,7 +140,7 @@ function Table({ names, M, f }: { names: string[]; M: number[][]; f: (x: number)
   );
 }
 
-export default function Results({ mode, criteria, alternatives, experts, judgments, method = 'ahp', weightingMethod = 'ahp', decisionMatrix, showPerExpert, projectTitle = 'Proyecto MCDA', projectObjective = '' }: Props) {
+export default function Results({ mode, criteria, alternatives, experts, judgments, method = 'ahp', weightingMethod = 'ahp', decisionMatrix, showPerExpert, projectTitle = 'Proyecto MCDA', projectObjective = '', onChangeV }: Props) {
   const [showReportModal, setShowReportModal] = useState(false);
   const idx = useMemo(() => indexJudgments(judgments), [judgments]);
   const withData = useMemo(() => experts.filter((e) => Object.keys(idx[e.id] ?? {}).length > 0).map((e) => e.id), [experts, idx]);
@@ -143,7 +152,15 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
   // Pesos de AHP (siempre calculados para la pestaña de detalle por hoja)
   const ahpWeights = useMemo(() => sheetResult(CRIT_SHEET, criteria, used, idx).agg.w, [criteria, used, idx]);
   // Pesos efectivos para los métodos de ranking: CRITIC, Entropía o AHP según weighting_method
-  const dm = useMemo(() => normalizeMatrix(decisionMatrix), [decisionMatrix]);
+  // v de VIKOR: el dueño lo guarda en decision_matrix.vikorV (onChangeV); en la vista pública el selector
+  // solo cambia una copia local, sin tocar el proyecto.
+  const [vLocal, setVLocal] = useState<number | null>(null);
+  const dm = useMemo(() => {
+    const base = normalizeMatrix(decisionMatrix);
+    return !onChangeV && vLocal != null ? { ...base, vikorV: vLocal } : base;
+  }, [decisionMatrix, onChangeV, vLocal]);
+  const vEff = vikorV(dm);
+  const changeV = (v: number) => (onChangeV ? onChangeV(v) : setVLocal(v));
   const critWeights = useMemo(() => {
     if (method === 'ahp') return ahpWeights;
     if (weightingMethod === 'critic') return criticWeights(criteria, alternatives, dm);
@@ -172,7 +189,7 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
   // vía su propio `tie` cuando no tiene datos suficientes (igual que ya hacía Fuzzy TOPSIS sin etiquetas).
   const compareViews = useMemo(() => {
     const maxAhpG = Math.max(...syn.rows.map((r) => r.g), 0.0001) * 1.08;
-    const ahpView = {
+    const ahpView: QuantView & { key: Method; label: string; color: string } = {
       key: 'ahp' as const, label: 'AHP', color: 'var(--m-ahp)',
       rows: syn.rows.map((r) => ({ name: r.name, value: r.g, rank: r.rank })), order: syn.order, tie: syn.tie,
       higherBetter: true, bar: (v: number) => Math.max(0, Math.min(100, (v / maxAhpG) * 100)), fmt: (v: number) => v.toFixed(4), unit: 'prioridad global (mayor es mejor)',
@@ -185,6 +202,7 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
   const topWinner = useMemo(() => {
     const counts = new Map<string, number>();
     decidableViews.forEach((m) => {
+      if (m.soft) return; // VIKOR sin ganador único: su #1 no cuenta como primer lugar
       const first = m.rows.find((r) => r.rank === 1);
       if (first) counts.set(first.name, (counts.get(first.name) ?? 0) + 1);
     });
@@ -317,9 +335,14 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
       {mode === 'single' && (method === 'electre' ? electrePanel : (
         <>
           <div className="card win">
-            <span className="eyebrow">Ganador ({METHOD_LABEL[method]})</span>
+            <span className="eyebrow">{method === 'vikor' && vikSyn.verdict && vikSyn.verdict.kind !== 'unique' ? 'Conjunto de compromiso (VIKOR): no hay un ganador único' : `Ganador (${METHOD_LABEL[method]})`}</span>
             {(method === 'ahp' ? syn.tie : quant.tie) ? <span className="big">Empate: aún no hay datos que distingan</span> : (
-              method === 'ahp' ? (
+              method === 'vikor' && vikSyn.verdict && vikSyn.verdict.kind !== 'unique' ? (
+                <>
+                  <span className="big">{vikSyn.verdict.set.map((i) => vikSyn.rows[i].name).join(', ')}</span>
+                  <span className="mono">{vikSyn.verdict.kind === 'two' ? 'falla la condición 2 (estabilidad)' : 'falla la condición 1 (ventaja aceptable)'} · v = {vEff.toFixed(2)} · mejor Q: {vikSyn.rows[vikSyn.order[0]].name} ({vikSyn.rows[vikSyn.order[0]].q.toFixed(4)})</span>
+                </>
+              ) : method === 'ahp' ? (
                 <>
                   <span className="big">{syn.rows[syn.order[0]].name}</span>
                   <span className="mono">prioridad global {syn.rows[syn.order[0]].g.toFixed(4)}</span>
@@ -423,6 +446,7 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
               </div>
             </>
           ) : (
+            <>
             <div className="card">
               <h3 style={{ marginBottom: 10 }}>Ranking {METHOD_LABEL[method]} — {quant.unit}</h3>
               <div className="stack">
@@ -459,6 +483,10 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
                 </div>
               </details>
             </div>
+            {method === 'vikor' && (
+              <VikorPanel criteria={criteria} alternatives={alternatives} dm={dm} weights={critWeights} synth={vikSyn} v={vEff} onChangeV={changeV} persisted={!!onChangeV} />
+            )}
+            </>
           )}
         </>
       ))}
@@ -489,18 +517,19 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
                   </thead>
                   <tbody>
                     {alternatives.map((a) => {
-                      const firsts = compareViews.filter((m) => !m.tie && m.rows.find((row) => row.name === a.name)?.rank === 1).length;
+                      const firsts = compareViews.filter((m) => !m.tie && !m.soft && m.rows.find((row) => row.name === a.name)?.rank === 1).length;
                       return (
                         <tr key={a.id}>
                           <td>{a.name}</td>
                           {compareViews.map((m) => {
                             const row = m.rows.find((rr) => rr.name === a.name);
-                            const isFirst = !m.tie && row?.rank === 1;
+                            const isFirst = !m.tie && !m.soft && row?.rank === 1;
+                            const inSoft = !m.tie && !!m.soft?.includes(a.name);
                             return (
                               <td key={m.key} className="n">
                                 {m.tie || !row
                                   ? <span className="muted mono">—</span>
-                                  : <span className="mono" style={{ fontWeight: isFirst ? 700 : 500, color: isFirst ? 'var(--pass)' : 'var(--ink)' }}>#{row.rank}</span>}
+                                  : <span className="mono" style={{ fontWeight: isFirst ? 700 : 500, color: isFirst ? 'var(--pass)' : 'var(--ink)' }} title={inSoft ? 'Conjunto de compromiso de VIKOR: no hay ganador único' : undefined}>#{row.rank}{inSoft ? ' ◆' : ''}</span>}
                               </td>
                             );
                           })}
@@ -511,6 +540,11 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
                   </tbody>
                 </table>
               </div>
+              {compareViews.find((m) => m.key === 'vikor')?.soft && (
+                <p className="muted" style={{ fontSize: 12.5, margin: '8px 0 0' }}>
+                  ◆ VIKOR no declara un ganador único con v = {vEff.toFixed(2)} (falla una de las condiciones de Opricovic &amp; Tzeng): su conjunto de compromiso es {compareViews.find((m) => m.key === 'vikor')?.soft?.join(', ')}, y su #1 no se cuenta como primer lugar en el consenso.
+                </p>
+              )}
             </div>
 
             <div className="card">
@@ -633,6 +667,8 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
               ? syn.rows.map((r) => ({ name: r.name, score: r.g, rank: r.rank }))
               : quant.rows.map((r) => ({ name: r.name, score: r.value, rank: r.rank }))
           }
+          vikorV={method === 'vikor' ? vEff : undefined}
+          compromiseSet={method === 'vikor' && vikSyn.verdict && vikSyn.verdict.kind !== 'unique' ? vikSyn.verdict.set.map((i) => vikSyn.rows[i].name) : undefined}
           onClose={() => setShowReportModal(false)}
         />
       )}

@@ -60,5 +60,23 @@ ok(!!imp, 'la hoja _datos es un respaldo v2 válido');
 ok(imp?.method === 'vikor', `method reimportado = ${imp?.method} (esperado vikor)`);
 ok(JSON.stringify(imp?.decisionMatrix?.values) === JSON.stringify(dm.values), 'decision_matrix.values sobrevive el viaje de ida y vuelta');
 
+// ---- v editable: la celda de v y las fórmulas de Q usan el v guardado, y sobrevive el respaldo ----
+{
+  const dm03: DecisionMatrix = { ...dm, vikorV: 0.3 };
+  const wb3 = buildWorkbook(XLSX, { ...study, decisionMatrix: dm03 });
+  const ws3 = wb3.Sheets['VIKOR'];
+  const exp3 = vikorSynthesis(criteria, alternatives, dm03, weights);
+  const nAlt = alternatives.length;
+  const rVin = 6 + nAlt + 4; // rRmax + 1, ver vikorSheet()
+  ok(ws3['B' + rVin]?.v === 0.3, `celda v (B${rVin}) = ${ws3['B' + rVin]?.v} (esperado 0.3)`);
+  ok(String(ws3[cQ + 6]?.f).includes('$B$' + rVin), `las fórmulas de Q apuntan a la celda de v ($B$${rVin}), no a un 0.5 escrito a mano`);
+  alternatives.forEach((a, i) => ok(cerca(ws3[cQ + (6 + i)].v, exp3.rows[i].q), `v=0.3: Q(${a.name}) = ${ws3[cQ + (6 + i)].v.toFixed(4)} (esperado ${exp3.rows[i].q.toFixed(4)})`));
+  ok(exp3.rows.some((r, i) => Math.abs(r.q - expected.rows[i].q) > 1e-3), 'v = 0.3 sí cambia Q respecto a v = 0.5 (la prueba distingue)');
+  const wb3b = XLSX.read(XLSX.write(wb3, { bookType: 'xlsx', type: 'array' }), { type: 'array' });
+  let t3 = ''; for (let r = 1; wb3b.Sheets['_datos']['A' + r]; r++) t3 += wb3b.Sheets['_datos']['A' + r].v;
+  const imp3 = fromLegacy(JSON.parse(t3));
+  ok(imp3.decisionMatrix.vikorV === 0.3, `vikorV sobrevive el viaje de ida y vuelta por _datos (= ${imp3.decisionMatrix.vikorV})`);
+}
+
 console.log(fallos ? `\n${fallos} prueba(s) fallaron` : '\nTodas las pruebas pasaron');
 process.exit(fallos ? 1 : 0);

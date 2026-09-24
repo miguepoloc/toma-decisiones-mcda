@@ -179,6 +179,10 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
   function setDMType(critId: string, type: MatrixType) {
     patch({ decision_matrix: setMatrixType(dm, critId, type) }, true);
   }
+  /** v de VIKOR: se guarda dentro de decision_matrix (sin migración), ver types.ts. */
+  function setVikorV(v: number) {
+    patch({ decision_matrix: { ...dm, vikorV: v } });
+  }
 
   const studyExport = () => ({
     title: project.title, objective: project.objective, criteria: project.criteria, alternatives: project.alternatives,
@@ -463,6 +467,7 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
             showPerExpert
             projectTitle={project.title}
             projectObjective={project.objective}
+            onChangeV={setVikorV}
           />
         </div>
       )}

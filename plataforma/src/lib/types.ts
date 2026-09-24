@@ -20,6 +20,11 @@ export type MatrixType = 'max' | 'min';
 export type DecisionMatrix = {
   values: Record<string, Record<string, number | string>>;
   types: Record<string, MatrixType>;
+  /** Solo VIKOR: v = peso de la estrategia de mayoría (S) frente al arrepentimiento (R), en [0, 1].
+   * No se deriva de los datos, lo elige quien decide (Alidrisi 2021: 0.5 = "consenso" por convención).
+   * Vive aquí, dentro del JSON de `decision_matrix`, para que `public_get`/`expert_get`, los respaldos
+   * `.json` y la hoja `_datos` del Excel lo lleven sin migración. Si falta, se asume 0.5. */
+  vikorV?: number;
 };
 
 export type ProjectRow = {

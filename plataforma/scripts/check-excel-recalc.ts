@@ -19,6 +19,7 @@ import { normalizePrio, blankPrio } from '../src/lib/prio.ts';
 import { blankMatrix, setCell, setType, type DecisionMatrix } from '../src/lib/topsis.ts';
 import { sawSynthesis } from '../src/lib/saw.ts';
 import { fuzzyTopsisSynthesis } from '../src/lib/fuzzy_topsis.ts';
+import { vikorSynthesis } from '../src/lib/vikor.ts';
 import type { DecisionMatrix as DM } from '../src/lib/types.ts';
 
 let fallos = 0;
@@ -155,6 +156,52 @@ setupProfile();
     ok(!!rankCell && rankCell.v === expected.rows[i].rank,
       `[LibreOffice recalculó] Fuzzy TOPSIS!${cRk}${r} Ranking(${a.name}) = ${rankCell?.v} (esperado ${expected.rows[i].rank})`);
   });
+}
+
+// ---- VIKOR: v editable + condiciones de Opricovic & Tzeng (fórmulas vivas) ----
+// Dos casos: IoT/Palmor con v = 0.3 (ganador que cambia el Q respecto a v = 0.5) y el viaje (3 rutas, todos
+// costo) con v = 0.5, donde falla la condición 1 y hay conjunto de compromiso. Se arruinan las celdas con
+// fórmula y se compara lo que recalcula LibreOffice contra vikorSynthesis().
+for (const caso of ['iot', 'viaje'] as const) {
+  const criteria = (caso === 'iot' ? ['Alcance', 'Autonomía', 'Infraestructura', 'Madurez'] : ['Precio', 'Tiempo', 'Distancia']).map((name, i) => ({ id: 'k' + i, name, hint: '' }));
+  const alternatives = (caso === 'iot' ? ['LoRaWAN', 'GSM/GPRS', 'Sigfox', 'Zigbee'] : ['Ruta Norte', 'Ruta Centro', 'Ruta Sur']).map((name, i) => ({ id: 'a' + i, name }));
+  const dataset = caso === 'iot' ? [[10, 8, 2, 5], [10.5, 0.5, 3, 2], [40, 2, 5, 2], [0.07, 1.5, 2, 4]] : [[95, 3.5, 280], [65, 5.5, 260], [80, 4.5, 340]];
+  let dm: DecisionMatrix = blankMatrix();
+  alternatives.forEach((a, i) => criteria.forEach((c, j) => { dm = setCell(dm, a.id, c.id, dataset[i][j]); }));
+  criteria.forEach((c) => { dm = setType(dm, c.id, caso === 'iot' ? 'max' : 'min'); });
+  if (caso === 'iot') dm = { ...dm, vikorV: 0.3 };
+  const experts = [{ id: 'e0', name: 'Experto 1', role_desc: 'Ingeniero de redes' }];
+  const rows: { expert_id: string; sheet: string; pair_key: string; value: number }[] = [];
+  pairsOf(criteria.length).forEach(([i, j], n) => rows.push({ expert_id: 'e0', sheet: 'crit', pair_key: `k${i}-k${j}`, value: ((n * 3) % 7) - 3 }));
+  const study = {
+    title: 'Proyecto VIKOR de prueba', objective: 'Elegir', criteria, alternatives, experts,
+    idx: indexJudgments(rows), prio: normalizePrio(blankPrio()), method: 'vikor' as const, decisionMatrix: dm,
+  };
+  const wb = buildWorkbook(XLSX, study);
+  const nCorrupted = corruptCachedValues(wb, 'VIKOR') + corruptCachedValues(wb, 'Criterios');
+  const corruptPath = path.join(tmpdir(), `plataforma_recalc_vikor_${caso}.xlsx`);
+  writeFileSync(corruptPath, XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' }));
+  console.log(`VIKOR (${caso}): ${nCorrupted} celdas con fórmula arruinadas a propósito, recalculando en LibreOffice…`);
+  const recalced = recalcViaLibreOffice(soffice, corruptPath, path.join(tmpdir(), `plataforma_recalc_out_vikor_${caso}`));
+  const ws = XLSX.read(readFileSync(recalced), { type: 'buffer' }).Sheets['VIKOR'];
+  const weights = analyze(aggMatrix(criteria, [Object.fromEntries(rows.filter((r) => r.sheet === 'crit').map((r) => [r.pair_key, r.value]))])).w;
+  const exp = vikorSynthesis(criteria, alternatives, dm, weights);
+  const m = criteria.length, n = alternatives.length, rV0 = 6, rRmax = rV0 + n + 3;
+  const rVin = rRmax + 1, rDQ = rVin + 1, rDeltaQ = rDQ + 1, rC1 = rDeltaQ + 1, rC2 = rC1 + 1, rVerd = rC2 + 1;
+  const cQ = colL(m + 3), cRk = colL(m + 4), cSet = colL(m + 5);
+  ok(ws['B' + rVin]?.v === exp.v, `[LibreOffice] VIKOR!B${rVin} v = ${ws['B' + rVin]?.v} (esperado ${exp.v})`);
+  alternatives.forEach((a, i) => {
+    const r = rV0 + i;
+    ok(!!ws[cQ + r] && cerca(ws[cQ + r].v, exp.rows[i].q), `[LibreOffice recalculó] VIKOR (${caso}) Q(${a.name}) = ${ws[cQ + r]?.v?.toFixed?.(4)} (esperado ${exp.rows[i].q.toFixed(4)})`);
+    ok(ws[cRk + r]?.v === exp.rows[i].rank, `[LibreOffice recalculó] VIKOR (${caso}) Ranking(${a.name}) = ${ws[cRk + r]?.v} (esperado ${exp.rows[i].rank})`);
+    ok(ws[cSet + r]?.v === (exp.verdict!.set.includes(i) ? 'Sí' : 'No'), `[LibreOffice recalculó] VIKOR (${caso}) En conjunto(${a.name}) = ${ws[cSet + r]?.v} (esperado ${exp.verdict!.set.includes(i) ? 'Sí' : 'No'})`);
+  });
+  ok(cerca(ws['B' + rDQ]?.v, exp.verdict!.dq), `[LibreOffice recalculó] VIKOR (${caso}) DQ = ${ws['B' + rDQ]?.v} (esperado ${exp.verdict!.dq.toFixed(4)})`);
+  ok(cerca(ws['B' + rDeltaQ]?.v, exp.verdict!.deltaQ), `[LibreOffice recalculó] VIKOR (${caso}) ΔQ = ${ws['B' + rDeltaQ]?.v?.toFixed?.(4)} (esperado ${exp.verdict!.deltaQ.toFixed(4)})`);
+  ok(ws['B' + rC1]?.v === (exp.verdict!.c1 ? 'Sí' : 'No'), `[LibreOffice recalculó] VIKOR (${caso}) Condición 1 = ${ws['B' + rC1]?.v} (esperado ${exp.verdict!.c1 ? 'Sí' : 'No'})`);
+  ok(ws['B' + rC2]?.v === (exp.verdict!.c2 ? 'Sí' : 'No'), `[LibreOffice recalculó] VIKOR (${caso}) Condición 2 = ${ws['B' + rC2]?.v} (esperado ${exp.verdict!.c2 ? 'Sí' : 'No'})`);
+  const esperadoVerd = exp.verdict!.kind === 'unique' ? 'Ganador único' : exp.verdict!.kind === 'two' ? 'Sin ganador único: se proponen el 1º y el 2º' : 'Sin ganador único: conjunto de compromiso (columna «En conjunto de compromiso»)';
+  ok(ws['B' + rVerd]?.v === esperadoVerd, `[LibreOffice recalculó] VIKOR (${caso}) Veredicto = ${ws['B' + rVerd]?.v}`);
 }
 
 if (existsSync(profileDir)) rmSync(profileDir, { recursive: true, force: true });

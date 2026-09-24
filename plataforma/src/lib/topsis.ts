@@ -13,10 +13,13 @@ export function normalizeMatrix(x: unknown): DecisionMatrix {
   const b = blankMatrix();
   if (!x || typeof x !== 'object') return b;
   const s = x as Partial<DecisionMatrix>;
-  return {
+  const out: DecisionMatrix = {
     values: s.values && typeof s.values === 'object' ? s.values : b.values,
     types: s.types && typeof s.types === 'object' ? s.types : b.types,
   };
+  // v de VIKOR: se conserva solo si es un número válido en [0, 1] (si no, se ignora y rige el 0.5 por defecto)
+  if (typeof s.vikorV === 'number' && Number.isFinite(s.vikorV) && s.vikorV >= 0 && s.vikorV <= 1) out.vikorV = s.vikorV;
+  return out;
 }
 
 export function getCell(dm: DecisionMatrix, altId: string, critId: string): number | null {

@@ -91,7 +91,7 @@ que la fórmula en sí NO se evalúa elemento a elemento sin modo matricial; cor
 (`(d>0)*(d<1)*d+(d>=1)*1`) en PROMETHEE y una grilla de discordancia por criterio (celdas reales, no expresión) para
 que el `MAX()` de ELECTRE sea de números sueltos. La priorización de criterios (Sesión 1, Prior 1-5) es un Excel
 aparte (`buildPrioWorkbook()`) en vez de venir siempre pegada al del método — el respaldo `_datos` para reimportar
-sigue viviendo solo en el Excel del método. Falta: solo **ANP** (Sesión 6 — generaliza el paso de PESOS a una red
+sigue viviendo solo en el Excel del método. **VIKOR** además tiene el parámetro **v editable** (guardado en `decision_matrix.vikorV`, 0.5 por defecto, no se deriva de los datos), la verificación de las 2 condiciones de Opricovic & Tzeng (2004) — si fallan, el resultado es un *conjunto de compromiso*, no un ganador — y sensibilidad del ranking a v (`VikorPanel.tsx`, Excel con v como celda; ver `plataforma/README.md` § 24 sep 2026). Falta: solo **ANP** (Sesión 6 — generaliza el paso de PESOS a una red
 con dependencias, no encaja en el patrón de matriz de decisión de los otros 4, necesita su propia conversación de
 diseño antes de tocar código) y la extensión Fuzzy (el temario la trata como "enriquecimiento" sobre cualquier
 método, no un método aparte). Detalle completo en `plataforma/README.md` § "Visión: plataforma multicriterio

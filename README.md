@@ -20,6 +20,7 @@ nada localmente.
 | 04 | [`04_electre_iot_palmor.ipynb`](04_electre_iot_palmor.ipynb) | ELECTRE | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/miguepoloc/toma-decisiones-mcda/blob/main/04_electre_iot_palmor.ipynb) |
 | 05 | [`05_promethee_iot_palmor.ipynb`](05_promethee_iot_palmor.ipynb) | PROMETHEE II | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/miguepoloc/toma-decisiones-mcda/blob/main/05_promethee_iot_palmor.ipynb) |
 | 06 | [`06_anp_iot_palmor.ipynb`](06_anp_iot_palmor.ipynb) | ANP | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/miguepoloc/toma-decisiones-mcda/blob/main/06_anp_iot_palmor.ipynb) |
+| 07 | [`07_ahp_sig_cacao_snsm.ipynb`](07_ahp_sig_cacao_snsm.ipynb) | AHP + SIG | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/miguepoloc/toma-decisiones-mcda/blob/main/07_ahp_sig_cacao_snsm.ipynb) |
 
 ## Caso usado
 
@@ -33,13 +34,24 @@ matriz de decisión son reales, verificados vía WebSearch (datasheets SIMCom/Di
 The Things Network, Lauridsen et al. 2019 *Sensors*/MDPI, noticias de apagado de 2G en
 Colombia).
 
-**AHP (01), TOPSIS (02) y VIKOR (03)** resuelven exactamente el caso ya visto en clase
-(Sesiones 1-3 del curso), con los mismos pesos y matriz de decisión ya publicados y
-verificados allí. **ELECTRE (04), PROMETHEE II (05) y ANP (06)** aplican sus métodos a
-este mismo caso por primera vez en este repositorio — es una extensión nueva, con datos
-reales y métodos/umbrales de convención del curso, pero **aún no vista en clase** (en el
-curso presencial, esos 3 bloques todavía se enseñan sobre un caso distinto, de
-zonificación agrícola). Cada notebook lo aclara explícitamente en su celda introductoria.
+**AHP (01), TOPSIS (02), VIKOR (03), ELECTRE (04) y PROMETHEE II (05)** resuelven
+exactamente el caso ya visto en clase (Sesiones 1-4 del curso), con los mismos pesos y
+matriz de decisión ya publicados y verificados allí — **corrección (23 sep 2026):** S4
+(ELECTRE/PROMETHEE) migró de un caso cacaotero anterior a este mismo caso IoT/Palmor
+ese día, así que 04 y 05 ya no son una extensión adelantada del repositorio, coinciden
+con lo que se enseña en clase. **ANP (06)** sigue aplicando su método a este caso por
+primera vez en este repositorio — es una extensión nueva, con datos reales y
+métodos/umbrales de convención del curso, pero **aún no vista en clase** (el bloque de
+ANP de S6 todavía enseña sobre el caso cacaotero/zonificación agrícola, ver 07). Cada
+notebook lo aclara explícitamente en su celda introductoria.
+
+**07 usa un caso distinto**, el mismo que S5 (AHP+SIG) y el bloque de ANP de S6: un
+mapa de idoneidad cacaotera de las estribaciones de la Sierra Nevada de Santa Marta,
+100% Python (descarga, recorte, ponderación y mapa final — QGIS solo para quien quiera
+un layout cartográfico final, ver la celda introductoria del notebook). No es el caso
+IoT/Palmor: es un problema espacial continuo (superficie de aptitud), no una elección
+entre alternativas discretas, y usa datos geoespaciales reales descargados en vivo
+(WorldClim, SoilGrids, Sentinel-2, Copernicus DEM), no una matriz de decisión fija.
 
 ## Dependencias
 
