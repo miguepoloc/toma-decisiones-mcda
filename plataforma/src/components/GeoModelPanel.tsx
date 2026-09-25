@@ -6,6 +6,8 @@ import { useMemo } from 'react';
 import { describeFn, suitability, type FnSpec } from '@/lib/geo/membership';
 import type { LayerInfo } from '@/lib/geo/data';
 import type { Criterion, GeoConfig } from '@/lib/types';
+import type { Parcel } from '@/lib/geo/patches';
+import type { AreaStats } from '@/lib/geo/suitability';
 import { Num } from './GeoBits';
 
 type Rule = GeoConfig['rules'][string];
@@ -23,9 +25,17 @@ type Props = {
   exploreWeights: number[] | null;
   onExplore: (on: boolean, w?: number[] | null) => void;
   readOnlyRules?: boolean;
+  minPatchHa: number;
+  onMinPatch: (ha: number) => void;
+  parcels: Parcel[] | null;
+  onFlyTo: (col: number, row: number) => void;
+  stats: AreaStats | null;
+  baseline: { label: string; stats: AreaStats } | null;
+  onSaveBaseline: (label: string) => void;
+  onClearBaseline: () => void;
 };
 
-const FN_LABEL: Record<FnSpec['type'], string> = { steps: 'Por rangos', trapezoid: 'Trapecio (óptimo en el medio)', up: 'Más es mejor', down: 'Menos es mejor', classes: 'Por clases' };
+const FN_LABEL: Record<FnSpec['type'], string> = { steps: 'Por rangos', trapezoid: 'Trapecio (óptimo en el medio)', target: 'Valor objetivo (± tolerancia)', up: 'Más es mejor', down: 'Menos es mejor', classes: 'Por clases' };
 
 function defaultFn(type: FnSpec['type'], min: number, max: number): FnSpec {
   const span = max > min ? max - min : 1;
@@ -33,6 +43,7 @@ function defaultFn(type: FnSpec['type'], min: number, max: number): FnSpec {
   switch (type) {
     case 'steps': return { type, breaks: [q(0.33), q(0.66)], scores: [0, 0.5, 1] };
     case 'trapezoid': return { type, a: q(0), b: q(0.3), c: q(0.7), d: q(1) };
+    case 'target': return { type, value: q(0.5), tol: q(0.5 + 0.03) - q(0.5), falloff: q(0.5 + 0.25) - q(0.5) };
     case 'up': return { type, a: q(0), b: q(1) };
     case 'down': return { type, a: q(0), b: q(1) };
     case 'classes': return { type, map: {} };
@@ -41,6 +52,11 @@ function defaultFn(type: FnSpec['type'], min: number, max: number): FnSpec {
 
 /** Rango del eje X de la vista previa: para reglas por rangos se acerca a la zona donde ocurren los cortes. */
 function previewRange(fn: FnSpec, min: number, max: number): [number, number] {
+  if (fn.type === 'target') {
+    const reach = (Math.max(0, fn.tol) + Math.max(fn.falloff, 1e-9)) * 1.4;
+    const lo = Math.max(min, fn.value - reach), hi = Math.min(max, fn.value + reach);
+    return hi > lo ? [lo, hi] : [min, min + 1];
+  }
   const top = fn.type === 'steps' && fn.breaks.length ? Math.max(...fn.breaks) : 0;
   const hi = top > 0 ? Math.min(max, top * 2.2) : max;
   return [min, hi > min ? hi : min + 1];
@@ -89,6 +105,19 @@ function FnEditor({ fn, onChange, min, max }: { fn: FnSpec; onChange: (f: FnSpec
           {scores.length > 2 && <button type="button" className="btn sm" onClick={() => set(breaks.slice(0, -1), scores.slice(0, -1))}>− rango</button>}
           <button type="button" className="btn sm" onClick={() => set([...breaks].sort((a, b) => a - b), scores)}>Ordenar cortes</button>
         </div>
+      </div>
+    );
+  }
+  if (fn.type === 'target') {
+    const f = fn;
+    return (
+      <div>
+        <div className="gv-nums" style={{ gridTemplateColumns: 'repeat(3,1fr)' }}>
+          <label><span>objetivo</span><Num label="Valor objetivo" value={f.value} onChange={(n) => onChange({ ...f, value: n })} /></label>
+          <label><span>± tolerancia</span><Num label="Tolerancia" min={0} value={f.tol} onChange={(n) => onChange({ ...f, tol: Math.max(0, n) })} /></label>
+          <label><span>caída</span><Num label="Distancia hasta idoneidad 0" min={0} value={f.falloff} onChange={(n) => onChange({ ...f, falloff: Math.max(0, n) })} /></label>
+        </div>
+        <p className="gv-hint">Idoneidad 1 si el valor está a ±tolerancia del objetivo; baja linealmente a 0 a «caída» unidades más allá. Sirve para «110 V», «pH 6», «temperatura 25 °C»…</p>
       </div>
     );
   }
@@ -213,6 +242,53 @@ export default function GeoModelPanel(p: Props) {
           <Num label="Umbral moderada" width={62} min={0} max={100} value={Math.round(p.thresholds.media * 100)} onChange={(n) => p.onThresholds({ ...p.thresholds, media: Math.max(0, Math.min(100, n)) / 100 })} /></div>
         <div className="gv-class-row"><i style={{ background: 'var(--geo-noapta)' }} /><span>No apta / vetada</span><span /></div>
         <div className="gv-class-row"><i style={{ background: 'var(--geo-excl)' }} /><span>Exclusión</span><span /></div>
+      </section>
+
+      <section className="gv-sec">
+        <header><h4>Parcelas contiguas</h4></header>
+        <p className="gv-hint">Muchos proyectos (una finca solar, un cultivo) necesitan un área mínima de un solo cuerpo. Aquí se buscan los grupos de celdas de <b>alta aptitud</b> que se tocan y suman al menos ese tamaño.</p>
+        <div className="gv-class-row" style={{ gridTemplateColumns: 'minmax(0,1fr) auto auto' }}>
+          <span>Área mínima de la parcela</span>
+          <Num label="Área mínima en hectáreas" width={80} min={0} value={p.minPatchHa} onChange={(n) => p.onMinPatch(Math.max(0, n))} /><span className="mono muted">ha</span>
+        </div>
+        {p.minPatchHa > 0 && p.parcels && (
+          <>
+            <p className="gv-hint"><b>{p.parcels.length}</b> parcela(s) de ≥ {p.minPatchHa} ha{p.parcels.length ? ` · suman ${p.parcels.reduce((a, x) => a + x.ha, 0).toLocaleString('es-CO', { maximumFractionDigits: 0 })} ha · la mayor ${p.parcels[0].ha.toLocaleString('es-CO', { maximumFractionDigits: 0 })} ha` : '. Prueba con un mínimo menor o revisa los umbrales de clase.'}. Se ven en la capa «Parcelas» y salen en los exportables.</p>
+            {p.parcels.slice(0, 8).map((x) => (
+              <button type="button" className="gv-parcel" key={x.id} onClick={() => p.onFlyTo(x.col, x.row)} title="Ir a esta parcela">
+                <b>#{x.id}</b><span>{x.ha.toLocaleString('es-CO', { maximumFractionDigits: 0 })} ha</span><span className="mono">media {x.meanPct.toFixed(0)}%</span>
+              </button>
+            ))}
+            {p.parcels.length > 8 && <p className="gv-hint">…y {p.parcels.length - 8} más en el CSV de parcelas.</p>}
+          </>
+        )}
+      </section>
+
+      <section className="gv-sec">
+        <header><h4>Comparar escenarios</h4></header>
+        <p className="gv-hint">Guarda el resultado actual, cambia pesos, reglas o umbrales, y mira qué mejoró y qué empeoró (capa «Diferencia»). El escenario guardado vive solo en esta sesión.</p>
+        {!p.baseline ? (
+          <div className="gv-row-acts"><button type="button" className="btn sm" disabled={!p.stats} onClick={() => p.onSaveBaseline('A')}>Guardar el estado actual como escenario A</button></div>
+        ) : (
+          <>
+            <div className="gv-cmp">
+              <span /><b>A</b><b>Ahora</b><b>Δ ha</b>
+              {([['Alta', 'alta'], ['Moderada', 'media'], ['No apta', 'noapta']] as const).map(([lbl, k]) => {
+                const a = p.baseline!.stats[k].ha, b = p.stats?.[k].ha ?? 0, d = b - a;
+                return (
+                  <div className="row" key={k}>
+                    <span>{lbl}</span><span className="mono">{a.toLocaleString('es-CO', { maximumFractionDigits: 0 })}</span><span className="mono">{b.toLocaleString('es-CO', { maximumFractionDigits: 0 })}</span>
+                    <span className="mono" style={{ color: d === 0 ? undefined : (k === 'noapta' ? d > 0 : d < 0) ? 'var(--geo-noapta)' : 'var(--geo-alta)' }}>{d > 0 ? '+' : ''}{d.toLocaleString('es-CO', { maximumFractionDigits: 0 })}</span>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="gv-row-acts">
+              <button type="button" className="btn sm" onClick={() => p.onSaveBaseline('A')}>Reemplazar A por el estado actual</button>
+              <button type="button" className="btn sm" onClick={p.onClearBaseline}>Quitar la comparación</button>
+            </div>
+          </>
+        )}
       </section>
     </div>
   );

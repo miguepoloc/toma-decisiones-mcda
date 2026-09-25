@@ -97,3 +97,28 @@ export function paintFlag(layer: Float32Array, color: [number, number, number]):
   for (let i = 0; i < out.length; i++) if (layer[i] > 0) out[i] = c;
   return out;
 }
+
+const DIFF_NEG: [number, number, number] = [217, 83, 79];
+const DIFF_POS: [number, number, number] = [46, 125, 50];
+/** Diferencia de idoneidad (actual − escenario guardado): rojo = empeora, verde = mejora, transparente si
+ * el cambio es menor a `eps` puntos. Solo celdas evaluables en AMBOS mapas. Intensidad hasta ±`full` puntos. */
+export function paintDiff(pct: Uint8Array, base: Uint8Array, mask: Uint8Array, eps = 1, full = 30): Uint32Array {
+  const out = new Uint32Array(pct.length);
+  for (let i = 0; i < out.length; i++) {
+    if (mask[i] !== 1 || pct[i] === 255 || base[i] === 255) continue;
+    const d = pct[i] - base[i];
+    if (Math.abs(d) < eps) continue;
+    const t = Math.min(1, Math.abs(d) / full);
+    const [r, g, b] = d < 0 ? DIFF_NEG : DIFF_POS;
+    out[i] = rgba(r, g, b, Math.round(90 + 165 * t));
+  }
+  return out;
+}
+
+/** Parcelas (etiquetas > 0) en un color plano. */
+export function paintParcels(labels: Uint32Array, color: [number, number, number] = [109, 40, 217]): Uint32Array {
+  const out = new Uint32Array(labels.length);
+  const c = rgba(color[0], color[1], color[2], 235);
+  for (let i = 0; i < out.length; i++) if (labels[i] > 0) out[i] = c;
+  return out;
+}

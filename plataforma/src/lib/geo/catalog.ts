@@ -10,7 +10,7 @@ import { gunzip, gzip } from './store.ts';
 export const CATALOG_BUCKET = 'geo-catalog';
 export const CAT_PREFIX = 'cat:';
 
-export type CatalogDef = { criteria: Criterion[]; geo: { grid: GeoGrid; layers: Record<string, GeoLayerMeta>; rules: GeoConfig['rules']; classes: GeoConfig['classes'] } };
+export type CatalogDef = { criteria: Criterion[]; geo: { grid: GeoGrid; layers: Record<string, GeoLayerMeta>; rules: GeoConfig['rules']; classes: GeoConfig['classes']; minPatchHa?: number } };
 export type CatalogRow = { id: string; title: string; description: string; attribution: string; is_active: boolean; definition: CatalogDef; created_at?: string };
 
 export async function listCatalog(sb: SupabaseClient): Promise<CatalogRow[]> {
@@ -51,6 +51,8 @@ export async function loadCatalogLayer(sb: SupabaseClient, path: string): Promis
 export type PublishInput = {
   id: string; title: string; description: string; attribution: string; userId: string;
   criteria: Criterion[]; geo: GeoConfig; layers: Record<string, Float32Array>;
+  /** Licencia / condiciones de uso por capa (clave de capa → texto). */
+  licenses?: Record<string, string>;
 };
 
 /** Copia las capas propias del docente al bucket del catálogo y registra (o reemplaza) el paquete. */
@@ -67,10 +69,11 @@ export async function publishToCatalog(sb: SupabaseClient, inp: PublishInput, on
     const path = `cat/${inp.id}/${k}.f32.gz`;
     const { error } = await sb.storage.from(CATALOG_BUCKET).upload(path, new Blob([gz as BlobPart], { type: 'application/gzip' }), { upsert: true, contentType: 'application/gzip' });
     if (error) throw new Error(error.message);
-    metas[k] = { ...(inp.geo.layers as Record<string, GeoLayerMeta>)[k], path, bytes: gz.byteLength };
+    const license = inp.licenses?.[k]?.trim();
+    metas[k] = { ...(inp.geo.layers as Record<string, GeoLayerMeta>)[k], path, bytes: gz.byteLength, ...(license ? { license } : {}) };
     onProgress?.(++done, keys.length);
   }
-  const definition: CatalogDef = { criteria: inp.criteria, geo: { grid, layers: metas, rules: inp.geo.rules, classes: inp.geo.classes } };
+  const definition: CatalogDef = { criteria: inp.criteria, geo: { grid, layers: metas, rules: inp.geo.rules, classes: inp.geo.classes, ...(inp.geo.minPatchHa ? { minPatchHa: inp.geo.minPatchHa } : {}) } };
   const { error } = await sb.from('geo_packs').upsert({ id: inp.id, title: inp.title, description: inp.description, attribution: inp.attribution, definition, is_active: true, created_by: inp.userId });
   if (error) throw new Error(error.message);
 }

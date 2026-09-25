@@ -6,7 +6,7 @@ import type { LoadedPack } from './pack.ts';
 
 export type LayerInfo = {
   label: string; unit: string; role: 'criterion' | 'exclusion' | 'area';
-  min: number; max: number; origin?: string; source?: string; bytes?: number;
+  min: number; max: number; origin?: string; source?: string; bytes?: number; license?: string;
 };
 
 export type GeoData = {

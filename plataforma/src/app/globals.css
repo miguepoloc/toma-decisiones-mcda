@@ -651,3 +651,14 @@ a{color:var(--accent)}
 .gv-tour-card .step{font-size:11px;color:var(--muted)}
 .gv-tour-card p{margin:0;font-size:13px;line-height:1.5;color:var(--muted)}
 .gv-tour-card .acts{display:flex;gap:6px;justify-content:flex-end;margin-top:6px}
+
+.gv-parcel{appearance:none;display:grid;grid-template-columns:34px 1fr auto;gap:8px;align-items:center;text-align:left;width:100%;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:8px;padding:6px 10px;font:500 12.5px var(--f-body);cursor:pointer}
+.gv-parcel:hover{border-color:#6D28D9}
+.gv-parcel b{color:#6D28D9;font-family:var(--f-mono)}
+.gv-cmp{display:grid;grid-template-columns:auto 1fr 1fr 1fr;gap:3px 10px;font-size:12.5px;align-items:center}
+.gv-cmp .row{display:contents}
+.gv-cmp>b{font:700 11px var(--f-mono);color:var(--muted);text-align:right}
+.gv-cmp .row span:not(:first-child){text-align:right}
+.gv-lic{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);gap:8px;align-items:center;font-size:12px}
+.gv-lic span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gv-lic input{min-height:30px;padding:3px 8px;font-size:12px}

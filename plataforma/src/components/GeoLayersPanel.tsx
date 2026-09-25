@@ -7,7 +7,7 @@ import { useEffect, useMemo, useRef, useState, type Dispatch, type MutableRefObj
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { estimatePixels, gridBoundsLonLat, gridFromBounds, MAX_PIXELS, padBounds, suggestRes, unionBounds, type Bounds } from '@/lib/geo/grid';
 import { parseFile, type Parsed } from '@/lib/geo/parse';
-import { burn, distanceLayer, type FC } from '@/lib/geo/vector';
+import { burn, distanceLayer, interpolateSurface, type FC } from '@/lib/geo/vector';
 import { layerRange, resampleToGrid } from '@/lib/geo/raster';
 import { isQuotaError, layerPath, removeLayers, uploadLayer, type Quota } from '@/lib/geo/store';
 import { slug } from '@/lib/geo/export';
@@ -22,7 +22,7 @@ export type VisState = Record<string, { on: boolean; op: number }>;
 type Role = GeoLayerMeta['role'];
 type Pending = {
   pid: string; parsed: Parsed; label: string; unit: string; role: Role; criterionId: string;
-  mode: 'distance' | 'presence' | 'attr'; field: string; categorical: boolean;
+  mode: 'distance' | 'presence' | 'attr' | 'surface'; field: string; categorical: boolean;
   status: 'idle' | 'working' | 'error'; err?: string;
 };
 
@@ -58,6 +58,7 @@ type Props = {
   draft: Bounds | null; setDraft: (b: Bounds | null) => void;
   drawing: boolean; setDrawing: (d: boolean) => void;
   quota: Quota | null; onQuotaChange: () => void;
+  virtual: { id: string; label: string; role: string; swatch: string }[];
 };
 
 export default function GeoLayersPanel(p: Props) {
@@ -156,6 +157,12 @@ export default function GeoLayersPanel(p: Props) {
         origin = pn.categorical ? 'Ráster remuestreado (vecino más cercano)' : 'Ráster remuestreado (bilineal)';
       } else if (pn.mode === 'distance') {
         arr = distanceLayer(ps.fc, g); origin = 'Distancia euclidiana a los elementos';
+      } else if (pn.mode === 'surface') {
+        if (!pn.field) throw new Error('Elige el campo numérico (p. ej. la profundidad de cada isolínea).');
+        const known = burn(ps.fc, g, { kind: 'attr', field: pn.field });
+        let nk = 0; for (let i = 0; i < known.length; i++) if (!Number.isNaN(known[i])) nk++;
+        if (!nk) throw new Error('Ninguna celda con valor cae dentro del área de estudio.');
+        arr = interpolateSurface(known, g.width, g.height); origin = `Superficie interpolada desde «${pn.field}»`;
       } else if (pn.mode === 'attr') {
         if (!pn.field) throw new Error('Elige el campo numérico que quieres rasterizar.');
         arr = burn(ps.fc, g, { kind: 'attr', field: pn.field }); origin = `Atributo «${pn.field}» rasterizado`;
@@ -314,8 +321,11 @@ export default function GeoLayersPanel(p: Props) {
                     <legend>Qué calcular con el vector</legend>
                     <label><input type="radio" checked={pn.mode === 'distance'} onChange={() => upd(pn.pid, { mode: 'distance', unit: 'm' })} /> Distancia (m) al elemento más cercano</label>
                     <label><input type="radio" checked={pn.mode === 'presence'} onChange={() => upd(pn.pid, { mode: 'presence', unit: '' })} /> Dentro / fuera (1 / 0)</label>
-                    <label className={ps.fields.length ? '' : 'off'}><input type="radio" disabled={!ps.fields.length} checked={pn.mode === 'attr'} onChange={() => upd(pn.pid, { mode: 'attr', unit: '' })} /> Valor de un atributo numérico
+                    <label className={ps.fields.length ? '' : 'off'}><input type="radio" disabled={!ps.fields.length} checked={pn.mode === 'attr'} onChange={() => upd(pn.pid, { mode: 'attr', unit: '' })} /> Valor de un atributo numérico (polígonos)
                       {pn.mode === 'attr' && <select value={pn.field} onChange={(e) => upd(pn.pid, { field: e.target.value })}>{ps.fields.map((f) => <option key={f} value={f}>{f}</option>)}</select>}
+                    </label>
+                    <label className={ps.fields.length ? '' : 'off'}><input type="radio" disabled={!ps.fields.length} checked={pn.mode === 'surface'} onChange={() => upd(pn.pid, { mode: 'surface', unit: '' })} /> Superficie continua desde un atributo (isolíneas o puntos)
+                      {pn.mode === 'surface' && <select value={pn.field} onChange={(e) => upd(pn.pid, { field: e.target.value })}>{ps.fields.map((f) => <option key={f} value={f}>{f}</option>)}</select>}
                     </label>
                   </fieldset>
                 )}
@@ -351,10 +361,11 @@ export default function GeoLayersPanel(p: Props) {
           </div>
         )}
         <LayerRow id="result" label="Resultado (idoneidad)" role="resultado" vis={p.vis} setVis={p.setVis} swatch="linear-gradient(90deg,#D9534F,#F0AD4E,#2E7D32)" />
+        {p.virtual.map((x) => <LayerRow key={x.id} id={x.id} label={x.label} role={x.role} vis={p.vis} setVis={p.setVis} swatch={x.swatch} />)}
         {data && Object.entries(data.info).map(([k, l]) => (
           <LayerRow key={k} id={`l:${k}`} label={l.label} role={ROLE_LABEL[l.role].toLowerCase()} vis={p.vis} setVis={p.setVis}
             swatch={l.role === 'exclusion' ? '#7F8C8D' : l.role === 'area' ? '#84CC16' : 'linear-gradient(90deg,#2166AC,#92C5DE,#FDDB80)'}
-            note={l.origin ? `${l.origin}${layers[k] && !layers[k].path ? ' · sin guardar (solo esta sesión)' : ''}` : undefined}
+            note={[l.origin ? `${l.origin}${layers[k] && !layers[k].path ? ' · sin guardar (solo esta sesión)' : ''}` : '', l.license ? `Licencia: ${l.license}` : ''].filter(Boolean).join(' · ') || undefined}
             onDelete={isPack ? undefined : () => dropLayer(k)} />
         ))}
         {p.vecs.map((v) => (
@@ -369,7 +380,7 @@ export default function GeoLayersPanel(p: Props) {
 function LayerRow({ id, label, role, vis, setVis, swatch, note, onDelete }: {
   id: string; label: string; role: string; vis: VisState; setVis: Dispatch<SetStateAction<VisState>>; swatch: string; note?: string; onDelete?: () => void;
 }) {
-  const v = vis[id] ?? { on: id === 'result', op: id === 'result' ? 0.9 : 0.85 };
+  const v = vis[id] ?? { on: id === 'result' || id === 'parcels' || id === 'diff', op: id === 'result' ? 0.9 : 0.85 };
   const [ask, setAsk] = useState(false);
   return (
     <div className={'gv-layer' + (v.on ? ' on' : '')}>

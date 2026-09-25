@@ -47,16 +47,19 @@ export function geomKinds(fc: FC): Set<'point' | 'line' | 'polygon'> {
   return s;
 }
 
-/** Campos numéricos de las propiedades (para "valor de un atributo"). */
+/** Campos numéricos de las propiedades (para "valor de un atributo"). Ignora nulos: basta que los
+ * valores presentes sean todos números y que haya al menos uno. */
 export function numericFields(fc: FC): string[] {
-  const seen = new Map<string, boolean>();
+  const seen = new Map<string, { ok: boolean; n: number }>();
   for (const f of fc.features.slice(0, 500)) {
     for (const [k, v] of Object.entries(f.properties ?? {})) {
-      const ok = typeof v === 'number' && Number.isFinite(v);
-      seen.set(k, (seen.get(k) ?? true) && ok);
+      if (v === null || v === undefined || v === '') continue;
+      const cur = seen.get(k) ?? { ok: true, n: 0 };
+      if (typeof v === 'number' && Number.isFinite(v)) cur.n++; else cur.ok = false;
+      seen.set(k, cur);
     }
   }
-  return [...seen.entries()].filter(([, ok]) => ok).map(([k]) => k);
+  return [...seen.entries()].filter(([, r]) => r.ok && r.n > 0).map(([k]) => k);
 }
 
 export type BurnMode = { kind: 'presence' } | { kind: 'attr'; field: string };
@@ -194,4 +197,72 @@ export function distanceLayer(fc: FC, grid: GeoGrid): Float32Array {
   const mask = new Uint8Array(b.length);
   for (let i = 0; i < b.length; i++) mask[i] = Number.isNaN(b[i]) ? 0 : 1;
   return distanceTransform(mask, grid.width, grid.height, grid.resM);
+}
+
+/** Índice de la celda "fuente" (`isSource[i] > 0`) más cercana a cada celda, por propagación en dos
+ * pasadas (chamfer, 2 rondas). Aproximado (errores de una celda en casos raros), suficiente para
+ * inicializar una interpolación. -1 si no hay ninguna fuente. */
+export function nearestSource(isSource: Uint8Array, w: number, h: number): Int32Array {
+  const src = new Int32Array(w * h).fill(-1);
+  const d2 = new Float32Array(w * h).fill(Infinity);
+  let any = false;
+  for (let i = 0; i < src.length; i++) if (isSource[i]) { src[i] = i; d2[i] = 0; any = true; }
+  if (!any) return src;
+  const relax = (i: number, x: number, y: number, nx: number, ny: number) => {
+    if (nx < 0 || ny < 0 || nx >= w || ny >= h) return;
+    const s = src[ny * w + nx];
+    if (s < 0) return;
+    const sx = s % w, sy = (s - sx) / w;
+    const d = (sx - x) * (sx - x) + (sy - y) * (sy - y);
+    if (d < d2[i]) { d2[i] = d; src[i] = s; }
+  };
+  for (let round = 0; round < 2; round++) {
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const i = y * w + x;
+      relax(i, x, y, x - 1, y); relax(i, x, y, x - 1, y - 1); relax(i, x, y, x, y - 1); relax(i, x, y, x + 1, y - 1);
+    }
+    for (let y = h - 1; y >= 0; y--) for (let x = w - 1; x >= 0; x--) {
+      const i = y * w + x;
+      relax(i, x, y, x + 1, y); relax(i, x, y, x + 1, y + 1); relax(i, x, y, x, y + 1); relax(i, x, y, x - 1, y + 1);
+    }
+  }
+  return src;
+}
+
+/** Superficie continua a partir de celdas con valor conocido (isolíneas o puntos con atributo): las
+ * celdas conocidas quedan fijas y el resto se resuelve como la ecuación de Laplace (relajación
+ * Gauss-Seidel con sobrerrelajación), partiendo del valor de la fuente más cercana. Entre dos isolíneas
+ * da una rampa suave; más allá de la última, tiende a un valor plano (no extrapola tendencias).
+ * `vals[i]` es NaN donde se desconoce. Devuelve una capa nueva (NaN solo si no había ningún dato). */
+export function interpolateSurface(vals: Float32Array, w: number, h: number, maxIter = 400, tol = 1e-3): Float32Array {
+  const n = w * h;
+  const known = new Uint8Array(n);
+  let lo = Infinity, hi = -Infinity;
+  for (let i = 0; i < n; i++) if (!Number.isNaN(vals[i])) { known[i] = 1; lo = Math.min(lo, vals[i]); hi = Math.max(hi, vals[i]); }
+  if (lo === Infinity) return new Float32Array(n).fill(NaN);
+  const near = nearestSource(known, w, h);
+  const u = new Float32Array(n);
+  for (let i = 0; i < n; i++) u[i] = known[i] ? vals[i] : vals[near[i]];
+  if (lo === hi) return u;
+  const eps = tol * (hi - lo), omega = 1.85;
+  for (let it = 0; it < maxIter; it++) {
+    let maxd = 0;
+    for (let pass = 0; pass < 2; pass++) {
+      for (let y = 0; y < h; y++) for (let x = (y + pass) & 1; x < w; x += 2) {
+        const i = y * w + x;
+        if (known[i]) continue;
+        let sum = 0, c = 0;
+        if (x > 0) { sum += u[i - 1]; c++; }
+        if (x < w - 1) { sum += u[i + 1]; c++; }
+        if (y > 0) { sum += u[i - w]; c++; }
+        if (y < h - 1) { sum += u[i + w]; c++; }
+        const nv = u[i] + omega * (sum / c - u[i]);
+        const d = Math.abs(nv - u[i]);
+        if (d > maxd) maxd = d;
+        u[i] = nv;
+      }
+    }
+    if (maxd < eps) break;
+  }
+  return u;
 }

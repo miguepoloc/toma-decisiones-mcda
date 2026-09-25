@@ -14,7 +14,7 @@ export function epsgNumber(crs: string): number {
 }
 
 /** GeoTIFF de una banda, sin compresión, georreferenciado en el CRS de la grilla (UTM/EPSG). */
-export async function toGeoTiff(values: Float32Array | Uint8Array, grid: GeoGrid, nodata: number): Promise<Uint8Array> {
+export async function toGeoTiff(values: Float32Array | Uint8Array | Uint16Array, grid: GeoGrid, nodata: number): Promise<Uint8Array> {
   const { writeArrayBuffer } = await import('geotiff');
   const [a, , c, , e, f] = grid.transform;
   const isGeographic = grid.crs === 'EPSG:4326' || grid.crs === 'EPSG:4686';
@@ -113,6 +113,16 @@ export function pixelsCsv(pct: Uint8Array, cls: Uint8Array, mask: Uint8Array, gr
     const row = Math.floor(i / grid.width), col = i - row * grid.width;
     const [lon, lat] = pixelToLonLat(col, row, grid.transform, grid.crs);
     lines.push(`${lon.toFixed(6)},${lat.toFixed(6)},${pct[i]},${CLASS_LABEL[cls[i]] ?? cls[i]}`);
+  }
+  return lines.join('\n') + '\n';
+}
+
+/** CSV de parcelas contiguas de alta aptitud (id, ha, idoneidad media/mínima, lon, lat del centroide). */
+export function parcelsCsv(parcels: { id: number; ha: number; meanPct: number; minPct: number; col: number; row: number }[], grid: GeoGrid): string {
+  const lines = ['id,hectareas,idoneidad_media,idoneidad_minima,lon,lat'];
+  for (const p of parcels) {
+    const [lon, lat] = pixelToLonLat(p.col, p.row, grid.transform, grid.crs);
+    lines.push(`${p.id},${p.ha.toFixed(2)},${p.meanPct.toFixed(1)},${p.minPct},${lon.toFixed(6)},${lat.toFixed(6)}`);
   }
   return lines.join('\n') + '\n';
 }

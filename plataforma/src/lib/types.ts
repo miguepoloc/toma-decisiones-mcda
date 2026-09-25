@@ -60,7 +60,8 @@ export type GeoFnSpec =
   | { type: 'up'; a: number; b: number }
   | { type: 'down'; a: number; b: number }
   | { type: 'classes'; map: Record<string, number> }
-  | { type: 'steps'; breaks: number[]; scores: number[] };
+  | { type: 'steps'; breaks: number[]; scores: number[] }
+  | { type: 'target'; value: number; tol: number; falloff: number };
 export type GeoVetoSpec = { op: '<' | '>' | '<=' | '>='; value: number };
 
 /** Grilla de análisis del proyecto: CRS métrico (UTM de la zona, o el del paquete del catálogo),
@@ -77,6 +78,8 @@ export type GeoGrid = {
 export type GeoLayerMeta = {
   label: string; unit: string; role: 'criterion' | 'exclusion' | 'area';
   origin: string; source: string; min: number; max: number; path: string; bytes: number;
+  /** Licencia / condiciones de uso del dato (texto libre; la fija el docente al publicar en el catálogo). */
+  license?: string;
 };
 
 /** Configuración de un proyecto `kind:'spatial'`. Dos orígenes de datos: `packId` (paquete de
@@ -90,6 +93,8 @@ export type GeoConfig = {
   layers?: Record<string, GeoLayerMeta>;
   rules: Record<string, { layerKey: string; fn: GeoFnSpec; veto?: GeoVetoSpec }>;
   classes: { alta: number; media: number };
+  /** Área mínima (ha) de una parcela contigua de alta aptitud; 0 o ausente = sin filtro. */
+  minPatchHa?: number;
 };
 
 export type ProjectRow = {

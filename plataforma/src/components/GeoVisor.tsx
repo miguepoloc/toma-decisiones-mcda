@@ -14,7 +14,8 @@ import { lonLatToPixel, pixelToLonLat } from '@/lib/geo/crs';
 import { buildMask, fromPack, type GeoData, type LayerInfo } from '@/lib/geo/data';
 import { buildOverlayMap, gather, type OverlayMap } from '@/lib/geo/overlay';
 import { loadPack } from '@/lib/geo/pack';
-import { CLASS_HEX, CLASS_LABEL, paintCriterion, paintFlag, paintRaw, paintResult, rampColor } from '@/lib/geo/paint';
+import { CLASS_HEX, CLASS_LABEL, paintCriterion, paintDiff, paintFlag, paintParcels, paintRaw, paintResult, rampColor } from '@/lib/geo/paint';
+import { findParcels } from '@/lib/geo/patches';
 import { describeFn, describeVeto, suitability, vetoed } from '@/lib/geo/membership';
 import { downloadLayer, getQuota, type Quota } from '@/lib/geo/store';
 import { CAT_PREFIX, getCatalogRow, loadCatalogLayer } from '@/lib/geo/catalog';
@@ -24,9 +25,9 @@ import GeoPublishPanel from './GeoPublishPanel';
 import GeoCatalogPanel from './GeoCatalogPanel';
 import GeoTour, { tourSeen, type TourStep } from './GeoTour';
 import {
-  areaStats, CLASS_ALTA, CLASS_EXCLUDED, CLASS_MODERADA, CLASS_NO_APTA, CLASS_VETO, evaluateGrid, MASK_VALID, type CriterionRule,
+  areaStats, type AreaStats, CLASS_ALTA, CLASS_EXCLUDED, CLASS_MODERADA, CLASS_NO_APTA, CLASS_VETO, evaluateGrid, MASK_VALID, type CriterionRule,
 } from '@/lib/geo/suitability';
-import { kmz, pixelsCsv, qmlClasses, qmlPct, resultRaster, slug, toGeoTiff, zipFiles } from '@/lib/geo/export';
+import { kmz, parcelsCsv, pixelsCsv, qmlClasses, qmlPct, resultRaster, slug, toGeoTiff, zipFiles } from '@/lib/geo/export';
 import { downloadGeoExcelBytes, type GeoSummary } from '@/lib/geoExcel';
 import type { Criterion, ExpertRow, GeoConfig, GeoLayerMeta } from '@/lib/types';
 import GeoMap, { BASEMAPS, type BasemapKey, type GeoMapHandle, type MapMarker, type RasterOverlay } from './GeoMap';
@@ -81,6 +82,8 @@ export default function GeoVisor(props: Props) {
   const [expMsg, setExpMsg] = useState('');
   const [expBusy, setExpBusy] = useState('');
   const [tour, setTour] = useState(false);
+  const [minPatchHa, setMinPatchHa] = useState(geo.minPatchHa ?? 0);
+  const [baseline, setBaseline] = useState<{ label: string; pct: Uint8Array; stats: AreaStats } | null>(null);
   useEffect(() => { if (!tourSeen()) { const t = setTimeout(() => setTour(true), 900); return () => clearTimeout(t); } }, []);
 
   const mapRef = useRef<GeoMapHandle>(null);
@@ -147,7 +150,7 @@ export default function GeoVisor(props: Props) {
         for (const [k, m] of Object.entries(metas)) {
           if (!cache.current[k]) { missing++; continue; }
           layers[k] = cache.current[k];
-          info[k] = { label: m.label, unit: m.unit, role: m.role, min: m.min, max: m.max, origin: m.origin, source: m.source, bytes: m.bytes };
+          info[k] = { label: m.label, unit: m.unit, role: m.role, min: m.min, max: m.max, origin: m.origin, source: m.source, bytes: m.bytes, license: m.license };
         }
         setLost(missing);
         setData({ grid, layers, info, mask: buildMask(grid, layers, info), points: {}, attribution });
@@ -177,6 +180,11 @@ export default function GeoVisor(props: Props) {
 
   const ev = useMemo(() => (data ? evaluateGrid(data.layers, data.mask, dRules, dThr) : null), [data, dRules, dThr]);
   const stats = useMemo(() => (data && ev ? areaStats(ev.cls, ev.pct, data.mask, data.grid.haPerPixel) : null), [data, ev]);
+  const dMinPatch = useDeferredValue(minPatchHa);
+  const parcelRes = useMemo(() => {
+    if (!data || !ev || !(dMinPatch > 0)) return null;
+    return findParcels(ev.cls, ev.pct, data.mask, data.grid.width, data.grid.height, Math.ceil(dMinPatch / data.grid.haPerPixel), data.grid.haPerPixel);
+  }, [data, ev, dMinPatch]);
   const om = useMemo(() => (data ? buildOverlayMap(data.grid, 'mercator') : null), [data]);
   const gridBounds = useMemo(() => (data ? gridBoundsLonLat(data.grid) : null), [data]);
 
@@ -185,8 +193,10 @@ export default function GeoVisor(props: Props) {
   useEffect(() => { if (gridBounds) setTimeout(() => mapRef.current?.fit(gridBounds), 60); }, [boundsKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ------------------------------------------------------------------ imágenes sobre el mapa
+  const virtualIds = [...(parcelRes ? ['parcels'] : []), ...(baseline ? ['diff'] : [])];
+  const defaultOn = (id: string) => id === 'result' || id === 'parcels' || id === 'diff';
   const layerIds = data ? Object.keys(data.info).map((k) => `l:${k}`) : [];
-  const onIds = ['result', ...layerIds].filter((id) => (vis[id]?.on ?? id === 'result'));
+  const onIds = ['result', ...virtualIds, ...layerIds].filter((id) => (vis[id]?.on ?? defaultOn(id)));
   const onKey = onIds.join('|');
   useEffect(() => {
     if (!data || !om || !ev) { setImgs({}); return; }
@@ -195,6 +205,8 @@ export default function GeoVisor(props: Props) {
       for (const id of onKey.split('|').filter(Boolean)) {
         let deps: Deps, paint: () => Uint32Array;
         if (id === 'result') { deps = [data, ev, om, style]; paint = () => paintResult(ev.pct, ev.cls, data.mask, style); }
+        else if (id === 'parcels') { deps = [parcelRes, om]; paint = () => paintParcels(parcelRes!.labels); }
+        else if (id === 'diff') { deps = [ev, baseline, om, data]; paint = () => paintDiff(ev.pct, baseline!.pct, data.mask); }
         else {
           const k = id.slice(2), info = data.info[k];
           const rule = Object.values(geo.rules).find((r) => r.layerKey === k);
@@ -212,14 +224,14 @@ export default function GeoVisor(props: Props) {
       setImgs(next);
     }, 80);
     return () => clearTimeout(t);
-  }, [data, om, ev, style, onKey, geo.rules]);
+  }, [data, om, ev, style, onKey, geo.rules, parcelRes, baseline]);
 
   const rasters = useMemo<RasterOverlay[]>(() => {
     if (!om) return [];
     return Object.entries(imgs).map(([id, url]) => ({
-      id, url, bounds: om.bounds, opacity: vis[id]?.op ?? (id === 'result' ? 0.9 : 0.85), visible: vis[id]?.on ?? id === 'result', z: id === 'result' ? 20 : 10,
+      id, url, bounds: om.bounds, opacity: vis[id]?.op ?? (id === 'result' ? 0.9 : 0.85), visible: vis[id]?.on ?? defaultOn(id), z: id === 'result' ? 20 : id === 'diff' ? 22 : id === 'parcels' ? 21 : 10,
     }));
-  }, [imgs, om, vis]);
+  }, [imgs, om, vis]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const vectors = useMemo(() => vecs.map((v) => ({ id: v.id, fc: v.fc, color: v.color, visible: vis[`v:${v.id}`]?.on ?? false })), [vecs, vis]);
 
@@ -318,6 +330,8 @@ export default function GeoVisor(props: Props) {
     const g = buildOverlayMap(data!.grid, 'geographic');
     saveBytes(`${base}.kmz`, kmz(props.title, g.bounds, await canvasBytes(toCanvas(g, paintResult(ev!.pct, ev!.cls, data!.mask, style)))), 'application/vnd.google-earth.kmz');
   };
+  const parcelsTif = async () => { saveBytes(`${base}_parcelas.tif`, await toGeoTiff(Uint16Array.from(parcelRes!.labels), data!.grid, 0), 'image/tiff'); };
+  const parcelsFile = async () => saveBytes(`${base}_parcelas.csv`, parcelsCsv(parcelRes!.parcels, data!.grid), 'text/csv');
   const csv = async () => saveBytes(`${base}_pixeles.csv`, pixelsCsv(ev!.pct, ev!.cls, data!.mask, data!.grid), 'text/csv');
   const xlsx = async () => saveBytes(`${base}_resumen.xlsx`, await downloadGeoExcelBytes(summary()), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   const zip = async () => {
@@ -328,6 +342,7 @@ export default function GeoVisor(props: Props) {
     try { files['mapa.png'] = await canvasBytes(await framePng(true)); } catch { files['resultado.png'] = await canvasBytes(await framePng(false)); }
     const og = buildOverlayMap(g, 'geographic');
     files['google-earth.kmz'] = kmz(props.title, og.bounds, await canvasBytes(toCanvas(og, paintResult(ev!.pct, ev!.cls, data!.mask, style))));
+    if (parcelRes?.parcels.length) { files['parcelas.tif'] = await toGeoTiff(Uint16Array.from(parcelRes.labels), g, 0); files['parcelas.csv'] = parcelsCsv(parcelRes.parcels, g); }
     files['pixeles.csv'] = pixelsCsv(ev!.pct, ev!.cls, data!.mask, g);
     files['resumen.xlsx'] = await downloadGeoExcelBytes(summary());
     const s = summary();
@@ -394,13 +409,20 @@ export default function GeoVisor(props: Props) {
           {tab === 'capas' && (
             <GeoLayersPanel geo={geo} data={data} criteria={criteria} commit={commit} cache={cache} sb={supabase} ownerId={props.ownerId} projectId={props.projectId}
               vecs={vecs} setVecs={setVecs} vis={vis} setVis={setVis} fit={(b) => mapRef.current?.fit(b)} draft={draft} setDraft={setDraft} drawing={drawing} setDrawing={setDrawing}
-              quota={quota} onQuotaChange={refreshQuota} />
+              quota={quota} onQuotaChange={refreshQuota}
+              virtual={[...(parcelRes ? [{ id: 'parcels', label: `Parcelas ≥ ${minPatchHa} ha`, role: `${parcelRes.parcels.length} parcelas`, swatch: '#6D28D9' }] : []), ...(baseline ? [{ id: 'diff', label: `Diferencia con el escenario ${baseline.label}`, role: 'rojo empeora · verde mejora', swatch: 'linear-gradient(90deg,#D9534F,#eee,#2E7D32)' }] : [])]} />
           )}
           {tab === 'modelo' && (
             <GeoModelPanel criteria={criteria} weights={weightResult.agg.w} cr={weightResult.agg.cr} nExperts={expertIds.length} layers={data?.info ?? {}} rules={geo.rules}
               onRule={(id, rule) => commit((c) => { const r = { ...c.rules }; if (rule) r[id] = rule; else delete r[id]; return { ...c, rules: r }; })}
               thresholds={thresholds} onThresholds={(c) => { setThresholds(c); commit((g) => ({ ...g, classes: c })); }}
-              exploring={exploring} exploreWeights={exploreWeights} onExplore={(on, w) => { setExploring(on); setExploreWeights(w ?? null); }} />
+              exploring={exploring} exploreWeights={exploreWeights} onExplore={(on, w) => { setExploring(on); setExploreWeights(w ?? null); }}
+              minPatchHa={minPatchHa} onMinPatch={(ha) => { setMinPatchHa(ha); commit((g) => ({ ...g, minPatchHa: ha })); }}
+              parcels={parcelRes?.parcels ?? null}
+              onFlyTo={(col, row) => { if (data) { const [lon, lat] = pixelToLonLat(col, row, data.grid.transform, data.grid.crs); mapRef.current?.flyTo(lat, lon, 12); } }}
+              stats={stats} baseline={baseline ? { label: baseline.label, stats: baseline.stats } : null}
+              onSaveBaseline={(label) => { if (ev && stats) { setBaseline({ label, pct: ev.pct.slice(), stats }); setVis((v) => ({ ...v, diff: { on: true, op: 0.9 } })); } }}
+              onClearBaseline={() => setBaseline(null)} />
           )}
           {tab === 'exportar' && (
             <div className="gv-sec-stack">
@@ -419,6 +441,10 @@ export default function GeoVisor(props: Props) {
                 { k: 'png', label: 'PNG del mapa (con mapa base y leyenda)', desc: 'La vista actual tal como la ves, con título y leyenda, lista para tu informe.', run: pngMap },
                 { k: 'pngr', label: 'PNG solo del resultado (transparente)', desc: 'Únicamente los píxeles, sin mapa base: para superponer en tu propio diseño.', run: pngOnly },
                 { k: 'kmz', label: 'KMZ para Google Earth', desc: 'El resultado como imagen georreferenciada sobre el globo.', run: kmzOne },
+                ...(parcelRes?.parcels.length ? [
+                  { k: 'ptif', label: `GeoTIFF de parcelas (≥ ${minPatchHa} ha)`, desc: 'Cada parcela contigua de alta aptitud con su número (0 = ninguna). Ábrelo en QGIS y vectorízalo.', run: parcelsTif },
+                  { k: 'pcsv', label: 'CSV de parcelas', desc: 'Número, hectáreas, idoneidad media y mínima y centroide (lon, lat) de cada parcela.', run: parcelsFile },
+                ] : []),
                 { k: 'csv', label: 'CSV de píxeles (lon, lat, %, clase)', desc: 'Importable como puntos en QGIS o Excel (máx. ~200 000 filas).', run: csv },
                 { k: 'xls', label: 'Excel de resumen', desc: 'Pesos, reglas, superficie por clase y datos de las capas.', run: xlsx },
               ]} />
@@ -495,7 +521,7 @@ export default function GeoVisor(props: Props) {
               ))}
             </div>
             <div className="muted mono" style={{ fontSize: 12 }}>
-              Área evaluada: {stats.evaluableHa.toLocaleString('es-CO', { maximumFractionDigits: 0 })} ha · {data!.grid.resM} × {data!.grid.resM} m por celda{exploring ? ' · con pesos explorados' : ''}{data!.attribution ? ` · Datos: ${data!.attribution}` : ''}
+              Área evaluada: {stats.evaluableHa.toLocaleString('es-CO', { maximumFractionDigits: 0 })} ha · {data!.grid.resM} × {data!.grid.resM} m por celda{exploring ? ' · con pesos explorados' : ''}{data!.attribution ? ` · Datos: ${data!.attribution}` : ''}{parcelRes ? ` · ${parcelRes.parcels.length} parcela(s) ≥ ${minPatchHa} ha` : ''}
             </div>
           </div>
         )}

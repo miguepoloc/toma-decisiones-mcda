@@ -18,6 +18,7 @@ export default function GeoCatalogPanel(p: Props) {
   const [title, setTitle] = useState(p.title);
   const [desc, setDesc] = useState(p.objective);
   const [attr, setAttr] = useState('');
+  const [lic, setLic] = useState<Record<string, string>>(() => Object.fromEntries(Object.entries(p.geo.layers ?? {}).map(([k, l]) => [k, l.license ?? ''])));
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const layers = Object.entries(p.geo.layers ?? {});
@@ -27,7 +28,7 @@ export default function GeoCatalogPanel(p: Props) {
   async function go() {
     setBusy(true); setMsg('');
     try {
-      await publishToCatalog(p.sb, { id, title: title.trim(), description: desc.trim(), attribution: attr.trim(), userId: p.userId, criteria: p.criteria, geo: p.geo, layers: p.cache.current },
+      await publishToCatalog(p.sb, { id, title: title.trim(), description: desc.trim(), attribution: attr.trim(), userId: p.userId, criteria: p.criteria, geo: p.geo, layers: p.cache.current, licenses: lic },
         (d, t) => setMsg(`Subiendo capas… ${d}/${t}`));
       setMsg(`Paquete «${id}» publicado en el catálogo. Aparece en «Punto de partida» de los proyectos nuevos.`);
     } catch (e) { setMsg(e instanceof Error ? e.message : String(e)); }
@@ -43,6 +44,13 @@ export default function GeoCatalogPanel(p: Props) {
       <label className="gv-field"><span>Título</span><input type="text" value={title} maxLength={200} onChange={(e) => setTitle(e.target.value)} /></label>
       <label className="gv-field"><span>Descripción</span><input type="text" value={desc} maxLength={2000} onChange={(e) => setDesc(e.target.value)} /></label>
       <label className="gv-field"><span>Fuente / atribución de los datos</span><input type="text" value={attr} maxLength={1000} placeholder="p. ej. SIAM-INVEMAR 2016; Shipmap" onChange={(e) => setAttr(e.target.value)} /></label>
+      <div className="gv-field"><span>Licencia o condiciones de uso, por capa</span>
+        {layers.map(([k, l]) => (
+          <label key={k} className="gv-lic"><span title={l.source}>{l.label}</span>
+            <input type="text" value={lic[k] ?? ''} maxLength={200} placeholder="p. ej. CC-BY 4.0 · uso académico" onChange={(e) => setLic((v) => ({ ...v, [k]: e.target.value }))} /></label>
+        ))}
+        {layers.some(([k]) => !(lic[k] ?? '').trim()) && <small className="gv-hint warn">Hay capas sin licencia indicada: los estudiantes las verán sin condiciones de uso.</small>}
+      </div>
       {unsaved > 0 && <p className="gv-hint warn">{unsaved} capa(s) no están cargadas en memoria; espera a que termine la carga del mapa.</p>}
       <div className="gv-row-acts">
         <button type="button" className="btn primary sm" disabled={busy || !p.ready || !idOk || !title.trim() || unsaved > 0} onClick={go}>{busy ? 'Publicando…' : 'Publicar en el catálogo'}</button>

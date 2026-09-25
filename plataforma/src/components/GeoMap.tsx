@@ -25,6 +25,7 @@ export type MapMarker = { id: string; lat: number; lon: number; label?: string; 
 
 export type GeoMapHandle = {
   fit: (b: Bounds) => void;
+  flyTo: (lat: number, lon: number, zoom?: number) => void;
   /** Dibuja mapa base + capas visibles en un canvas (para el PNG). Lanza si el navegador bloquea las teselas. */
   capture: () => Promise<HTMLCanvasElement>;
   size: () => { w: number; h: number };
@@ -197,6 +198,7 @@ const GeoMap = forwardRef<GeoMapHandle, Props>(function GeoMap(props, ref) {
 
   useImperativeHandle(ref, () => ({
     fit: (b) => { if (L && map.current) map.current.fitBounds(toLBounds(L, b), { padding: [30, 30] }); },
+    flyTo: (lat, lon, zoom) => { map.current?.flyTo([lat, lon], zoom ?? Math.max(map.current.getZoom(), 12), { duration: 0.8 }); },
     size: () => { const s = map.current?.getSize(); return { w: s?.x ?? 0, h: s?.y ?? 0 }; },
     capture: async () => {
       const m = map.current;

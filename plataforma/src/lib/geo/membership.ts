@@ -17,7 +17,8 @@ export type FnSpec =
   | { type: 'up'; a: number; b: number }
   | { type: 'down'; a: number; b: number }
   | { type: 'classes'; map: Record<string, number> }
-  | { type: 'steps'; breaks: number[]; scores: number[] };
+  | { type: 'steps'; breaks: number[]; scores: number[] }
+  | { type: 'target'; value: number; tol: number; falloff: number };
 
 export type VetoSpec = { op: '<' | '>' | '<=' | '>='; value: number };
 
@@ -63,8 +64,18 @@ export function steps(x: number, breaks: number[], scores: number[]): number {
   return scores[i] ?? 0;
 }
 
+/** Valor objetivo: idoneidad 1 si |x − value| ≤ tol y baja linealmente a 0 a `falloff` más allá de esa
+ * tolerancia (p. ej. voltaje de red = 110 V ± 5, cae a 0 a 20 V de distancia). */
+export function target(x: number, value: number, tol: number, falloff: number): number {
+  if (Number.isNaN(x)) return NaN;
+  const d = Math.abs(x - value) - Math.max(0, tol);
+  if (d <= 0) return 1;
+  return falloff > 0 ? clamp01(1 - d / falloff) : 0;
+}
+
 export function suitability(x: number, fn: FnSpec): number {
   switch (fn.type) {
+    case 'target': return target(x, fn.value, fn.tol, fn.falloff);
     case 'steps': return steps(x, fn.breaks, fn.scores);
     case 'trapezoid': return trapezoid(x, fn.a, fn.b, fn.c, fn.d);
     case 'up': return up(x, fn.a, fn.b);
@@ -121,6 +132,7 @@ export function describeFn(fn: FnSpec): string {
     case 'trapezoid': return `Trapecio ${n(fn.a)} / ${n(fn.b)} / ${n(fn.c)} / ${n(fn.d)}`;
     case 'up': return `Más es mejor: 0 hasta ${n(fn.a)}, 1 desde ${n(fn.b)}`;
     case 'down': return `Menos es mejor: 1 hasta ${n(fn.a)}, 0 desde ${n(fn.b)}`;
+    case 'target': return `Valor objetivo ${n(fn.value)} ± ${n(fn.tol)}, cae a 0 a ${n(fn.falloff)} más allá`;
     case 'classes': return 'Por clases: ' + Object.entries(fn.map).map(([k, v]) => `${k}→${n(v)}`).join(', ');
     case 'steps': {
       const parts = fn.scores.map((s, i) => {

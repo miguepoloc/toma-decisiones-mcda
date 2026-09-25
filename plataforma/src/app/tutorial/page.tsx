@@ -162,7 +162,7 @@ export default async function TutorialPage() {
                 </tbody>
               </table></div>
               <p>Pasos: 1) crea el proyecto en blanco y renombra los 4 criterios; 2) sube el polígono del municipio como <b>Área de estudio</b> (el área y la resolución se proponen solos); 3) sube cada archivo asignándolo a su criterio; 4) en «Modelo» ajusta las reglas de la tabla; 5) pide a tus expertos que comparen los criterios; 6) haz clic en el mapa sobre los mejores sitios y revisa qué criterio los limita; 7) exporta el GeoTIFF y sigue el análisis en QGIS (Sesión 6) si necesitas áreas contiguas mínimas.</p>
-              <div className="tip"><b>Tip:</b> para «voltaje de red = 110 V» u otros valores objetivo no hay regla «objetivo» en los mapas todavía: usa una regla de trapecio centrada en el valor deseado.</div>
+              <div className="tip"><b>Tip:</b> para «voltaje de red = 110 V», «pH 6» u otro <b>valor objetivo</b> usa la regla «Valor objetivo (± tolerancia)». Y si lo que tienes son <b>isolíneas o puntos con un valor</b> (curvas de nivel, batimetría, estaciones), súbelos como «Superficie continua desde un atributo»: la plataforma interpola una superficie entre ellos. Para una finca solar, en «Modelo → Parcelas contiguas» fija el área mínima (p. ej. 20 ha) y la plataforma busca los cuerpos de alta aptitud de ese tamaño, con su CSV y GeoTIFF; y «Comparar escenarios» te muestra qué cambia si mueves un peso o una regla.</div>
             </div>
           </div>
 

@@ -96,7 +96,7 @@ plataforma/
 │                                      membership, suitability, crs, grid, vector, raster, mapper, overlay, paint, export,
 │                                      data, examples — puros; pack, parse, store — solo navegador), geoExcel.ts
 ├─ scripts/                            check-{ahp,topsis,vikor,promethee,electre}.ts (matemática), check-excel.ts
-│                                      (exportación e ida y vuelta), check-geo-{membership,suitability,crs,raster,export,publish}.ts,
+│                                      (exportación e ida y vuelta), check-geo-{membership,suitability,crs,raster,export,publish,analysis}.ts,
 │                                      geo/export_pack.py (genera public/geo-packs/ desde data/ahp_sig_snsm/cache/
 │                                      del repo raíz — no corre en CI, es manual cuando cambia el caso guiado)
 ├─ supabase/tests/                     run.sh + stubs.sql + geo_rls.sql: corre TODAS las migraciones en un PostgreSQL 17
@@ -205,9 +205,16 @@ boya oceanográfica — ver `docs/PLAN_geovisor_ahp_sig.md` (plan, UX, fases). S
   área, exclusión, cuota, publicar, vista pública con clic, publicar al catálogo y crear otro proyecto desde él
   (mismas estadísticas), panel de admin. **No verificado**: contra Supabase Storage/Auth reales (los mocks no prueban
   las políticas de Storage reales — solo los stubs de Postgres), el flujo autenticado dentro de `ProjectWorkspace`.
-- **Falta**: derivar una superficie desde isolíneas (batimetría de la tesis son líneas de 100 m: hoy se usa como
-  distancia o se sube ráster/polígono), regla «valor objetivo», GeoTIFF multibanda/rotado, comparar dos escenarios,
-  filtro de área mínima contigua (útil para fincas solares), catálogo con licencias por capa.
+- **Análisis adicional** (`check-geo-analysis.ts`): *superficie desde isolíneas o puntos* (`vector.ts`:
+  `nearestSource` + `interpolateSurface`, relajación de Laplace con las celdas conocidas fijas — rampa suave entre
+  curvas, plana más allá de la última, no extrapola; 1 M de celdas en < 6 s); regla **valor objetivo** (`target`:
+  1 dentro de ± tolerancia, cae linealmente a 0); **parcelas contiguas** de alta aptitud con área mínima
+  (`patches.ts`, componentes conexos de 8 vecinos; capa «Parcelas», CSV y GeoTIFF con el número de cada una;
+  `geo.minPatchHa`); **comparar escenarios** (guarda el resultado actual como A; capa «Diferencia» rojo/verde y
+  tabla en hectáreas; solo en la sesión); **licencia por capa** (`GeoLayerMeta.license`, la escribe el docente al
+  publicar al catálogo y se muestra en «Capas»).
+- **Falta**: filtro por proximidad a puntos concretos, escenarios persistentes, GeoTIFF multibanda/rotado, y probar
+  contra Supabase real (Storage/Auth).
 
 ## Qué está verificado y qué no
 Verificado aquí: compila (`next build`), el chequeo de tipos pasa, la matemática de los 7 métodos de ranking
@@ -238,6 +245,12 @@ del SQL (políticas + funciones `SECURITY DEFINER`) se ve correcta, pero eso no 
 5. Descargar el Excel y abrirlo.
 
 ## Historial de cambios
+
+**25 sep 2026 (geovisor AHP + SIG, cuarta entrega: análisis):** cerró lo que faltaba — superficie desde isolíneas
+(la batimetría de la tesis son isolíneas de 100 m; `numericFields` ahora tolera filas sin valor), regla de valor
+objetivo, parcelas contiguas mínimas, comparar escenarios y licencias por capa. Probado en navegador con isolíneas
+sintéticas (20/50/100/200 m). `Google Drive/My Drive/Maestria/Tesis` sigue sin poder leerse: es el permiso de macOS
+(Privacidad y seguridad → Archivos y carpetas / Acceso total al disco) de la app que corre la sesión, no de Drive.
 
 **25 sep 2026 (geovisor AHP + SIG, tercera entrega: publicar, cuota, catálogo, tutorial):** el docente pidió cerrar
 lo pendiente y dio la ruta de su tesis (`Maestria/Tesis/MAPAS`, `Maestria/Tesis_Mapas`), que sirvió de prueba real.
@@ -571,9 +584,8 @@ el selector de método del proyecto.
 3. **Rol de profesor** — el docente no puede ver los proyectos de sus estudiantes desde la plataforma todavía
    (decidido con el docente, 20 sep 2026: no es prioridad mientras la calificación se haga sobre el Excel/informe
    que cada estudiante entrega aparte, ver `evaluacion_v1.md` del curso).
-4. **Geovisor (S5), lo que resta** — superficie desde isolíneas, regla «valor objetivo», comparar escenarios, filtro de
-   área mínima contigua, licencias por capa del catálogo; y probar el flujo contra Supabase real (Storage y Auth) una vez
-   aplicadas las migraciones 11 y 12. Ver § "Geovisor" y `docs/PLAN_geovisor_ahp_sig.md`.
+4. **Geovisor (S5), lo que resta** — escenarios persistentes, proximidad a puntos concretos, GeoTIFF multibanda/rotado y
+   probar el flujo contra Supabase real (Storage y Auth) tras aplicar las migraciones 11 y 12. Ver § "Geovisor".
 
 Los 7 métodos ya tienen Excel propio con fórmulas vivas y color de acento propio (ver "Historial de cambios",
 20 sep 2026 noche).
