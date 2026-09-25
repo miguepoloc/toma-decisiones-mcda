@@ -129,6 +129,9 @@ no sirve como referencia.)
    - El estilo del proyecto `Tesis.qgz` para `Final.tif` usa cortes por tercios (1.667 y 2.333): **90.18 % / 6.71 % / 3.11 %**.
    - Ningún corte sobre `Final.tif` da 62.36 % (el acumulado salta de 62.30 % a 67.72 %); tampoco lo dan las combinaciones simples de pesos y cortes que probé.
    - `Tesis.qgz` referencia un ráster **`../../Downloads/Tesis_Migue.tif`** que no está en OneDrive: es el candidato más probable a ser el de la Figura 10.
+   - Revisados (25 sep 2026) los borradores de `Google Drive/Maestria/Articulos/AHP_GIS/` (docx de 2019 a mayo 2021): **62.36 / 30.88 / 6.76 % aparece desde el borrador
+     del 7 may 2021, sin describir cómo se obtuvo**. Las cifras «4.26 / 23.03 / 69.73 %» del borrador de enero 2021 son de un artículo **citado** (Yunis et al., trucha en Perú), no de este
+     estudio. La carpeta `Articulos` de Drive **no trae datos SIG** (solo borradores, artículos y `Datos_encuesta.xlsx`, con los juicios de 4 expertos del modelo de 2019 de 5 criterios).
    **Qué hacer:** localizar `Tesis_Migue.tif` (o la versión de la Figura 10). Si no aparece, el artículo A debe reportar las cifras del archivo que sí existe, con su
    procedimiento, y **decir explícitamente que difieren de las del artículo de 2021** y por qué (no se sabe). No reportar 62.36 % como reproducido.
 3. **Rejilla:** el ráster original tiene 10⁸ celdas y celdas rectangulares; el geovisor limita a 1.5 M celdas cuadradas. La comparación debe
