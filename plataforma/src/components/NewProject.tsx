@@ -108,7 +108,7 @@ function NewProjectForm({ userId }: { userId: string }) {
 
   // "Mapa de aptitud (SIG)": por defecto nace en blanco, como un proyecto de decisión (3 criterios
   // genéricos que el estudiante renombra y sube sus propios mapas en el Geovisor). Los ejemplos
-  // (cacao SNSM con datos, plantilla de la boya de la tesis) son opcionales. El proyecto usa
+  // (cacao SNSM y la boya de la tesis, ambos con datos) son opcionales. El proyecto usa
   // method:'saw' únicamente para que el panel de expertos reutilice, sin cambios, el mecanismo ya
   // existente de pesar criterios por pares (JudgmentEditor solo muestra la hoja 'crit' cuando
   // method !== 'ahp').

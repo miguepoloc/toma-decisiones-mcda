@@ -111,7 +111,7 @@ no sirve como referencia.)
 | Los 5 rásteres tienen el **mismo conjunto de píxeles válidos** | 12 232 559 píxeles ≈ 8 466 km² (el artículo dice ≈ 9 887 km² dentro de la isóbata de 200 m; la diferencia sería lo excluido por concesiones — **por confirmar**) |
 | `Final = 1 + Σ wᵢ·(clase ᵢ − 1)` | Mínimos cuadrados sobre todos los píxeles: **residuo máximo 1.2 × 10⁻⁷**. La álgebra de mapas es exactamente la suma ponderada lineal |
 | Pesos recuperados del ráster | 0.5482 (ecosistemas) · 0.1423 (tráfico) · 0.2020 (pesca) · 0.1075 (batimetría): **idénticos a la Tabla V del artículo** (script: `scripts/validation/boya-map-algebra.mjs`) |
-| Clases 1/2/3 | En el artículo **1 = apto, 3 = no apto** (menor valor = mejor). La plantilla `boya()` de `examples.ts` usa el sentido inverso (índice 0-1, mayor = mejor): convertir al comparar |
+| Clases 1/2/3 | En el artículo **1 = apto, 3 = no apto** (menor valor = mejor). El geovisor usa el sentido inverso (índice 0-1, mayor = mejor): S del geovisor = (3 − S del artículo)/2 |
 
 ### 5.2 Hallazgos
 
@@ -144,8 +144,7 @@ no sirve como referencia.)
 0.5482 / 0.1423 / 0.2020 / 0.1075 (eigenvector; CR 0.0650 vs 0.0652 publicado). Están cargados como el ejemplo «Boya con datos» (identidad reservada, «Experto 1..4»; fixture anonimizado
 `scripts/validation/data/encuesta-2021.json`). CR por experto: 0.089, 0.065, 0.059 y **0.382** (el Experto 4 es inconsistente); consenso S* = 82.2 % (alto).
 
-**A confirmar por el autor:** en ese archivo el 4.º criterio se llama **«Distancia a zonas de bañistas»**, mientras que el artículo publica el mismo peso (0.1075) como **«zona batimétrica»**.
-Puede ser una etiqueta que no se actualizó en el archivo o un cambio de criterio posterior a la encuesta; conviene saber cuál antes de citar el peso como el de la batimetría.
+**Aclarado por el autor (25 sep 2026):** en ese archivo el 4.º criterio figura como **«Distancia a zonas de bañistas»**, pero es la **zona batimétrica** del artículo (etiqueta del archivo sin actualizar); el peso 0.1075 es el de la batimetría.
 (Los 4 expertos son los mismos de `Datos_encuesta.xlsx`, el modelo de 2019 de 5 criterios.)
 
 ### 5.3 Pendiente

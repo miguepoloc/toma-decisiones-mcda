@@ -4,7 +4,7 @@ import { SNSM_CACAO_RULES, type FnSpec } from './membership.ts';
 import { uid } from '../types.ts';
 import type { Criterion, GeoConfig } from '../types.ts';
 
-export type ExampleId = 'cacao-snsm' | 'boya-2021' | 'boya-wsn';
+export type ExampleId = 'cacao-snsm' | 'boya-2021';
 /** Expertos sembrados con el ejemplo (opcional). Solo respuestas reales del autor o, si se reconstruyen, marcadas expresamente como tales. */
 export type ExampleExpert = { name: string; roleDesc: string; judgments: { key: string; value: number }[] };
 export type Example = { id: string; source?: 'builtin' | 'catalog'; label: string; blurb: string; hasData: boolean; title: string; objective: string; criteria: Criterion[]; geo: GeoConfig; experts?: ExampleExpert[] };
@@ -28,31 +28,6 @@ function cacao(): Example {
   };
 }
 
-/** Plantilla del artículo Polo-Castañeda, Gómez-Rojas & Linero-Cueto (2021), Int. J. Adv. Sci. Eng.
- * Inf. Technol. 11(5): ubicar una boya de monitoreo oceanográfico (WSN). Criterios y rangos de la
- * Tabla VI; NO trae datos (vienen del SIAM/INVEMAR/Shipmap): el estudiante sube sus capas. */
-function boya(): Example {
-  const mk = (name: string, hint: string, layerKey: string, breaks: number[], scores: number[]) => {
-    const id = uid('k');
-    return { c: { id, name, hint, src: null } as Criterion, r: { layerKey, fn: { type: 'steps' as const, breaks, scores } } };
-  };
-  const items = [
-    mk('Distancia a ecosistemas marinos', 'Más lejos es mejor. Polo-Castañeda et al. (2021), Tabla VI: >150 m adecuado, 70–150 m moderado, <70 m no adecuado. Sube la capa de ecosistemas (arrecifes, manglares, pastos) y calcula la «distancia» en metros.', 'ecosistemas', [70, 150], [0, 0.5, 1]),
-    mk('Distancia al tráfico marítimo', 'Más lejos es mejor. Tabla VI: >100 m adecuado, 50–100 m moderado, <50 m no adecuado. Sube las rutas de navegación (Shipmap/Wikiloc) y calcula la «distancia».', 'trafico', [50, 100], [0, 0.5, 1]),
-    mk('Distancia a zonas de pesca', 'Más lejos es mejor. Tabla VI: >1 milla náutica (1 852 m) adecuado, <1 milla moderado, dentro de la zona de pesca no adecuado. Sube las zonas de pesca y calcula la «distancia».', 'pesca', [1, 1852], [0, 0.5, 1]),
-    mk('Zona batimétrica (profundidad)', 'Tabla VI: 50–200 m adecuado, 20–50 m moderado, <20 m no adecuado. Sube un ráster de profundidad en metros POSITIVOS (si viene negativo, multiplícalo por −1 en QGIS). Recorta a la isóbata de 200 m como «Área de estudio».', 'bati', [20, 50], [0, 0.5, 1]),
-  ];
-  const rules: GeoConfig['rules'] = {};
-  items.forEach((it) => { rules[it.c.id] = it.r; });
-  return {
-    id: 'boya-wsn', label: 'Boya · plantilla sin datos (sube tus propias capas)', hasData: false,
-    blurb: 'Los 4 criterios y rangos de la Tabla VI del artículo de la boya, sin mapas: tú subes los tuyos (ecosistemas, tráfico, pesca, batimetría) y las concesiones como exclusión.',
-    title: 'Zonas aptas para una boya de monitoreo oceanográfico',
-    objective: 'Determinar dónde es viable instalar una red de sensores inalámbricos tipo boya, evitando ecosistemas, tráfico marítimo, zonas de pesca y profundidades inadecuadas, y excluyendo las áreas de concesión.',
-    criteria: items.map((i) => i.c), geo: { rules, classes: { ...CLASSES } },
-  };
-}
-
 /** Reglas del caso de la boya con datos: cada capa del paquete `boya-wsn-v1` ya trae la clase 1/2/3 del autor (1 apto · 2 moderado · 3 no apto)
  * y aquí se pasa a idoneidad 1 / 0.5 / 0. Con S = Σ wᵢ·sᵢ, «S del geovisor» = (3 − S del artículo)/2: los cortes 1.5 y 2.5 del resultado
  * original (`Final/Resultado.shp`) son idoneidad 0.75 y 0.25. */
@@ -63,7 +38,8 @@ export const BOYA_CLASSES = { alta: 0.75, media: 0.25 };
 /** Juicios de los 4 expertos de la encuesta de la tesis (`Datos_encuesta_sin_GSM.xlsx`, identidad reservada), en razones de Saaty para los pares
  * (1,2) (1,3) (1,4) (2,3) (2,4) (3,4) de [ecosistemas, tráfico, pesca, 4.º criterio]. Su media geométrica es EXACTAMENTE la Tabla IV del artículo
  * (hoja «Todo» del archivo; diferencia < 1e-15) y su eigenvector da los pesos publicados 0.5482 / 0.1423 / 0.2020 / 0.1075, CR 0.065.
- * OJO: en el archivo de la encuesta el 4.º criterio se llama «zonas de bañistas»; el artículo lo publica como «zona batimétrica». */
+ * Nota: en el archivo de la encuesta el 4.º criterio figura como «zonas de bañistas»; el autor confirmó (25 sep 2026) que es la zona batimétrica del
+ * artículo y que esa etiqueta del archivo quedó sin actualizar. */
 const BOYA_EXPERT_RATIOS: number[][] = [
   [5, 4, 7, 1 / 3, 4, 4],
   [9, 5, 7, 1, 3, 3],
@@ -100,6 +76,6 @@ function boyaDatos(): Example {
 }
 
 export function buildExample(id: ExampleId): Example {
-  return { ...(id === 'cacao-snsm' ? cacao() : id === 'boya-2021' ? boyaDatos() : boya()), source: 'builtin' };
+  return { ...(id === 'cacao-snsm' ? cacao() : boyaDatos()), source: 'builtin' };
 }
-export const EXAMPLE_IDS: ExampleId[] = ['cacao-snsm', 'boya-2021', 'boya-wsn'];
+export const EXAMPLE_IDS: ExampleId[] = ['cacao-snsm', 'boya-2021'];

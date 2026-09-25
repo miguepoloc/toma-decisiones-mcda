@@ -99,7 +99,7 @@ completa".
 
 **Geovisor AHP + SIG (Sesión 5, 25 sep 2026):** `kind:'spatial'` — un proyecto donde las alternativas son celdas
 de un territorio en vez de filas de una tabla. Nace en blanco (con «Punto de partida» opcional: caso cacao SNSM con
-datos del notebook `07_ahp_sig_cacao_snsm.ipynb`, o plantilla de la boya de la tesis del docente —
+datos del notebook `07_ahp_sig_cacao_snsm.ipynb`, o el caso real de la boya de la tesis del docente (paquete `boya-wsn-v1` con sus 4 expertos; ver `plataforma/docs/PLAN_publicacion.md` §5) —
 Polo-Castañeda et al. 2021, `03_Bibliografia_general/combinaciones/`). Mapa web real (Leaflet, mapa base mundial),
 carga de capas propias (GeoTIFF, GeoJSON, shapefile .zip, KML; vector → distancia/dentro-fuera/atributo; papel
 criterio, exclusión o área de estudio), reglas de idoneidad editables (por rangos, trapecio…), pesos reales del

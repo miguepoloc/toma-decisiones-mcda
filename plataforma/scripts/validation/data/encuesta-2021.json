@@ -1,10 +1,10 @@
 {
- "source": "Datos_encuesta_sin_GSM.xlsx (4 criterios, el modelo del artículo de 2021). Expertos anonimizados. Las celdas con formato de hora eran fracciones (8:00 = 1/3). En el archivo el 4.º criterio se llama «zonas de bañistas»; el artículo lo publica como «zona batimétrica».",
+ "source": "Datos_encuesta_sin_GSM.xlsx (4 criterios, el modelo del artículo de 2021). Expertos anonimizados. Las celdas con formato de hora eran fracciones (8:00 = 1/3). En el archivo el 4.º criterio figura como «zonas de bañistas»; el autor confirmó (25 sep 2026) que es la zona batimétrica del artículo (etiqueta del archivo sin actualizar).",
  "criteria": [
   "ecosistemas",
   "tráfico",
   "pesca",
-  "4.º criterio (bañistas en el archivo)"
+  "zona batimétrica (en el archivo: «zonas de bañistas», etiqueta sin actualizar)"
  ],
  "experts": [
   {

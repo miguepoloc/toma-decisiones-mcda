@@ -126,9 +126,8 @@ boya oceanográfica — ver `docs/PLAN_geovisor_ahp_sig.md` (plan, UX, fases). S
 2026): mapa web real, carga de capas propias y exportación; ver Historial.
 
 - **Nace en blanco**, como un proyecto de decisión (3 criterios «Criterio 1/2/3»). Los ejemplos son
-  opcionales (`src/lib/geo/examples.ts`): *cacao SNSM* (trae datos), *boya con datos* (`boya-2021`, paquete
-  `public/geo-packs/boya-wsn-v1`) y *plantilla de la boya* (los 4 criterios y rangos de la Tabla VI, sin datos —
-  el estudiante sube los suyos).
+  opcionales (`src/lib/geo/examples.ts`): *cacao SNSM* y *boya con datos* (`boya-2021`, paquete
+  `public/geo-packs/boya-wsn-v1`); ambos traen datos y admiten añadir mapas propios. (La plantilla de la boya sin datos se retiró el 25 sep 2026.)
 - **Boya con datos (`boya-wsn-v1`, 25 sep 2026).** Caso real de la tesis del docente (Polo-Castañeda et al. 2021): las 4 capas ya
   clasificadas 1/2/3 por el autor (1 apto · 3 no apto), reducidas de 38.68×17.89 m a 250 m tomando la moda de cada bloque, EPSG:3116, las
   concesiones como exclusión y fuera de la isóbata de 200 m como sin dato; ≈ 27 KB. Regla `classes` (1→1, 2→0.5, 3→0) y cortes 0.75/0.25
