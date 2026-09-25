@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
 import Logo from './Logo';
-import SignOutButton from './SignOutButton';
+import UserMenu from './UserMenu';
 
 const NAV_LINKS = [
   { href: '/', label: 'Inicio' },
@@ -14,7 +14,7 @@ const NAV_LINKS = [
 
 /** Barra superior compartida por TODAS las páginas: mismo logo, misma navegación (Inicio / ¿Qué
  * método uso? / Cómo funciona) y el mismo control de sesión a la derecha en todas partes, sin
- * excepción — entra a `/login` si no hay sesión, muestra correo + «Mis proyectos» + «Salir» si la hay.
+ * excepción — entra a `/login` si no hay sesión; si la hay, «Mis proyectos» + el menú de la cuenta (`UserMenu`: Mi cuenta / Salir).
  * `children` puede agregar algo propio de la página ANTES de ese control (una insignia, un dato de
  * contexto), pero nunca lo reemplaza: si una página cambiara ese bloque, se vería distinta a las demás,
  * que es justo lo que este componente existe para evitar. `showNav`/`hideAuthAction` lo apagan solo
@@ -80,13 +80,8 @@ export default function Topbar({
           {children}
           {!hideAuthAction && (loggedIn ? (
             <div className="user">
-              {userEmail && (
-                <Link href="/cuenta" className="user-email" aria-current={pathname === '/cuenta' ? 'page' : undefined} title="Mi cuenta">
-                  {userEmail}
-                </Link>
-              )}
               {pathname !== '/dashboard' && <Link className="btn sm" href="/dashboard">Mis proyectos</Link>}
-              <SignOutButton />
+              {userEmail && <UserMenu email={userEmail} />}
             </div>
           ) : (
             <Link className="btn sm primary" href="/login">Entrar o crear cuenta</Link>
