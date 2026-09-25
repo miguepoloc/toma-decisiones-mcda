@@ -123,17 +123,16 @@ no sirve como referencia.)
    ver el promedio del curso. El Excel exportado calcula el eigenvector con iteración de potencias en fórmulas vivas y muestra el promedio al lado; `test:excel:recalc`
    (LibreOffice) confirma que las fórmulas recalculadas coinciden. Pruebas: `check-ahp.ts` (ambos métodos), `check-ahp-eigen.ts`. **No sincronizado:** la plantilla HTML
    heredada (`prototipos/fuente/mcda_template.html`) y los HTML generados conservan el promedio de columnas.
-2. **Los porcentajes del artículo (62.36 / 30.88 / 6.76 %) no se reproducen con los archivos disponibles.** Lo que sí existe:
-   - `Final/Resultado.shp` (polígonos con `DN` 1/2/3) equivale a redondear `Final.tif` con cortes 1.5 y 2.5: **82.89 % / 14.03 % / 3.07 %** (7 018.0 / 1 188.1 /
-     260.2 km²; total 8 466.3 km², idéntico al del ráster).
-   - El estilo del proyecto `Tesis.qgz` para `Final.tif` usa cortes por tercios (1.667 y 2.333): **90.18 % / 6.71 % / 3.11 %**.
-   - Ningún corte sobre `Final.tif` da 62.36 % (el acumulado salta de 62.30 % a 67.72 %); tampoco lo dan las combinaciones simples de pesos y cortes que probé.
-   - `Tesis.qgz` referencia un ráster **`../../Downloads/Tesis_Migue.tif`** que no está en OneDrive: es el candidato más probable a ser el de la Figura 10.
-   - Revisados (25 sep 2026) los borradores de `Google Drive/Maestria/Articulos/AHP_GIS/` (docx de 2019 a mayo 2021): **62.36 / 30.88 / 6.76 % aparece desde el borrador
-     del 7 may 2021, sin describir cómo se obtuvo**. Las cifras «4.26 / 23.03 / 69.73 %» del borrador de enero 2021 son de un artículo **citado** (Yunis et al., trucha en Perú), no de este
-     estudio. La carpeta `Articulos` de Drive **no trae datos SIG** (solo borradores, artículos y `Datos_encuesta.xlsx`, con los juicios de 4 expertos del modelo de 2019 de 5 criterios).
-   **Qué hacer:** localizar `Tesis_Migue.tif` (o la versión de la Figura 10). Si no aparece, el artículo A debe reportar las cifras del archivo que sí existe, con su
-   procedimiento, y **decir explícitamente que difieren de las del artículo de 2021** y por qué (no se sabe). No reportar 62.36 % como reproducido.
+2. **Los porcentajes del artículo (62.36 / 30.88 / 6.76 %) son un artefacto de cómo se sumó el campo `area` — hallazgo del 25 sep 2026.** Se reproducen **exactamente**
+   (a dos decimales, las tres clases) sumando el atributo `area` de `Final/Resultado.shp`, donde **un solo registro (fid 302, un polígono apto de 4 619 km²) quedó
+   desbordado** en el campo DBF de 10 caracteres y se guardó como `**********`, así que cualquier suma por atributo lo omite. Sumando la **geometría** (y contando píxeles de `Final.tif`,
+   que coincide) salen **82.89 % apto / 14.03 % moderado / 3.07 % no apto** (7 018.0 / 1 188.1 / 260.2 km²; total 8 466.3 km²). Script: `scripts/validation/boya-resultado-areas.mjs`.
+   - **Confirmado en QGIS por el docente (25 sep 2026):** la tabla de atributos de `Resultado` (499 registros) muestra `fid 302, DN 1, area NULL`. Que el 62.36 % salió de sumar el atributo es una conclusión por
+     reproducción exacta de las tres cifras (no una prueba de lo que se hizo en 2021), pero el registro nulo está verificado a la vista.
+   - **Alcance:** el resumen, la interpretación de resultados y la conclusión del artículo de 2021 y la diapositiva 32 de la sustentación citan 62.36 %. El mapa (Fig. 10) y los pesos no cambian; cambian los porcentajes.
+     Corregirlo (fe de erratas en IJASEIT, si procede) es decisión del docente. El artículo A debe **reportar las cifras corregidas y explicar la diferencia**.
+   - Descartado en la búsqueda: cortes por intervalos iguales (90.18 / 6.71 / 3.11 %), corte 1.5/2.5 (= `Resultado.shp`, 82.89 / 14.03 / 3.07 %), permutaciones de pesos y `Tesis_Migue.tif` (no existe en OneDrive ni en Drive).
+   - Los borradores de Drive (`AHP_GIS/`, 2019 a may 2021) no describen el cálculo; «4.26 / 23.03 / 69.73 %» del borrador de enero 2021 es de un artículo citado (Yunis et al.). `Articulos` de Drive no trae datos SIG.
 3. **Rejilla:** el ráster original tiene 10⁸ celdas y celdas rectangulares; el geovisor limita a 1.5 M celdas cuadradas. La comparación debe
    hacerse por **ventanas** de ≈ 30 × 30 km a ≈ 40 m (los umbrales de 50-150 m no se resuelven con celdas de 250 m).
 4. **Material del curso:** en `Toma de decisiones/` no hay nada sobre la boya ni sobre el eigenvector; la sesión 2 y el notebook 01 usan el promedio de columnas.
@@ -144,7 +143,7 @@ no sirve como referencia.)
    `Ecosistemas_Marinos.tif`, `Lanchas.tif`, `Pesca_Artesanal.tif` y `Batimetria.tif`. Hay que **identificar qué capas vectoriales** produjeron
    cada ráster (`Marinos_Invemar` / `Union_Vegetal_Invemar` / `Corales_*` para ecosistemas; `Rutas_Lanchas*` para tráfico;
    `Intensidad_pesca_artesanal_*` para pesca; `Batimetria_*` / `Profundidad` para batimetría). Se identifican probando cuál reproduce el ráster.
-2. Localizar `Tesis_Migue.tif` (hallazgo 5.2.2).
+2. Decidir qué hacer con la cifra publicada (hallazgo 5.2.2: fe de erratas / corregir en el artículo A).
 3. Comparación final con umbral de aceptación fijado de antemano (p. ej. porcentaje de celdas que cambian de clase) y reporte aunque falle.
 4. Sensibilidad al redondeo de pesos y a la resolución de la rejilla.
 
