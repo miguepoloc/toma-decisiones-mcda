@@ -1,0 +1,81 @@
+{
+ "id": "boya-wsn-v1",
+ "title": "Zonas aptas para una boya de monitoreo oceanográfico — Caribe sur, zona de surgencia",
+ "attribution": "Polo-Castañeda, Gómez-Rojas & Linero-Cueto (2021), IJASEIT 11(5), doi:10.18517/ijaseit.11.5.14293. Datos: SIAM/INVEMAR, Wikiloc y Shipmap, ANH/DIMAR. Clases 1/2/3 del autor, reducidas a 250 m (moda)",
+ "grid": {
+  "crs": "EPSG:3116",
+  "width": 1548,
+  "height": 716,
+  "resM": 250,
+  "haPerPixel": 6.25,
+  "transform": [
+   250,
+   0,
+   913997.2111,
+   0,
+   -250,
+   1884402.6188
+  ]
+ },
+ "layers": {
+  "eco": {
+   "min": 1,
+   "max": 3,
+   "path": "layers/eco.u8.gz",
+   "bytes": 6725,
+   "label": "Distancia a ecosistemas marinos (clase 1 apto · 3 no apto)",
+   "unit": "clase"
+  },
+  "trafico": {
+   "min": 1,
+   "max": 3,
+   "path": "layers/trafico.u8.gz",
+   "bytes": 5646,
+   "label": "Distancia al tráfico marítimo (clase 1 apto · 3 no apto)",
+   "unit": "clase"
+  },
+  "pesca": {
+   "min": 1,
+   "max": 3,
+   "path": "layers/pesca.u8.gz",
+   "bytes": 7540,
+   "label": "Distancia a zonas de pesca (clase 1 apto · 3 no apto)",
+   "unit": "clase"
+  },
+  "bati": {
+   "min": 1,
+   "max": 3,
+   "path": "layers/bati.u8.gz",
+   "bytes": 6784,
+   "label": "Zona batimétrica (clase 1 apto · 3 no apto)",
+   "unit": "clase"
+  }
+ },
+ "mask": {
+  "path": "layers/mask.u8.gz",
+  "legend": {
+   "0": "fuera del área de trabajo (isóbata de 200 m)",
+   "1": "válido",
+   "2": "concesión / zona de fondeo (exclusión)"
+  }
+ },
+ "base": "",
+ "points": {
+  "Santa Marta": {
+   "lat": 11.2408,
+   "lon": -74.199
+  },
+  "Taganga": {
+   "lat": 11.2703,
+   "lon": -74.19
+  },
+  "Riohacha": {
+   "lat": 11.5444,
+   "lon": -72.9072
+  },
+  "Barranquilla": {
+   "lat": 10.9685,
+   "lon": -74.7813
+  }
+ }
+}
