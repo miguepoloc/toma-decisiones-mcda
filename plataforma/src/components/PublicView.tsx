@@ -7,6 +7,9 @@ import Results from './Results';
 import Topbar from './Topbar';
 import dynamic from 'next/dynamic';
 import type { PublicGeo } from './PublicGeoView';
+import PublicAhp from './PublicAhp';
+import { CRIT_SHEET, indexJudgments, sheetResult } from '@/lib/ahp';
+import { ahpSummary, type AhpSummary } from '@/lib/geo/ahpSummary';
 
 const PublicGeoView = dynamic(() => import('./PublicGeoView'), { ssr: false, loading: () => <p className="muted">Cargando el mapa…</p> });
 
@@ -14,6 +17,21 @@ export default function PublicView({ token, loggedIn, userEmail }: { token: stri
   const supabase = useMemo(() => createClient(), []);
   const [data, setData] = useState<PublicGet | null | undefined>(undefined);
   const [geo, setGeo] = useState<PublicGeo | { status: 'unpublished'; title: string; objective: string } | null>(null);
+
+  // Mapa aún sin publicar: el AHP de los criterios ya se puede mostrar (sale de public_get, sin nombres de expertos).
+  const [draftAhp, setDraftAhp] = useState<AhpSummary | null>(null);
+  const unpublished = geo?.status === 'unpublished';
+  useEffect(() => {
+    if (!unpublished) return;
+    let alive = true;
+    supabase.rpc('public_get', { p_token: token }).then(({ data: d, error }) => {
+      if (!alive || error || !d) return;
+      const pg = d as PublicGet;
+      const ids = pg.experts.map((e) => e.id);
+      setDraftAhp(ahpSummary(pg.project.criteria, sheetResult(CRIT_SHEET, pg.project.criteria, ids, indexJudgments(pg.judgments))));
+    });
+    return () => { alive = false; };
+  }, [supabase, token, unpublished]);
 
   useEffect(() => {
     let alive = true;
@@ -40,7 +58,10 @@ export default function PublicView({ token, loggedIn, userEmail }: { token: stri
         </header>
         {geo.status === 'ok'
           ? <PublicGeoView data={geo} />
-          : <div className="card"><p className="muted">El autor activó el enlace público pero todavía no publicó el mapa. Vuelve más tarde.</p></div>}
+          : <>
+              <div className="card"><p className="muted">El autor activó el enlace público pero todavía no publicó el mapa{draftAhp ? '; mientras tanto puedes ver el análisis AHP de los criterios.' : '. Vuelve más tarde.'}</p></div>
+              {draftAhp && <div className="card" style={{ marginTop: 16 }}><PublicAhp ahp={draftAhp} /></div>}
+            </>}
       </div>
     );
   }
