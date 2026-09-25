@@ -29,6 +29,11 @@ const METHOD_LABELS: Record<MethodKey, string> = {
 // que `Investigacion_didactica_IoT_WSN/PLAN_INVESTIGACION.md` y el Excel guiado de la Sesión 2
 // (`s2_ahp_excel/Ejercicio.xlsx`). Da a un estudiante un proyecto con datos reales del curso en vez de
 // "Criterio 1/2/3" al crear su primer proyecto — no reemplaza su propio problema de tesis.
+const KINDS: { id: Kind; title: string; text: string; icon: string }[] = [
+  { id: 'decision', title: 'Decisión con alternativas', text: 'Comparas opciones con tus criterios y sale un ranking (AHP, TOPSIS, VIKOR…).', icon: 'M3 3v18h18M7 16h6M7 11h10M7 6h4' },
+  { id: 'spatial', title: 'Mapa de aptitud (SIG)', text: 'Las alternativas son celdas de un territorio: subes tus mapas y el ranking sale como un mapa.', icon: 'M1 6v16l7-4 8 4 7-4V2l-7 4-8-4-7 4zM8 2v16M16 6v16' },
+];
+
 const IOT_PALMOR_TITLE = 'Selección de tecnología IoT — Palmor (ejemplo del curso)';
 const IOT_PALMOR_OBJECTIVE = 'Elegir la tecnología de comunicación (LoRaWAN, GSM/GPRS, Sigfox o Zigbee) para una red de sensores agroclimáticos en Palmor, Sierra Nevada de Santa Marta.';
 const IOT_PALMOR_CRITERIA = [
@@ -166,24 +171,24 @@ function NewProjectForm({ userId }: { userId: string }) {
   }
 
   return (
-    <div className="two-col">
+    <div className="newproj">
       <form className="card form" onSubmit={create}>
         <h3>Nuevo proyecto</h3>
-        <div>
-          <label className="lbl" htmlFor="pk">Tipo de proyecto</label>
-          <div className="seg" id="pk">
-            <button type="button" aria-pressed={kind === 'decision'} onClick={() => setKind('decision')}>Decisión con alternativas</button>
-            <button type="button" aria-pressed={kind === 'spatial'} onClick={() => setKind('spatial')}>Mapa de aptitud (SIG)</button>
+        <fieldset className="kind-pick">
+          <legend className="lbl">¿Qué vas a hacer?</legend>
+          <div className="kind-cards">
+            {KINDS.map((k) => (
+              <label key={k.id} className={'kind-card' + (kind === k.id ? ' on' : '')}>
+                <input type="radio" name="kind" value={k.id} checked={kind === k.id} onChange={() => setKind(k.id)} />
+                <span className="kind-ico"><Icon d={k.icon} size={20} /></span>
+                <span className="kind-txt"><b>{k.title}</b><span>{k.text}</span></span>
+                <span className="kind-check" aria-hidden="true"><Icon d={ICONS.check} size={14} /></span>
+              </label>
+            ))}
           </div>
-          {kind === 'spatial' && (
-            <p className="muted" style={{ fontSize: 12.5, marginTop: 6 }}>
-              Las alternativas son celdas de un territorio, no filas de una tabla: pesas los criterios con tus expertos como en AHP,
-              subes tus propios mapas (GeoTIFF, GeoJSON, shapefile…) y el ranking sale de un mapa que puedes exportar.
-            </p>
-          )}
-        </div>
+        </fieldset>
         <div>
-          <label className="lbl" htmlFor="pt">Título</label>
+          <label className="lbl" htmlFor="pt">Título{(kind === 'decision' || start === 'blank') && <span className="req" aria-hidden="true"> *</span>}</label>
           <input
             id="pt"
             type="text"
@@ -232,21 +237,17 @@ function NewProjectForm({ userId }: { userId: string }) {
                 </div>
               )}
             </div>
-            <div>
-              <label className="lbl" style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
-                  checked={useIotCase}
-                  onChange={(e) => setUseIotCase(e.target.checked)}
-                  style={{ marginTop: 3 }}
-                />
+            <label className={'check-card' + (useIotCase ? ' on' : '')}>
+              <input type="checkbox" checked={useIotCase} onChange={(e) => setUseIotCase(e.target.checked)} />
+              <span className="check-box" aria-hidden="true"><Icon d={ICONS.check} size={13} /></span>
+              <span className="check-txt">
+                <b>Empezar con el caso de ejemplo del curso</b>
                 <span>
-                  Empezar con el caso de ejemplo del curso: tecnología IoT para Palmor (LoRaWAN/GSM-GPRS/Sigfox/Zigbee,
-                  Sesiones 1-3). Precarga criterios, alternativas{method !== 'ahp' && method !== 'fuzzy_topsis' ? ' y la matriz de datos' : ''} —
-                  tú decides si lo usas para explorar la plataforma o reemplazas todo por tu propio problema de tesis.
+                  Tecnología IoT para Palmor (LoRaWAN, GSM/GPRS, Sigfox, Zigbee; Sesiones 1-3). Precarga criterios y alternativas
+                  {method !== 'ahp' && method !== 'fuzzy_topsis' ? ' y la matriz de datos' : ''}. Déjalo sin marcar para empezar en blanco con tu propio problema.
                 </span>
-              </label>
-            </div>
+              </span>
+            </label>
           </>
         )}
         {kind === 'spatial' && (
@@ -269,7 +270,7 @@ function NewProjectForm({ userId }: { userId: string }) {
       </form>
       {/* Toda la tarjeta acepta el soltado: si el archivo cae fuera de la zona, el navegador lo descargaría/abriría. */}
       <div
-        className="card form"
+        className="card form import-card"
         onDragOver={(e) => { e.preventDefault(); setOver(true); }}
         onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOver(false); }}
         onDrop={(e) => { e.preventDefault(); setOver(false); dropFiles(e.dataTransfer.files); }}
