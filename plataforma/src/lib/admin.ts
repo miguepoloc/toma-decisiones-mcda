@@ -40,3 +40,11 @@ export function sparklinePoints(values: number[], width = 120, height = 32, pad 
 }
 
 export const fmtDate = (iso: string) => iso.slice(0, 10);
+
+/** «2026-09-24 · hace 1 día» para un último acceso; null = nunca inició sesión. */
+export function fmtLastLogin(iso: string | null, now = Date.now()): string {
+  if (!iso) return 'Nunca';
+  const days = Math.floor((now - new Date(iso).getTime()) / 86_400_000);
+  const ago = days <= 0 ? 'hoy' : days === 1 ? 'hace 1 día' : `hace ${days} días`;
+  return `${fmtDate(iso)} · ${ago}`;
+}

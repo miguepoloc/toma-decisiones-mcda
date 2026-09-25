@@ -49,6 +49,7 @@ select t.err('select public._rate_limit(''k'', 1, interval ''1 minute'')', 'perm
 select t.err('select public.geo_quota()', 'permission denied', 'anon NO puede llamar geo_quota');
 select t.err('select public.geo_check_upload(''x/y/z'', 1)', 'permission denied', 'anon NO puede llamar geo_check_upload');
 select t.err('select public.admin_geo_usage()', 'permission denied', 'anon NO puede llamar admin_geo_usage');
+select t.err('select public.admin_users_activity()', 'permission denied', 'anon NO puede llamar admin_users_activity');
 select t.ok(public.is_admin() = false, 'is_admin() es false para anon');
 reset role;
 
@@ -66,6 +67,7 @@ select t.err('select public.admin_set_user_quota(''a@x.co'', 999)', 'no autoriza
 select t.err('select public.admin_set_geo_settings(10, 5, 100000, 1000)', 'no autorizado', 'A (no admin) NO puede cambiar topes globales');
 select t.err('select public.admin_geo_usage()', 'no autorizado', 'A (no admin) NO ve el uso de todos');
 select t.err('select public.admin_geo_orphans()', 'no autorizado', 'A (no admin) NO ve huérfanos');
+select t.err('select public.admin_users_activity()', 'no autorizado', 'A (no admin) NO ve el último acceso de los demás');
 select t.ok((public.geo_settings()->>'max_layers')::int = 16, 'A puede leer los topes globales');
 reset role;
 
@@ -197,6 +199,15 @@ reset role;
 select t.ok((select count(*) from storage.objects where name like 'bbbbbbbb%') = 1, 'C (admin) NO borra las capas de un proyecto vivo');
 set role authenticated; select set_config('request.jwt.claim.sub', :C, false);
 select t.ok((select count(*) from storage.objects where bucket_id = 'geo-layers' and name like 'aaaaaaaa%') = 0, 'C (admin) NO ve las capas vivas de los estudiantes');
+reset role;
+
+-- ══════════════ último acceso (auth.users.last_sign_in_at) ══════════════
+update auth.users set last_sign_in_at = '2026-09-20 10:00+00' where email = 'a@x.co';
+update auth.users set last_sign_in_at = '2026-09-24 08:00+00' where email = 'b@x.co';
+set role authenticated; select set_config('request.jwt.claim.sub', :C, false);
+select t.ok(jsonb_array_length(public.admin_users_activity()) = 3, 'C (admin) ve las 3 cuentas');
+select t.ok(public.admin_users_activity()->0->>'email' = 'b@x.co', 'C: la más reciente va primero');
+select t.ok(public.admin_users_activity()->2->>'ultimo_acceso' is null, 'C: quien nunca inició sesión va al final con ultimo_acceso null');
 reset role;
 
 \echo

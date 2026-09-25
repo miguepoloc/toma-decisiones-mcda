@@ -188,6 +188,10 @@ export type AdminStats = {
   accesos_recientes: { email: string; fecha: string }[];
 };
 
+/** Una fila de admin_users_activity() (20240101000013_admin_last_login.sql). `ultimo_acceso` es
+ * auth.users.last_sign_in_at: el último LOGIN, no la última actividad; null = nunca inició sesión. */
+export type AdminUserActivity = { email: string; nombre: string | null; creado: string; ultimo_acceso: string | null };
+
 /** Lo que devuelve admin_ahp_raw() (20240101000009_admin_v2.sql): judgments crudos + criteria/
  * alternatives por proyecto, para que el admin corra la MISMA lógica de ahp.ts (expertMatrix/
  * analyze) en vez de reimplementarla en SQL. Ver computeAhpConsistency() en src/lib/admin.ts. */

@@ -2,8 +2,8 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import Topbar from '@/components/Topbar';
 import GeoAdmin from '@/components/GeoAdmin';
-import type { AdminAhpRawProject, AdminStats, Method, WeightingMethod } from '@/lib/types';
-import { computeAhpConsistency, fmtDate, sparklinePoints } from '@/lib/admin';
+import type { AdminAhpRawProject, AdminStats, AdminUserActivity, Method, WeightingMethod } from '@/lib/types';
+import { computeAhpConsistency, fmtDate, fmtLastLogin, sparklinePoints } from '@/lib/admin';
 
 export const dynamic = 'force-dynamic';
 
@@ -85,12 +85,17 @@ export default async function AdminPage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login?next=/admin');
 
-  const [{ data, error }, { data: ahpRawData, error: ahpError }] = await Promise.all([
+  const [{ data, error }, { data: ahpRawData, error: ahpError }, { data: activityData, error: activityError }] = await Promise.all([
     supabase.rpc('admin_stats'),
     supabase.rpc('admin_ahp_raw'),
+    supabase.rpc('admin_users_activity'),
   ]);
   if (error || !data) redirect('/dashboard');
   const s = data as AdminStats;
+  // null si la migración 13 aún no está aplicada: la tabla cae al historial sin columna de acceso.
+  const activity = activityError || !activityData ? null : (activityData as AdminUserActivity[]);
+  const weekAgo = Date.now() - 7 * 86_400_000;
+  const activos7d = activity?.filter((u) => u.ultimo_acceso && new Date(u.ultimo_acceso).getTime() >= weekAgo).length;
   const ahp = computeAhpConsistency(ahpError || !ahpRawData ? [] : (ahpRawData as AdminAhpRawProject[]));
 
   const metodoCount = Object.fromEntries(s.metodos.map((m) => [m.metodo, m.total])) as Record<string, number>;
@@ -123,6 +128,9 @@ export default async function AdminPage() {
           <h2>Usuarios</h2>
           <div className="stat-grid">
             <div className="stat"><span className="n">{s.usuarios_total}</span><span className="l">Cuentas registradas</span></div>
+            {activos7d != null && (
+              <div className="stat"><span className="n">{activos7d}</span><span className="l">Con login en los últimos 7 días</span></div>
+            )}
           </div>
         </div>
 
@@ -274,10 +282,13 @@ export default async function AdminPage() {
             <summary>Usuarios registrados ({s.usuarios_historial.length})</summary>
             <div className="tbl" style={{ marginTop: 10 }}>
               <table>
-                <thead><tr><th>Nombre</th><th>Email</th><th>Registrado</th></tr></thead>
+                <thead><tr><th>Nombre</th><th>Email</th><th>Registrado</th>{activity && <th>Último login</th>}</tr></thead>
                 <tbody>
-                  {s.usuarios_historial.map((u, i) => (
-                    <tr key={i}><td>{u.nombre || '—'}</td><td>{u.email}</td><td>{fmtDate(u.creado)}</td></tr>
+                  {(activity ?? s.usuarios_historial).map((u, i) => (
+                    <tr key={i}>
+                      <td>{u.nombre || '—'}</td><td>{u.email}</td><td>{fmtDate(u.creado)}</td>
+                      {activity && <td>{fmtLastLogin((u as AdminUserActivity).ultimo_acceso)}</td>}
+                    </tr>
                   ))}
                 </tbody>
               </table>
