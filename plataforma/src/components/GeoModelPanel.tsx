@@ -25,7 +25,7 @@ type Props = {
   exploreWeights: number[] | null;
   onExplore: (on: boolean, w?: number[] | null) => void;
   readOnlyRules?: boolean;
-  /** Proyecto con paquete del curso: solo lectura, no admite mapas propios. */
+  /** Proyecto con paquete del curso: sus mapas son de solo lectura, pero admite mapas propios extra. */
   isPack?: boolean;
   /** Lleva a la pestaña «Capas» para subir el mapa de este criterio. */
   onUploadFor?: (criterionId: string) => void;
@@ -183,8 +183,9 @@ export default function GeoModelPanel(p: Props) {
       <section className="gv-sec">
         <header><h4>Reglas de idoneidad</h4></header>
         <p className="gv-hint">Cómo se traduce el valor de cada capa (una distancia, una temperatura, una profundidad…) a una idoneidad de 0 (mala) a 1 (óptima).</p>
-        {p.isPack && <p className="gv-hint warn">Este proyecto usa un <b>paquete de datos del curso</b> (solo lectura): sus criterios ya traen mapa y no se pueden subir mapas propios aquí. Para trabajar con tus datos crea un proyecto nuevo «Mapa de aptitud (SIG)» en blanco.</p>}
+        {p.isPack && <p className="gv-hint">Este proyecto parte de un <b>paquete de datos del curso</b>: sus mapas son de solo lectura y no se modifican. Si agregas un criterio nuevo, <b>sube tu propio mapa</b> con el botón «Subir el mapa de este criterio»: se ajusta a la misma grilla del paquete y queda guardado en tu cuenta.</p>}
         {!p.isPack && layerEntries.length === 0 && p.criteria.length > 0 && <p className="gv-hint">Cada criterio necesita un mapa. Usa <b>«Subir el mapa de este criterio»</b> en cada uno, o carga primero tus archivos en la pestaña «Capas».</p>}
+        {p.criteria.some((c) => !p.rules[c.id]) && <p className="gv-hint warn">Los criterios «sin capa» no entran al cálculo del mapa hasta que les asignes un mapa (elige una capa existente o sube la tuya).</p>}
         {p.criteria.map((c) => {
           const rule = p.rules[c.id];
           const info = rule ? p.layers[rule.layerKey] : undefined;
@@ -210,8 +211,11 @@ export default function GeoModelPanel(p: Props) {
                   </select>
                 </label>
                 {missing && <p className="gv-hint warn">Este criterio espera una capa «{rule.layerKey}» que todavía no has cargado (pestaña «Capas»). La regla de abajo se conserva.</p>}
-                {(!rule || missing) && !p.isPack && p.onUploadFor && (
+                {(!rule || missing) && p.onUploadFor && (
                   <div className="gv-row-acts"><button type="button" className="btn primary sm" onClick={() => p.onUploadFor?.(c.id)}>Subir el mapa de este criterio</button></div>
+                )}
+                {rule && !missing && p.onUploadFor && (
+                  <div className="gv-row-acts"><button type="button" className="btn sm" onClick={() => p.onUploadFor?.(c.id)}>Reemplazar por un mapa propio…</button></div>
                 )}
                 {rule && (
                   <>

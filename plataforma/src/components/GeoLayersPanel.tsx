@@ -67,6 +67,9 @@ export default function GeoLayersPanel(p: Props) {
   const { geo, data } = p;
   const isPack = !!geo.packId;
   const grid = geo.grid;
+  // Grilla a la que se alinean los archivos nuevos: la propia del proyecto o, en un proyecto con
+  // paquete del curso (solo lectura), la del paquete — así lo que subes calza con sus capas.
+  const targetGrid = isPack ? data?.grid : grid;
   const [pending, setPending] = useState<Pending[]>([]);
   const [msg, setMsg] = useState('');
   const [busy, setBusy] = useState(false);
@@ -181,7 +184,8 @@ export default function GeoLayersPanel(p: Props) {
         if (!any) throw new Error('La capa no marca ninguna celda dentro del área.');
       }
       let key = slug(pn.label).slice(0, 18) || 'capa';
-      const taken = new Set(Object.keys(layers));
+      // Las claves del paquete (temp, precip…) también están ocupadas: la capa propia no las pisa.
+      const taken = new Set([...Object.keys(layers), ...Object.keys(data?.info ?? {})]);
       for (let n = 2; taken.has(key); n++) key = `${slug(pn.label).slice(0, 15)}-${n}`;
 
       let path = '', bytes = arr.byteLength, warn = '';
@@ -217,16 +221,16 @@ export default function GeoLayersPanel(p: Props) {
   }
 
   async function addAll() {
-    let g = grid ?? null;
+    let g = targetGrid ?? null;
     setBusy(true);
-    if (!g) g = createGrid();
+    if (!g && !isPack) g = createGrid();
     if (g) for (const pn of pending) await addOne(pn, g);
     setBusy(false);
   }
 
   const outside = (b: Bounds) => {
-    if (!grid) return false;
-    const gb = gridBoundsLonLat(grid);
+    if (!targetGrid) return false;
+    const gb = gridBoundsLonLat(targetGrid);
     return b.east < gb.west || b.west > gb.east || b.north < gb.south || b.south > gb.north;
   };
 
@@ -235,8 +239,9 @@ export default function GeoLayersPanel(p: Props) {
       <section className="gv-sec">
         <header><h4>1 · Área de estudio</h4></header>
         {isPack && data && (
-          <p className="gv-hint">Paquete del curso: <b>{data.grid.width}×{data.grid.height}</b> celdas de <b>{data.grid.resM} m</b> ({(data.grid.width * data.grid.height * data.grid.haPerPixel).toLocaleString('es-CO', { maximumFractionDigits: 0 })} ha). Es de solo lectura; para trabajar con tus propios mapas crea otro proyecto en blanco.</p>
+          <p className="gv-hint">Paquete del curso: <b>{data.grid.width}×{data.grid.height}</b> celdas de <b>{data.grid.resM} m</b> ({(data.grid.width * data.grid.height * data.grid.haPerPixel).toLocaleString('es-CO', { maximumFractionDigits: 0 })} ha). El área y sus mapas son de solo lectura, pero <b>puedes añadir tus propios mapas</b> (paso 2): se recortan y alinean solos a esta misma grilla.</p>
         )}
+        {isPack && !data && <p className="gv-hint">Cargando el paquete del curso… en cuanto termine podrás subir tus propios mapas aquí.</p>}
         {!isPack && grid && !editingArea && (
           <>
             <div className="gv-kv"><span>Grilla</span><b className="mono">{grid.width} × {grid.height} celdas</b></div>
@@ -280,9 +285,15 @@ export default function GeoLayersPanel(p: Props) {
         )}
       </section>
 
-      {!isPack && (
+      {(!isPack || data) && (
         <section className="gv-sec">
           <header><h4>2 · Añadir mapas</h4></header>
+          <ol className="gv-howto" aria-label="Cómo cargar tu mapa">
+            <li className={targetGrid ? 'done' : ''}><i>{targetGrid ? '✓' : '1'}</i><span><b>Área de estudio</b> {targetGrid ? (isPack ? 'lista: la fija el paquete del curso.' : 'lista.') : 'pendiente: arriba, o se propone sola desde tu primer archivo.'}</span></li>
+            <li className={pending.length ? 'done' : ''}><i>{pending.length ? '✓' : '2'}</i><span><b>Sube tu archivo</b> aquí abajo (GeoTIFF, GeoJSON, shapefile .zip, KML o GPX).</span></li>
+            <li><i>3</i><span><b>Elige el criterio</b> al que alimenta (o «Exclusión» si marca zonas prohibidas) y pulsa «Añadir al proyecto».</span></li>
+            <li><i>4</i><span><b>Ajusta su regla</b> en la pestaña «Modelo»: cómo el valor de tu mapa se vuelve idoneidad de 0 a 1.</span></li>
+          </ol>
           {p.uploadFor && (
             <div className="gv-hint" role="status">
               Subiendo el mapa del criterio <b>«{p.criteria.find((c) => c.id === p.uploadFor)?.name ?? '—'}»</b>. Elige un archivo; después ajustas su regla en la pestaña «Modelo».
@@ -309,14 +320,15 @@ export default function GeoLayersPanel(p: Props) {
               <div className="gv-pending" key={pn.pid}>
                 <div className="hd"><b title={ps.name}>{ps.name}</b><span className="mono">{ps.kind === 'raster' ? 'ráster' : 'vector'}</span></div>
                 <div className="meta mono">{rng}</div>
-                {grid && outside(ps.bounds) && <p className="gv-hint warn">Este archivo está fuera del área de estudio.</p>}
+                {targetGrid && outside(ps.bounds) && <p className="gv-hint warn">Este archivo está fuera del área de estudio{isPack ? ' del paquete (no se podrá añadir)' : ''}.</p>}
                 <label className="gv-field"><span>Nombre de la capa</span><input type="text" value={pn.label} onChange={(e) => upd(pn.pid, { label: e.target.value })} /></label>
                 <label className="gv-field"><span>Qué es</span>
                   <select value={pn.role} onChange={(e) => { const role = e.target.value as Role; upd(pn.pid, { role, mode: role === 'criterion' ? 'distance' : 'presence', unit: role === 'criterion' && ps.kind === 'vector' ? 'm' : '' }); }}>
-                    {(Object.keys(ROLE_LABEL) as Role[]).map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
+                    {(Object.keys(ROLE_LABEL) as Role[]).filter((r) => !(isPack && r === 'area')).map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
                   </select>
                 </label>
                 <p className="gv-hint">{ROLE_HINT[pn.role]}</p>
+                {isPack && <p className="gv-hint">El «Área de estudio» no se ofrece aquí: la fija el paquete del curso.</p>}
                 {pn.role === 'criterion' && (
                   <label className="gv-field"><span>Criterio al que alimenta</span>
                     <select value={pn.criterionId} onChange={(e) => upd(pn.pid, { criterionId: e.target.value })}>
@@ -330,10 +342,10 @@ export default function GeoLayersPanel(p: Props) {
                     <legend>Qué calcular con el vector</legend>
                     <label><input type="radio" checked={pn.mode === 'distance'} onChange={() => upd(pn.pid, { mode: 'distance', unit: 'm' })} /> Distancia (m) al elemento más cercano</label>
                     <label><input type="radio" checked={pn.mode === 'presence'} onChange={() => upd(pn.pid, { mode: 'presence', unit: '' })} /> Dentro / fuera (1 / 0)</label>
-                    <label className={ps.fields.length ? '' : 'off'}><input type="radio" disabled={!ps.fields.length} checked={pn.mode === 'attr'} onChange={() => upd(pn.pid, { mode: 'attr', unit: '' })} /> Valor de un atributo numérico (polígonos)
+                    <label className={ps.fields.length ? '' : 'off'} title={ps.fields.length ? undefined : 'Este archivo no tiene campos numéricos.'}><input type="radio" disabled={!ps.fields.length} checked={pn.mode === 'attr'} onChange={() => upd(pn.pid, { mode: 'attr', unit: '' })} /> Valor de un atributo numérico (polígonos)
                       {pn.mode === 'attr' && <select value={pn.field} onChange={(e) => upd(pn.pid, { field: e.target.value })}>{ps.fields.map((f) => <option key={f} value={f}>{f}</option>)}</select>}
                     </label>
-                    <label className={ps.fields.length ? '' : 'off'}><input type="radio" disabled={!ps.fields.length} checked={pn.mode === 'surface'} onChange={() => upd(pn.pid, { mode: 'surface', unit: '' })} /> Superficie continua desde un atributo (isolíneas o puntos)
+                    <label className={ps.fields.length ? '' : 'off'} title={ps.fields.length ? undefined : 'Este archivo no tiene campos numéricos.'}><input type="radio" disabled={!ps.fields.length} checked={pn.mode === 'surface'} onChange={() => upd(pn.pid, { mode: 'surface', unit: '' })} /> Superficie continua desde un atributo (isolíneas o puntos)
                       {pn.mode === 'surface' && <select value={pn.field} onChange={(e) => upd(pn.pid, { field: e.target.value })}>{ps.fields.map((f) => <option key={f} value={f}>{f}</option>)}</select>}
                     </label>
                   </fieldset>
@@ -343,14 +355,15 @@ export default function GeoLayersPanel(p: Props) {
                 )}
                 {pn.role === 'criterion' && <label className="gv-field"><span>Unidad</span><input type="text" value={pn.unit} placeholder="m, °C, mm…" onChange={(e) => upd(pn.pid, { unit: e.target.value })} /></label>}
                 {pn.err && <p className="gv-hint warn" role="alert">{pn.err}</p>}
+                {!targetGrid && !bbox && <p className="gv-hint warn">Falta el área de estudio: dibújala en el mapa o escribe sus coordenadas (paso 1) para poder añadir este archivo.</p>}
                 <div className="gv-row-acts">
-                  <button type="button" className="btn primary sm" disabled={busy || pn.status === 'working' || (!grid && !bbox)} onClick={async () => {
+                  <button type="button" className="btn primary sm" disabled={busy || pn.status === 'working' || (!targetGrid && !bbox)} onClick={async () => {
                     setBusy(true);
-                    let g = grid ?? null;
-                    if (!g) g = createGrid();
+                    let g = targetGrid ?? null;
+                    if (!g && !isPack) g = createGrid();
                     if (g) await addOne(pn, g);
                     setBusy(false);
-                  }}>{pn.status === 'working' ? 'Procesando…' : grid ? 'Añadir al proyecto' : 'Crear área y añadir'}</button>
+                  }}>{pn.status === 'working' ? 'Procesando…' : targetGrid ? 'Añadir al proyecto' : 'Crear área y añadir'}</button>
                   <button type="button" className="btn sm" disabled={pn.status === 'working'} onClick={() => setPending((cur) => cur.filter((x) => x.pid !== pn.pid))}>Quitar</button>
                 </div>
               </div>
@@ -362,7 +375,7 @@ export default function GeoLayersPanel(p: Props) {
 
       <section className="gv-sec">
         <header><h4>{isPack ? '2' : '3'} · Capas del proyecto</h4></header>
-        {!isPack && p.quota && (
+        {p.quota && (
           <div className={'gv-quota' + (p.quota.used_bytes > p.quota.quota_bytes ? ' over' : '')} title="Espacio de mapas de tu cuenta (todos tus proyectos)">
             <span className="bar"><span style={{ width: `${Math.min(100, (p.quota.used_bytes / Math.max(1, p.quota.quota_bytes)) * 100)}%` }} /></span>
             <span className="mono">{bytesFmt(p.quota.used_bytes)} de {bytesFmt(p.quota.quota_bytes)} · {p.quota.layers}/{p.quota.max_layers} capas</span>
@@ -374,8 +387,8 @@ export default function GeoLayersPanel(p: Props) {
         {data && Object.entries(data.info).map(([k, l]) => (
           <LayerRow key={k} id={`l:${k}`} label={l.label} role={ROLE_LABEL[l.role].toLowerCase()} vis={p.vis} setVis={p.setVis}
             swatch={l.role === 'exclusion' ? '#7F8C8D' : l.role === 'area' ? '#84CC16' : 'linear-gradient(90deg,#2166AC,#92C5DE,#FDDB80)'}
-            note={[l.origin ? `${l.origin}${layers[k] && !layers[k].path ? ' · sin guardar (solo esta sesión)' : ''}` : '', l.license ? `Licencia: ${l.license}` : ''].filter(Boolean).join(' · ') || undefined}
-            onDelete={isPack ? undefined : () => dropLayer(k)} />
+            note={[l.origin ? `${l.origin}${layers[k] && !layers[k].path ? ' · sin guardar (solo esta sesión)' : ''}` : '', !layers[k] && isPack ? 'Del paquete del curso · solo lectura (no se puede borrar)' : '', l.license ? `Licencia: ${l.license}` : ''].filter(Boolean).join(' · ') || undefined}
+            onDelete={layers[k] ? () => dropLayer(k) : undefined} />
         ))}
         {p.vecs.map((v) => (
           <LayerRow key={v.id} id={`v:${v.id}`} label={`${v.name} · vector original`} role="vector" vis={p.vis} setVis={p.setVis} swatch={v.color} />

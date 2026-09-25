@@ -11,7 +11,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { CRIT_SHEET, sheetResult, type JIndex } from '@/lib/ahp';
 import { gridBoundsLonLat, type Bounds } from '@/lib/geo/grid';
 import { lonLatToPixel, pixelToLonLat } from '@/lib/geo/crs';
-import { buildMask, fromPack, type GeoData, type LayerInfo } from '@/lib/geo/data';
+import { buildMask, fromPack, mergeExtraLayers, type GeoData, type LayerInfo } from '@/lib/geo/data';
 import { buildOverlayMap, gather, type OverlayMap } from '@/lib/geo/overlay';
 import { loadPack } from '@/lib/geo/pack';
 import { CLASS_HEX, CLASS_LABEL, paintCriterion, paintDiff, paintFlag, paintParcels, paintRaw, paintResult, rampColor } from '@/lib/geo/paint';
@@ -94,6 +94,8 @@ export default function GeoVisor(props: Props) {
   const geoRef = useRef(geo);
   const cache = useRef<Record<string, Float32Array>>({});
   const cachePack = useRef('');
+  /** Paquete estático ya descargado (solo lectura): añadir una capa propia no lo vuelve a bajar. */
+  const packCache = useRef<{ id: string; base: GeoData } | null>(null);
   const paintCache = useRef(new Map<string, { deps: Deps; url: string }>());
   const [quota, setQuota] = useState<Quota | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -114,49 +116,66 @@ export default function GeoVisor(props: Props) {
   useEffect(() => {
     let alive = true;
     setError('');
+    // Descarga (o toma de la caché) las capas de `metas`. La caché la llenan también las cargas en
+    // curso (GeoLayersPanel), así que aquí nunca se purga por comparación con `geo.layers` — un render
+    // intermedio la vaciaría a mitad de un lote. Borrar una capa o cambiar el área limpia la caché de
+    // forma explícita en GeoLayersPanel.
+    const load = async (metas: Record<string, GeoLayerMeta>, fetchOne: (m: GeoLayerMeta) => Promise<Float32Array>) => {
+      const need = Object.keys(metas).filter((k) => !cache.current[k] && metas[k].path);
+      if (need.length) setLoading(true);
+      let done = 0;
+      for (const k of need) {
+        if (!supabase) continue;
+        cache.current[k] = await fetchOne(metas[k]);
+        if (alive) setProgress(++done / need.length);
+      }
+      const layers: Record<string, Float32Array> = {}; const info: Record<string, LayerInfo> = {};
+      let missing = 0;
+      for (const [k, m] of Object.entries(metas)) {
+        if (!cache.current[k]) { missing++; continue; }
+        layers[k] = cache.current[k];
+        info[k] = { label: m.label, unit: m.unit, role: m.role, min: m.min, max: m.max, origin: m.origin, source: m.source, bytes: m.bytes, license: m.license };
+      }
+      return { layers, info, missing, extras: Object.keys(layers).map((key) => ({ key, info: info[key], values: layers[key] })) };
+    };
     (async () => {
       const isCat = !!geo.packId?.startsWith(CAT_PREFIX);
+      const pk = geo.packId ?? '';
+      if (cachePack.current !== pk) { cache.current = {}; cachePack.current = pk; }
+      const own = geo.layers ?? {};
+      const fetchOwn = (m: GeoLayerMeta) => downloadLayer(supabase!, m.path);
       if (geo.packId && !isCat) {
-        setLoading(true); setProgress(0);
-        const p = await loadPack(geo.packId, (l, t) => alive && setProgress(l / t));
-        if (alive) { setData(fromPack(p)); setLost(0); }
-      } else if (isCat || geo.grid) {
-        const pk = geo.packId ?? '';
-        if (cachePack.current !== pk) { cache.current = {}; cachePack.current = pk; }
-        let grid = geo.grid, metas = geo.layers ?? {}, attribution: string | undefined;
-        let fetchLayer = (m: GeoLayerMeta) => downloadLayer(supabase!, m.path);
-        if (isCat) {
-          if (!supabase) throw new Error('El catálogo necesita conexión con la base de datos.');
-          setLoading(true);
-          const row = await getCatalogRow(supabase, geo.packId!.slice(CAT_PREFIX.length));
-          if (!row) throw new Error('Este paquete del catálogo ya no está disponible (el docente lo retiró).');
-          grid = row.definition.geo.grid; metas = row.definition.geo.layers; attribution = row.attribution;
-          fetchLayer = (m) => loadCatalogLayer(supabase, m.path);
+        // Paquete estático (solo lectura): se descarga una vez y se guarda; las capas propias del
+        // estudiante (alineadas a la grilla del paquete) se le suman sin tocarlo.
+        let base: GeoData;
+        if (packCache.current?.id === geo.packId) base = packCache.current.base;
+        else {
+          setLoading(true); setProgress(0);
+          const p = await loadPack(geo.packId, (l, t) => alive && setProgress(l / t));
+          base = fromPack(p);
+          packCache.current = { id: geo.packId, base };
         }
-        if (!grid) { if (alive) setData(null); return; }
-        // La caché la llenan también las cargas en curso (GeoLayersPanel), así que aquí nunca se
-        // purga por comparación con `geo.layers` — un render intermedio la vaciaría a mitad de un
-        // lote. Solo se descarta al quedar el proyecto sin capas; borrar una capa o cambiar el área
-        // limpia la caché de forma explícita en GeoLayersPanel.
-        if (!Object.keys(metas).length) cache.current = {};
-        const need = Object.keys(metas).filter((k) => !cache.current[k] && metas[k].path);
-        if (need.length) setLoading(true);
-        let done = 0;
-        for (const k of need) {
-          if (!supabase) continue;
-          cache.current[k] = await fetchLayer(metas[k]);
-          if (alive) setProgress(++done / need.length);
-        }
+        const mine = await load(own, fetchOwn);
+        if (alive) { setData(mergeExtraLayers(base, mine.extras)); setLost(mine.missing); }
+      } else if (isCat) {
+        if (!supabase) throw new Error('El catálogo necesita conexión con la base de datos.');
+        setLoading(true);
+        const row = await getCatalogRow(supabase, geo.packId!.slice(CAT_PREFIX.length));
+        if (!row) throw new Error('Este paquete del catálogo ya no está disponible (el docente lo retiró).');
+        const grid = row.definition.geo.grid;
+        const cat = await load(row.definition.geo.layers, (m) => loadCatalogLayer(supabase, m.path));
+        const mine = await load(own, fetchOwn);
         if (!alive) return;
-        const info: Record<string, LayerInfo> = {}; const layers: Record<string, Float32Array> = {};
-        let missing = 0;
-        for (const [k, m] of Object.entries(metas)) {
-          if (!cache.current[k]) { missing++; continue; }
-          layers[k] = cache.current[k];
-          info[k] = { label: m.label, unit: m.unit, role: m.role, min: m.min, max: m.max, origin: m.origin, source: m.source, bytes: m.bytes, license: m.license };
-        }
-        setLost(missing);
-        setData({ grid, layers, info, mask: buildMask(grid, layers, info), points: {}, attribution });
+        const base: GeoData = { grid, layers: cat.layers, info: cat.info, mask: buildMask(grid, cat.layers, cat.info), points: {}, attribution: row.attribution };
+        setLost(cat.missing + mine.missing);
+        setData(mergeExtraLayers(base, mine.extras));
+      } else if (geo.grid) {
+        const grid = geo.grid;
+        if (!Object.keys(own).length) cache.current = {};
+        const r = await load(own, fetchOwn);
+        if (!alive) return;
+        setLost(r.missing);
+        setData({ grid, layers: r.layers, info: r.info, mask: buildMask(grid, r.layers, r.info), points: {}, attribution: undefined });
       } else setData(null);
     })().catch((e) => alive && setError(e instanceof Error ? e.message : String(e))).finally(() => alive && setLoading(false));
     return () => { alive = false; };

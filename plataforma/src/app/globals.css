@@ -482,6 +482,11 @@ a{color:var(--accent)}
 .gv-sec h4{margin:0;font:700 12px var(--f-mono);letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
 .gv-hint{margin:0;font-size:12.5px;line-height:1.45;color:var(--muted)}
 .gv-hint.warn{color:var(--warn)}
+.gv-howto{margin:0;padding:0;list-style:none;display:grid;gap:5px;font-size:12.5px;line-height:1.4;color:var(--muted)}
+.gv-howto li{display:grid;grid-template-columns:20px minmax(0,1fr);gap:6px;align-items:start}
+.gv-howto li>i{font:700 11px var(--f-mono);font-style:normal;display:grid;place-items:center;width:18px;height:18px;border-radius:50%;border:1px solid var(--line)}
+.gv-howto li.done>i{background:var(--geo-alta);border-color:var(--geo-alta);color:#fff}
+.gv-howto b{color:var(--ink)}
 .gv-field{display:grid;gap:4px;font-size:12.5px}
 .gv-field>span{font:600 11.5px var(--f-body);color:var(--muted)}
 .gv-field input[type=text],.gv-field input[type=number],.gv-field select,.gv-sec select,.gv-sec input[type=number]{width:100%;min-height:34px;padding:5px 9px;font-size:13px}
