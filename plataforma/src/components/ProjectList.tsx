@@ -5,8 +5,9 @@ import { useEffect, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
 import { cloneLayers, removeProjectFolder } from '@/lib/geo/store';
+import { PROJECT_LIST_SELECT, describeProject, type ProjectListRow } from '@/lib/projects';
 
-type Row = { id: string; title: string; objective: string; is_public: boolean };
+type Row = ProjectListRow;
 
 function TrashIcon() {
   return (
@@ -116,7 +117,7 @@ export default function ProjectList({ initial }: { initial: Row[] }) {
         geo: orig.geo ?? {},
         is_public: false,
       })
-      .select('id, title, objective, is_public')
+      .select(PROJECT_LIST_SELECT)
       .single();
 
     if (insertErr || !copyRow) {
@@ -185,8 +186,10 @@ export default function ProjectList({ initial }: { initial: Row[] }) {
       // Si la copia de expertos falla, el proyecto base ya fue duplicado exitosamente
     }
 
+    // Los expertos se copiaron después de crear la fila: se vuelve a leer para que el resumen los cuente.
+    const { data: fresh } = await supabase.from('projects').select(PROJECT_LIST_SELECT).eq('id', copyRow.id).single();
     setBusy(false);
-    setProjects((prev) => [copyRow, ...prev]);
+    setProjects((prev) => [(fresh ?? copyRow) as Row, ...prev]);
     setSuccessMsg(`Proyecto «${copyRow.title}» duplicado con éxito.`);
     setTimeout(() => setSuccessMsg(''), 4500);
   }
@@ -219,11 +222,19 @@ export default function ProjectList({ initial }: { initial: Row[] }) {
       {!projects.length && (
         <div className="card muted">Aún no tienes proyectos. Crea el primero o importa tu trabajo de la herramienta HTML.</div>
       )}
-      {projects.map((p) => (
+      {projects.map((p) => {
+        const d = describeProject(p);
+        return (
         <div className="prow" key={p.id}>
-          <Link href={`/projects/${p.id}`} style={{ flex: 1, minWidth: 0, textDecoration: 'none', color: 'inherit' }}>
-            <b>{p.title}</b><br />
-            <span className="muted" style={{ fontSize: 13 }}>{p.objective ? p.objective.slice(0, 110) : 'Sin objetivo todavía'}</span>
+          <Link href={`/projects/${p.id}`} className="prow-main">
+            <b>{p.title}</b>
+            <span className="prow-obj muted" title={p.objective || undefined}>{p.objective || 'Sin objetivo todavía'}</span>
+            <span className="prow-meta">
+              <span className="prow-kind" data-method={d.spatial ? 'spatial' : d.method}><i aria-hidden="true" />{d.kind}</span>
+              {d.weights && <span>{d.weights}</span>}
+              {d.size.map((t) => <span key={t}>{t}</span>)}
+              <span>{d.people}</span>
+            </span>
           </Link>
           <span className={'pill ' + (p.is_public ? '' : 'neutral')}>{p.is_public ? 'Público con enlace' : 'Privado'}</span>
           <button
@@ -246,7 +257,8 @@ export default function ProjectList({ initial }: { initial: Row[] }) {
             <TrashIcon />
           </button>
         </div>
-      ))}
+        );
+      })}
 
       {target && (
         <div className="modal-overlay">
