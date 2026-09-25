@@ -80,7 +80,11 @@ export default function Topbar({
           {children}
           {!hideAuthAction && (loggedIn ? (
             <div className="user">
-              {userEmail && <span style={{ fontFamily: 'var(--f-mono)', fontSize: 12 }}>{userEmail}</span>}
+              {userEmail && (
+                <Link href="/cuenta" className="user-email" aria-current={pathname === '/cuenta' ? 'page' : undefined} title="Mi cuenta">
+                  {userEmail}
+                </Link>
+              )}
               {pathname !== '/dashboard' && <Link className="btn sm" href="/dashboard">Mis proyectos</Link>}
               <SignOutButton />
             </div>

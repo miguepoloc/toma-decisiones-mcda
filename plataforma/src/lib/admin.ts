@@ -1,5 +1,5 @@
 import { analyze, expertMatrix, indexJudgments, sheetItems } from './ahp.ts';
-import type { AdminAhpRawProject } from './types.ts';
+import type { AdminAhpRawProject, AdminUserActivity } from './types.ts';
 
 export type AhpConsistencySummary = { total_matrices: number; inconsistentes: number; pct_inconsistentes: number };
 
@@ -41,10 +41,74 @@ export function sparklinePoints(values: number[], width = 120, height = 32, pad 
 
 export const fmtDate = (iso: string) => iso.slice(0, 10);
 
-/** «2026-09-24 · hace 1 día» para un último acceso; null = nunca inició sesión. */
-export function fmtLastLogin(iso: string | null, now = Date.now()): string {
-  if (!iso) return 'Nunca';
-  const days = Math.floor((now - new Date(iso).getTime()) / 86_400_000);
-  const ago = days <= 0 ? 'hoy' : days === 1 ? 'hace 1 día' : `hace ${days} días`;
-  return `${fmtDate(iso)} · ${ago}`;
+// ───────────────────────── Usuarios (pestaña «Usuarios» del backoffice) ─────────────────────────
+
+/** Sin login en más de estos días = «inactivo». Ajustable aquí; la UI lo lee de esta constante. */
+export const INACTIVE_DAYS = 14;
+
+export type UserFilter = 'todos' | 'suspendidas' | 'pausadas' | 'sin_confirmar' | 'sin_login' | 'inactivos';
+export type UserSortKey = 'nombre' | 'creado' | 'ultimo_acceso';
+export type UserSort = { key: UserSortKey; dir: 'asc' | 'desc' };
+
+export const daysSince = (iso: string, now = Date.now()) => Math.floor((now - new Date(iso).getTime()) / 86_400_000);
+
+/** «hoy», «hace 1 día», «hace 12 días», «hace 3 meses». */
+export function ago(iso: string, now = Date.now()): string {
+  const d = daysSince(iso, now);
+  if (d <= 0) return 'hoy';
+  if (d === 1) return 'hace 1 día';
+  if (d < 60) return `hace ${d} días`;
+  return `hace ${Math.floor(d / 30)} meses`;
+}
+
+const norm = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
+export function matchesFilter(u: AdminUserActivity, f: UserFilter, now = Date.now()): boolean {
+  switch (f) {
+    case 'todos': return true;
+    case 'suspendidas': return u.estado === 'suspendida';
+    case 'pausadas': return u.estado === 'pausada';
+    case 'sin_confirmar': return !u.correo_confirmado;
+    case 'sin_login': return u.ultimo_acceso == null;
+    case 'inactivos': return u.ultimo_acceso != null && daysSince(u.ultimo_acceso, now) > INACTIVE_DAYS;
+  }
+}
+
+/** Busca por nombre o correo, sin tildes ni mayúsculas, y aplica el filtro de estado. */
+export function filterUsers(users: AdminUserActivity[], query: string, filter: UserFilter, now = Date.now()): AdminUserActivity[] {
+  const q = norm(query.trim());
+  return users.filter((u) => matchesFilter(u, filter, now) && (!q || norm(`${u.nombre ?? ''} ${u.email}`).includes(q)));
+}
+
+export function countByFilter(users: AdminUserActivity[], now = Date.now()): Record<UserFilter, number> {
+  const c: Record<UserFilter, number> = { todos: users.length, suspendidas: 0, pausadas: 0, sin_confirmar: 0, sin_login: 0, inactivos: 0 };
+  for (const u of users) for (const f of ['suspendidas', 'pausadas', 'sin_confirmar', 'sin_login', 'inactivos'] as const) if (matchesFilter(u, f, now)) c[f]++;
+  return c;
+}
+
+/** Orden estable. «Nunca ha entrado» cuenta como el más antiguo: primero al ordenar ascendente. */
+export function sortUsers(users: AdminUserActivity[], sort: UserSort): AdminUserActivity[] {
+  const val = (u: AdminUserActivity): string | number => {
+    if (sort.key === 'nombre') return norm(u.nombre || u.email);
+    const iso = sort.key === 'creado' ? u.creado : u.ultimo_acceso;
+    return iso ? new Date(iso).getTime() : -Infinity;
+  };
+  const m = sort.dir === 'asc' ? 1 : -1;
+  return users.map((u, i) => ({ u, i })).sort((a, b) => {
+    const x = val(a.u), y = val(b.u);
+    return (x < y ? -1 : x > y ? 1 : 0) * m || a.i - b.i;
+  }).map((r) => r.u);
+}
+
+/** Cada cambio de pestaña del backoffice registra un acceso (admin_stats). Para que «accesos recientes» no se
+ * llene de ruido, se juntan los consecutivos del mismo correo separados por menos de `gapMin` minutos. */
+export function collapseAccesses(list: { email: string; fecha: string }[], gapMin = 30): { email: string; fecha: string; veces: number }[] {
+  const out: { email: string; fecha: string; veces: number; oldest: number }[] = [];
+  for (const a of list) {
+    const t = new Date(a.fecha).getTime();
+    const last = out[out.length - 1];
+    if (last && last.email === a.email && last.oldest - t <= gapMin * 60_000) { last.veces++; last.oldest = t; }
+    else out.push({ email: a.email, fecha: a.fecha, veces: 1, oldest: t });
+  }
+  return out.map(({ oldest: _o, ...r }) => r);
 }

@@ -63,6 +63,13 @@ Un juicio es un entero `value ∈ [-8, 8]` por par: 0 = igual; negativo = gana e
 - Las páginas publicadas como artefactos (`FILEMODE=false`) no pueden descargar archivos ni llevan la librería Excel; los archivos autónomos sí (xlsx-js-style embebida, ~500 KB).
 
 ### Plataforma (`plataforma/`)
+- **Cuentas (25 sep 2026):** estados activa/desactivada/suspendida en `profiles` (`paused_at`, `suspended_at`),
+  migraciones `…14_profiles_lockdown` (cierra un escalamiento a admin: `profiles` ya no es escribible salvo `full_name`)
+  y `…15_account_status`. Se hace cumplir con RLS **restrictiva** + chequeo dentro de las funciones `SECURITY DEFINER` +
+  `auth.users.banned_until` (el middleware es solo UX). `/cuenta` = desactivar/eliminar la propia cuenta; `/admin` está en
+  pestañas (`?tab=`) con tabla de usuarios y auditoría (`account_events`). Detalle y lo no verificado contra el Supabase real:
+  `plataforma/README.md` § 25 sep 2026 (primera entrada). Al añadir una tabla con datos del usuario, **añádele también la
+  política restrictiva `account_active`**, o un suspendido seguirá escribiendo en ella.
 - Next.js App Router. Rutas: `/dashboard` y `/projects/[id]` (dueño, protegidas en `src/middleware.ts` + `lib/supabase/middleware.ts`), `/e/[token]` (experto sin cuenta), `/p/[token]` (público de solo lectura). `ProjectWorkspace` es el cliente central (pestañas Proyecto, Priorización A, Expertos, Resultados, Compartir; guardado con debounce).
 - Seguridad en `supabase/migrations/0001_init.sql`: RLS deja al dueño ver solo lo suyo; expertos y público entran **únicamente** por funciones `SECURITY DEFINER` (`expert_get`, `expert_save`, `expert_submit`, `public_get`) que validan un token aleatorio. `public_get` no expone nombres de expertos, enlaces ni la Parte A. Nunca usar la clave `service_role` en el frontend.
 - `lib/legacy.ts` + `lib/importer.ts` convierten entre el formato de respaldo v2 de la herramienta HTML y las tablas (importar `.json`/`.xlsx`); `lib/excel.ts` es el port a TS del generador de Excel.

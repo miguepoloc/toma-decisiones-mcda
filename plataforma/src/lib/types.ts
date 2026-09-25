@@ -188,9 +188,38 @@ export type AdminStats = {
   accesos_recientes: { email: string; fecha: string }[];
 };
 
-/** Una fila de admin_users_activity() (20240101000013_admin_last_login.sql). `ultimo_acceso` es
- * auth.users.last_sign_in_at: el último LOGIN, no la última actividad; null = nunca inició sesión. */
-export type AdminUserActivity = { email: string; nombre: string | null; creado: string; ultimo_acceso: string | null };
+/** Estado de una cuenta (20240101000014_account_status.sql): `pausada` la pone y la quita el propio
+ * usuario (volver a iniciar sesión la quita); `suspendida` solo un admin. */
+export type AccountState = 'activa' | 'pausada' | 'suspendida';
+
+/** Una fila de admin_users_activity(). `ultimo_acceso` es auth.users.last_sign_in_at: el último LOGIN,
+ * no la última actividad (no cambia al renovarse el token); null = nunca inició sesión. */
+export type AdminUserActivity = {
+  id: string;
+  email: string;
+  nombre: string | null;
+  rol: 'user' | 'admin';
+  estado: AccountState;
+  /** false = no abrió el enlace de confirmación del correo (un admin puede confirmarlo). */
+  correo_confirmado: boolean;
+  creado: string;
+  ultimo_acceso: string | null;
+  suspendida_el: string | null;
+  pausada_el: string | null;
+  proyectos: number;
+};
+
+export type AccountAction = 'suspend' | 'reactivate' | 'pause' | 'resume' | 'delete' | 'confirm_email';
+
+/** Una fila de admin_account_events(): auditoría de suspensiones, pausas y eliminaciones. */
+export type AdminAccountEvent = {
+  fecha: string;
+  accion: AccountAction;
+  motivo: string | null;
+  usuario_email: string | null;
+  actor_email: string | null;
+  autoservicio: boolean;
+};
 
 /** Lo que devuelve admin_ahp_raw() (20240101000009_admin_v2.sql): judgments crudos + criteria/
  * alternatives por proyecto, para que el admin corra la MISMA lógica de ahp.ts (expertMatrix/

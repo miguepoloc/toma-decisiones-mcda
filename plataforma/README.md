@@ -254,6 +254,51 @@ del SQL (políticas + funciones `SECURITY DEFINER`) se ve correcta, pero eso no 
 
 ## Historial de cambios
 
+**25 sep 2026 (bloquear atacantes, desactivar/eliminar cuenta, backoffice en pestañas):** el docente pidió poder
+bloquear a un usuario malicioso desde el admin y que cada usuario pueda desactivarse; y revisar la UX del admin.
+- **Hallazgo grave, corregido primero (migración `…14_profiles_lockdown.sql`, aplicable sola):** `profiles_self` era
+  `for all` sobre la propia fila, así que **cualquier usuario con sesión podía `PATCH profiles {"role":"admin"}` y
+  volverse admin** (o subirse `geo_quota_mb` a 10 GB). Reproducido en el PostgreSQL de pruebas. Ahora `authenticated`
+  solo lee su fila y solo puede actualizar `full_name` (privilegio por columna). **Aplicar esta migración ya**; si
+  hubo tiempo entre el despliegue y ahora, conviene revisar `select email from auth.users u join profiles p using (id)
+  where p.role = 'admin'` por si alguien más se promovió.
+- **Estados de cuenta (`…15_account_status.sql`):** *activa* / *desactivada* (`paused_at`, la pone y quita el propio
+  usuario; volver a iniciar sesión la quita) / *suspendida* (`suspended_at`, solo un admin). Se hace cumplir en 4 capas:
+  políticas RLS **restrictivas** (no hubo que tocar las existentes) en `projects/experts/judgments/geo_results` y en
+  `storage.objects` del bucket `geo-layers` — cortan al instante aunque el JWT siga vigente (~1 h); las funciones
+  `SECURITY DEFINER` que se saltan RLS (`geo_*`, `expert_*`, `public_get`, `public_geo_get`) comprueban el estado por
+  dentro, así **los enlaces `/e/…` y `/p/…` del dueño se apagan y vuelven al reactivar**; `auth.users.banned_until`
+  (`now()+100 años`, no `infinity`: GoTrue lo lee desde Go) al suspender; y el middleware (solo UX) cierra sesión y manda a
+  `/login?motivo=`. Suspender exige motivo (queda en `account_events`, que el usuario no ve), no se puede suspender a un
+  admin ni a uno mismo, y un usuario suspendido no puede «pausarse», reactivarse iniciando sesión ni eliminarse para escapar.
+- **`/cuenta`** (el correo de la barra superior enlaza ahí): «Desactivar mi cuenta» (pausa reversible) y «Eliminar mi
+  cuenta y mis datos» (confirmación escribiendo el correo). Eliminar borra primero los archivos de Storage **por la API**
+  (borrar filas de `storage.objects` desde SQL deja el archivo huérfano) y luego llama `delete_my_account()`, que borra
+  `auth.users` y cae todo en cascada; de la auditoría se borra el correo. Los admin no se desactivan ni eliminan desde ahí.
+- **Backoffice `/admin` en pestañas** (`?tab=resumen|usuarios|proyectos|seguridad|mapas`, enlaces reales, con insignia de
+  cuentas suspendidas): «Atención» con lo que pide acción; tabla de usuarios con búsqueda sin tildes, filtros (suspendidas,
+  desactivadas, nunca entraron, inactivas +14 d), orden por columna (`aria-sort`), **último login**, estado con icono+texto
+  y Suspender/Reactivar con diálogo de confirmación accesible (`ConfirmDialog`: foco atrapado, Escape, restaura foco);
+  registro de acciones sobre cuentas; accesos al backoffice agrupados (cada pestaña con `admin_stats` registra un acceso).
+  Arreglado de paso: la etiqueta de las barras al 100 % se salía de la tarjeta; la pestaña Mapas desbordaba en móvil.
+- **Admin sobre cuentas ajenas:** además de Suspender/Reactivar, **Confirmar correo** (`admin_confirm_user_email`, para quien
+  no recibió el mensaje de activación; solo si te consta que el correo es de la persona) y **Eliminar** (`admin_delete_user`:
+  motivo obligatorio, se confirma escribiendo el correo, cascada igual que la autoeliminación). Aquí la auditoría **conserva**
+  el correo y el motivo (a diferencia de la autoeliminación, que lo borra). Los archivos de mapas de una cuenta eliminada
+  quedan huérfanos y se limpian en Mapas. Nuevo filtro «Correo sin confirmar» y etiqueta en la fila.
+- **Último login = `auth.users.last_sign_in_at`:** cambia al *iniciar sesión*, no al renovarse el token; quien deja la
+  sesión abierta días se ve «antiguo». Para actividad real haría falta un `last_seen_at` desde el middleware.
+- **Trampa:** una `<span class="sr-only">` (absoluta) dentro de un contenedor con `overflow-x:auto` **no queda recortada**
+  si el contenedor no es `position:relative` y ensancha todo el documento; `.tbl` ahora lo es.
+- **Verificado:** `npm run test:db` (nuevo `supabase/tests/account_status.sql`, ~60 comprobaciones: escalamiento cerrado,
+  enlaces apagados/vueltos, cascada al eliminar, auditoría; y migraciones 10–15 idempotentes), `npm test`
+  (`check-admin-users.ts`), typecheck, build y un recorrido en navegador contra un mock de Supabase (escritorio, móvil 390 px,
+  claro/oscuro, sin errores de consola). **No verificado contra el Supabase real:** que `postgres` pueda `update/delete` sobre
+  `auth.users` desde las funciones (debería, como en el SQL Editor) ni la política restrictiva sobre `storage.objects` — probar
+  con una cuenta de prueba tras aplicar (suspender → no entra; reactivar → entra; eliminar → desaparece en Authentication).
+- **Fuera de alcance, a propósito:** suspender bloquea la *cuenta*, no a la persona (puede registrarse con otro correo):
+  el freno de verdad es CAPTCHA en Supabase → Authentication → Attack Protection (ajuste del panel, no de código).
+
 **25 sep 2026 (geovisor AHP + SIG, cuarta entrega: análisis):** cerró lo que faltaba — superficie desde isolíneas
 (la batimetría de la tesis son isolíneas de 100 m; `numericFields` ahora tolera filas sin valor), regla de valor
 objetivo, parcelas contiguas mínimas, comparar escenarios y licencias por capa. Probado en navegador con isolíneas

@@ -7,9 +7,19 @@ import { createClient, supabaseConfigurado } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
 import Topbar from '@/components/Topbar';
 
+/** Avisos que llegan por `/login?motivo=…` (middleware, cierre de sesión al desactivar/eliminar la cuenta). */
+const MOTIVOS: Record<string, { title: string; text: string; tone: 'info' | 'warn' }> = {
+  pausada: { title: 'Cuenta desactivada.', text: 'Cerramos tu sesión. Cuando quieras volver, inicia sesión y se reactiva sola, con todos tus proyectos.', tone: 'info' },
+  eliminada: { title: 'Cuenta eliminada.', text: 'Borramos tu cuenta y tus datos. Puedes crear una nueva cuando quieras.', tone: 'info' },
+  suspendida: { title: 'Cuenta suspendida.', text: 'Un administrador suspendió esta cuenta. Escribe al docente para revisarlo.', tone: 'warn' },
+};
+
 function LoginForm() {
   const router = useRouter();
-  const next = useSearchParams().get('next') || '/dashboard';
+  const params = useSearchParams();
+  const next = params.get('next') || '/dashboard';
+  const motivoParam = params.get('motivo');
+  const aviso = motivoParam && Object.prototype.hasOwnProperty.call(MOTIVOS, motivoParam) ? MOTIVOS[motivoParam] : null;
   const [mode, setMode] = useState<'in' | 'up' | 'reset'>('in');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -48,7 +58,14 @@ function LoginForm() {
     if (mode === 'in') {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) setMsg(friendlyError(error, 'No se pudo iniciar sesión. Intenta de nuevo.'));
-      else { router.push(next); router.refresh(); }
+      else {
+        // Iniciar sesión reactiva una cuenta desactivada; una suspendida no se reactiva sola.
+        const { data: estado } = await supabase.rpc('resume_my_account');
+        if (estado === 'suspended') {
+          await supabase.auth.signOut();
+          setMsg('Tu cuenta está suspendida. Escribe al docente para revisarlo.');
+        } else { router.push(next); router.refresh(); }
+      }
     } else if (mode === 'up') {
       const { data, error } = await supabase.auth.signUp({
         email, password,
@@ -106,6 +123,11 @@ function LoginForm() {
               </p>
             )}
           </div>
+          {aviso && (
+            <div className={'banner' + (aviso.tone === 'info' ? ' info' : '')} role="status" style={{ fontSize: 13.5 }}>
+              <span><b>{aviso.title}</b> {aviso.text}</span>
+            </div>
+          )}
           {!supabaseConfigurado && <div className="banner"><span><b>Falta configurar Supabase.</b> Define NEXT_PUBLIC_SUPABASE_URL y NEXT_PUBLIC_SUPABASE_ANON_KEY (ver README).</span></div>}
           <form className="card form" onSubmit={submit}>
             {mode === 'up' && <div><label className="lbl" htmlFor="n">Nombre completo</label><input id="n" type="text" required value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" placeholder="Ej. Dr. Carlos Mendoza" /></div>}

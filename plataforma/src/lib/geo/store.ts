@@ -54,6 +54,31 @@ export async function removeProjectFolder(sb: SupabaseClient, ownerId: string, p
   if (names.length) await removeLayers(sb, names);
 }
 
+/** Lista TODOS los archivos de un usuario (`<uid>/<proyecto>/…`), paginando. Lanza si la API falla:
+ * al eliminar la cuenta es preferible detenerse y reintentar que dejar archivos sin dueño. */
+async function listAll(sb: SupabaseClient, prefix: string): Promise<{ name: string; isFolder: boolean }[]> {
+  const out: { name: string; isFolder: boolean }[] = [];
+  for (let offset = 0; ; offset += 1000) {
+    const { data, error } = await sb.storage.from(BUCKET).list(prefix, { limit: 1000, offset });
+    if (error) throw new Error(error.message);
+    for (const o of data ?? []) out.push({ name: o.name, isFolder: o.id == null });
+    if ((data?.length ?? 0) < 1000) return out;
+  }
+}
+
+/** Borra todas las capas de un usuario, de todos sus proyectos, para «Eliminar mi cuenta». El SQL no
+ * puede hacerlo (borrar filas de storage.objects deja el archivo huérfano en el almacenamiento).
+ * Devuelve cuántos archivos borró. */
+export async function removeAllUserLayers(sb: SupabaseClient, uid: string): Promise<number> {
+  const paths: string[] = [];
+  for (const top of await listAll(sb, uid)) {
+    if (!top.isFolder) { paths.push(`${uid}/${top.name}`); continue; }
+    for (const f of await listAll(sb, `${uid}/${top.name}`)) if (!f.isFolder) paths.push(`${uid}/${top.name}/${f.name}`);
+  }
+  for (let i = 0; i < paths.length; i += 100) await removeLayers(sb, paths.slice(i, i + 100));
+  return paths.length;
+}
+
 /** Copia las capas propias de un proyecto a la carpeta de otro (duplicar). Cada copia pasa por la
  * cuota (`geo_check_upload`); si algo falla se borran las ya copiadas y se lanza el error. Devuelve
  * las capas con sus rutas nuevas. Los paquetes del catálogo/estáticos no se copian (no hay `path` propio). */

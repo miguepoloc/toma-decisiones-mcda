@@ -137,7 +137,7 @@ label.lbl{font:600 12px var(--f-mono);letter-spacing:.05em;text-transform:upperc
 .cand-name{font-weight:600}
 .cand.out{background:var(--surface2)}
 .cand.out .cand-name{color:var(--muted);text-decoration:line-through}
-.tbl{overflow-x:auto}
+.tbl{overflow-x:auto;position:relative}
 table{border-collapse:collapse;width:100%;font-size:14px;min-width:520px}
 th{font:500 11px var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);text-align:left;padding:6px 10px 6px 0;border-bottom:1px solid var(--line);vertical-align:bottom}
 td{padding:7px 10px 7px 0;border-bottom:1px solid var(--line);vertical-align:top}
@@ -325,6 +325,11 @@ a{color:var(--accent)}
 .modal h3{margin:0;font-size:17px}
 .modal p{margin:0 0 4px;color:var(--muted);font-size:14px}
 .modal .confirm-field{margin-top:6px}
+.modal .warn-icon.neutral{background:var(--accent-soft);color:var(--accent)}
+.modal-desc{display:grid;gap:8px;color:var(--muted);font-size:14px}
+.modal-desc p{margin:0}
+.modal-list{margin:0;padding-left:20px;display:grid;gap:4px}
+.modal textarea{width:100%}
 .modal .acts{justify-content:flex-end;margin-top:10px}
 .err{color:var(--warn);font-size:14px}
 .ok{color:var(--pass)}
@@ -460,6 +465,60 @@ a{color:var(--accent)}
 .spark svg{display:block;width:100%;height:32px}
 .afunnel{display:grid;gap:4px}
 .afunnel-step{font-size:12px;color:var(--muted);padding-left:2px}
+
+/* ---- admin: pestañas, tabla de usuarios, atención ---- */
+.panel > *,.stat-group,.stat-group > *,.stack > *,.two-col > *{min-width:0}
+.two-col > .stat-group{align-content:start}
+.admin-tabs{display:flex;gap:4px;overflow-x:auto;border-bottom:1px solid var(--line);margin-bottom:4px;scrollbar-width:thin}
+.admin-tab{position:relative;flex:0 0 auto;display:inline-flex;align-items:center;gap:8px;padding:11px 16px;font:600 14px var(--f-body);color:var(--muted);text-decoration:none;border-bottom:3px solid transparent;margin-bottom:-1px;min-height:44px;transition:color .15s ease,border-color .15s ease}
+.admin-tab:hover{color:var(--ink)}
+.admin-tab.active{color:var(--ink);border-bottom-color:var(--accent)}
+.tab-badge{font:600 11px var(--f-mono);min-width:20px;text-align:center;padding:1px 6px;border-radius:99px;background:var(--warn);color:#1a1200}
+.attn{list-style:none;margin:0;display:grid;gap:2px}
+.attn a{display:flex;gap:8px;align-items:baseline;padding:10px 4px;color:var(--ink);text-decoration:none;border-radius:6px;min-height:44px}
+.attn a:hover{background:var(--surface2)}
+.attn b{color:var(--warn);font-size:18px}
+.attn li+li{border-top:1px solid var(--line)}
+.ok-card{border-color:var(--pass)}
+.scroll-y{max-height:460px;overflow:auto}
+.scroll-y thead th{position:sticky;top:0;background:var(--bg);z-index:1}
+.acc-list{list-style:none;margin:0;padding:0;display:grid;gap:8px;font-size:13.5px}
+.acc-list li{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.ufilters{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+.usearch{position:relative;flex:1 1 300px;min-width:min(100%,280px);max-width:420px}
+.usearch svg{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none}
+.usearch input{font:inherit;color:var(--ink);background:var(--surface2);border:1px solid var(--line);border-radius:8px;padding:9px 12px 9px 34px;width:100%;min-height:40px;transition:border-color .2s ease}
+.usearch input:focus{border-color:var(--accent)}
+.ufilters .seg button{min-height:40px}
+.thsort{appearance:none;background:none;border:0;padding:0;font:inherit;letter-spacing:inherit;text-transform:inherit;color:inherit;cursor:pointer;white-space:nowrap}
+.thsort:hover{color:var(--ink)}
+th[aria-sort="ascending"] .thsort,th[aria-sort="descending"] .thsort{color:var(--ink)}
+.utable{min-width:900px}
+.utable th.ucell{font:inherit;letter-spacing:0;text-transform:none;color:var(--ink);padding:7px 10px 7px 0;border-bottom:1px solid var(--line);vertical-align:top}
+.utable td,.utable th.ucell{padding-block:11px}
+.utable td{vertical-align:middle}
+.utable th.ucell{vertical-align:middle}
+.uname{display:block;font-weight:600}
+.uemail{display:block;font-size:12px}
+.since{display:block;font-size:12px;margin-top:2px}
+.pill.st{display:inline-flex;align-items:center;gap:5px}
+.row-susp .uname{color:var(--muted)}
+.uact{text-align:right;white-space:nowrap}
+.uact-btns{display:inline-flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.pill.unconf{display:inline-block;margin-top:6px;font-size:11px}
+.utable th:first-child,.utable td:first-child{position:sticky;left:0;background:var(--bg);z-index:1}
+.empty{display:grid;gap:8px;justify-items:start;padding:22px}
+@media (pointer:coarse){.uact .btn.sm,.ufilters .seg button{min-height:44px}}
+
+/* ---- «Mi cuenta» ---- */
+.user-email{font:500 12px var(--f-mono);color:var(--muted);text-decoration:none;padding:6px 4px;border-radius:6px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.user-email:hover,.user-email[aria-current="page"]{color:var(--ink);text-decoration:underline}
+.acct-dl{display:grid;grid-template-columns:max-content 1fr;gap:6px 18px;margin:0}
+.acct-dl dt{font:500 12px var(--f-mono);letter-spacing:.05em;text-transform:uppercase;color:var(--muted);align-self:center}
+.acct-dl dd{margin:0}
+.acct-zone{display:flex;gap:16px 24px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.acct-zone > div{flex:1 1 360px;display:grid;gap:6px}
+.acct-zone.danger{border-color:var(--warn)}
 
 /* ---- geovisor (kind:'spatial') — todo prefijado .gv- para no chocar con clases cortas ya
    usadas arriba (.val, .track, .fill, .n, .st… viven en otros componentes; ver
