@@ -58,6 +58,8 @@ type Props = {
   draft: Bounds | null; setDraft: (b: Bounds | null) => void;
   drawing: boolean; setDrawing: (d: boolean) => void;
   quota: Quota | null; onQuotaChange: () => void;
+  /** Criterio para el que se está subiendo un mapa (viene del botón «Subir el mapa de este criterio»). */
+  uploadFor?: string | null; onCancelUpload?: () => void; onLayerAdded?: (criterionId: string) => void;
   virtual: { id: string; label: string; role: string; swatch: string }[];
 };
 
@@ -104,7 +106,7 @@ export default function GeoLayersPanel(p: Props) {
     for (const f of list) {
       try {
         const parsed = await parseFile(f);
-        for (const x of parsed) next.push(makePending(x, ''));
+        for (const x of parsed) next.push(makePending(x, p.uploadFor ?? ''));
       } catch (e) { setMsg((e instanceof Error ? e.message : String(e))); }
     }
     if (!next.length) return;
@@ -210,6 +212,7 @@ export default function GeoLayersPanel(p: Props) {
       setPending((cur) => cur.filter((x) => x.pid !== pn.pid));
       p.onQuotaChange();
       if (warn) setMsg(warn);
+      if (pn.role === 'criterion' && pn.criterionId) p.onLayerAdded?.(pn.criterionId);
     } catch (e) { upd(pn.pid, { status: 'error', err: e instanceof Error ? e.message : String(e) }); }
   }
 
@@ -280,6 +283,12 @@ export default function GeoLayersPanel(p: Props) {
       {!isPack && (
         <section className="gv-sec">
           <header><h4>2 · Añadir mapas</h4></header>
+          {p.uploadFor && (
+            <div className="gv-hint" role="status">
+              Subiendo el mapa del criterio <b>«{p.criteria.find((c) => c.id === p.uploadFor)?.name ?? '—'}»</b>. Elige un archivo; después ajustas su regla en la pestaña «Modelo».
+              {' '}<button type="button" className="btn sm" onClick={p.onCancelUpload}>Cancelar</button>
+            </div>
+          )}
           <label
             className={'gv-drop' + (over ? ' over' : '')}
             onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)}

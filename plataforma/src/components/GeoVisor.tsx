@@ -63,6 +63,9 @@ const sameDeps = (a: Deps, b: Deps) => a.length === b.length && a.every((x, i) =
 export default function GeoVisor(props: Props) {
   const { criteria, experts, idx, geo, supabase } = props;
   const [tab, setTab] = useState<Tab>('capas');
+  // Criterio al que se le está subiendo un mapa / cuya regla se abre tras subirlo (flujo «Subir el mapa de este criterio»).
+  const [uploadFor, setUploadFor] = useState<string | null>(null);
+  const [focusId, setFocusId] = useState<string | null>(null);
   const [data, setData] = useState<GeoData | null>(null);
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -410,10 +413,11 @@ export default function GeoVisor(props: Props) {
             <GeoLayersPanel geo={geo} data={data} criteria={criteria} commit={commit} cache={cache} sb={supabase} ownerId={props.ownerId} projectId={props.projectId}
               vecs={vecs} setVecs={setVecs} vis={vis} setVis={setVis} fit={(b) => mapRef.current?.fit(b)} draft={draft} setDraft={setDraft} drawing={drawing} setDrawing={setDrawing}
               quota={quota} onQuotaChange={refreshQuota}
+              uploadFor={uploadFor} onCancelUpload={() => setUploadFor(null)} onLayerAdded={(id) => { setUploadFor(null); setFocusId(id); setTab('modelo'); }}
               virtual={[...(parcelRes ? [{ id: 'parcels', label: `Parcelas ≥ ${minPatchHa} ha`, role: `${parcelRes.parcels.length} parcelas`, swatch: '#6D28D9' }] : []), ...(baseline ? [{ id: 'diff', label: `Diferencia con el escenario ${baseline.label}`, role: 'rojo empeora · verde mejora', swatch: 'linear-gradient(90deg,#D9534F,#eee,#2E7D32)' }] : [])]} />
           )}
           {tab === 'modelo' && (
-            <GeoModelPanel criteria={criteria} weights={weightResult.agg.w} cr={weightResult.agg.cr} nExperts={expertIds.length} layers={data?.info ?? {}} rules={geo.rules}
+            <GeoModelPanel isPack={!!geo.packId} onUploadFor={(id) => { setFocusId(null); setUploadFor(id); setTab('capas'); }} focusId={focusId} criteria={criteria} weights={weightResult.agg.w} cr={weightResult.agg.cr} nExperts={expertIds.length} layers={data?.info ?? {}} rules={geo.rules}
               onRule={(id, rule) => commit((c) => { const r = { ...c.rules }; if (rule) r[id] = rule; else delete r[id]; return { ...c, rules: r }; })}
               thresholds={thresholds} onThresholds={(c) => { setThresholds(c); commit((g) => ({ ...g, classes: c })); }}
               exploring={exploring} exploreWeights={exploreWeights} onExplore={(on, w) => { setExploring(on); setExploreWeights(w ?? null); }}
