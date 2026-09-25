@@ -133,7 +133,7 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
     patch({ criteria: ex.criteria, geo: ex.geo, ...(project.objective.trim() ? {} : { objective: ex.objective }) }, true);
     const seedErr = await seedExampleExpert(supabase, project.id, ex);
     if (seedErr) setMsg(seedErr);
-    else if (ex.expert) {
+    else if (ex.experts?.length) {
       const { data: xs } = await supabase.from('experts').select('*').eq('project_id', project.id).order('position');
       if (xs) {
         setExperts(xs as ExpertRow[]);

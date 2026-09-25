@@ -5,9 +5,9 @@ import { uid } from '../types.ts';
 import type { Criterion, GeoConfig } from '../types.ts';
 
 export type ExampleId = 'cacao-snsm' | 'boya-2021' | 'boya-wsn';
-/** Experto sembrado con el ejemplo (opcional). Sus juicios son una RECONSTRUCCIÓN marcada como tal, nunca respuestas de un panel real. */
+/** Expertos sembrados con el ejemplo (opcional). Solo respuestas reales del autor o, si se reconstruyen, marcadas expresamente como tales. */
 export type ExampleExpert = { name: string; roleDesc: string; judgments: { key: string; value: number }[] };
-export type Example = { id: string; source?: 'builtin' | 'catalog'; label: string; blurb: string; hasData: boolean; title: string; objective: string; criteria: Criterion[]; geo: GeoConfig; expert?: ExampleExpert };
+export type Example = { id: string; source?: 'builtin' | 'catalog'; label: string; blurb: string; hasData: boolean; title: string; objective: string; criteria: Criterion[]; geo: GeoConfig; experts?: ExampleExpert[] };
 
 const CLASSES = { alta: 0.70, media: 0.45 };
 
@@ -60,9 +60,19 @@ export const BOYA_CLASS_SCORES = { '1': 1, '2': 0.5, '3': 0 };
 export const BOYA_RULES: { layerKey: string; fn: FnSpec }[] = ['eco', 'trafico', 'pesca', 'bati'].map((layerKey) => ({ layerKey, fn: { type: 'classes', map: { ...BOYA_CLASS_SCORES } } }));
 export const BOYA_CLASSES = { alta: 0.75, media: 0.25 };
 
-/** Matriz agregada publicada (Tabla IV del artículo), redondeada a la escala entera de Saaty: 4, 4, 3, 1/2, 2, 2. Da pesos
- * [0.541, 0.144, 0.203, 0.111] y CR 0.068 frente a los publicados [0.5482, 0.1423, 0.2020, 0.1075] y CR 0.0652. No son juicios de expertos. */
-const BOYA_TABLA_IV: [number, number, number][] = [[0, 1, -3], [0, 2, -3], [0, 3, -2], [1, 2, 1], [1, 3, -1], [2, 3, -1]];
+/** Juicios de los 4 expertos de la encuesta de la tesis (`Datos_encuesta_sin_GSM.xlsx`, identidad reservada), en razones de Saaty para los pares
+ * (1,2) (1,3) (1,4) (2,3) (2,4) (3,4) de [ecosistemas, tráfico, pesca, 4.º criterio]. Su media geométrica es EXACTAMENTE la Tabla IV del artículo
+ * (hoja «Todo» del archivo; diferencia < 1e-15) y su eigenvector da los pesos publicados 0.5482 / 0.1423 / 0.2020 / 0.1075, CR 0.065.
+ * OJO: en el archivo de la encuesta el 4.º criterio se llama «zonas de bañistas»; el artículo lo publica como «zona batimétrica». */
+const BOYA_EXPERT_RATIOS: number[][] = [
+  [5, 4, 7, 1 / 3, 4, 4],
+  [9, 5, 7, 1, 3, 3],
+  [6, 3, 5, 1, 3, 3],
+  [1, 5, 1 / 3, 1 / 3, 1 / 3, 1],
+];
+const BOYA_PAIRS: [number, number][] = [[0, 1], [0, 2], [0, 3], [1, 2], [1, 3], [2, 3]];
+/** razón de Saaty -> valor del control (negativo: gana el primero; |v|+1 = intensidad). */
+const ratioToValue = (a: number) => (a >= 1 ? -(Math.round(a) - 1) : Math.round(1 / a) - 1);
 
 function boyaDatos(): Example {
   const specs = [
@@ -76,16 +86,16 @@ function boyaDatos(): Example {
   criteria.forEach((c, i) => { rules[c.id] = { layerKey: BOYA_RULES[i].layerKey, fn: BOYA_RULES[i].fn }; });
   return {
     id: 'boya-2021', label: 'Boya de monitoreo oceanográfico · con datos (artículo 2021)', hasData: true,
-    blurb: 'Caso real de la tesis del docente (Polo-Castañeda et al., 2021), con las clases 1/2/3 del autor a 250 m y las concesiones como exclusión. Trae un experto de ejemplo con la Tabla IV redondeada, marcado como tal.',
+    blurb: 'Caso real de la tesis del docente (Polo-Castañeda et al., 2021): las clases 1/2/3 del autor a 250 m, las concesiones como exclusión y los 4 expertos de la encuesta (su media geométrica es la Tabla IV del artículo).',
     title: 'Zonas aptas para una boya de monitoreo oceanográfico (ejemplo del artículo de 2021)',
     objective: 'Determinar dónde instalar una red de sensores inalámbricos tipo boya en la zona de surgencia del Caribe sur (isóbata de 200 m), lejos de ecosistemas, tráfico marítimo y zonas de pesca, y sin las áreas de concesión.',
     criteria,
     geo: { packId: 'boya-wsn-v1', rules, classes: { ...BOYA_CLASSES } },
-    expert: {
-      name: 'Ejemplo · Tabla IV del artículo (redondeada)',
-      roleDesc: 'Reconstrucción entera de la matriz agregada publicada, para probar el mecanismo. NO son respuestas de expertos reales.',
-      judgments: BOYA_TABLA_IV.map(([i, j, value]) => ({ key: `${criteria[i].id}-${criteria[j].id}`, value })),
-    },
+    experts: BOYA_EXPERT_RATIOS.map((ratios, e) => ({
+      name: `Experto ${e + 1}`,
+      roleDesc: 'Respuestas de la encuesta de la tesis (identidad reservada). Su media geométrica es la Tabla IV del artículo.',
+      judgments: BOYA_PAIRS.map(([i, j], k) => ({ key: `${criteria[i].id}-${criteria[j].id}`, value: ratioToValue(ratios[k]) })),
+    })),
   };
 }
 

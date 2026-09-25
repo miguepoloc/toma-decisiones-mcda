@@ -137,6 +137,17 @@ no sirve como referencia.)
    hacerse por **ventanas** de ≈ 30 × 30 km a ≈ 40 m (los umbrales de 50-150 m no se resuelven con celdas de 250 m).
 4. **Material del curso:** en `Toma de decisiones/` no hay nada sobre la boya ni sobre el eigenvector; la sesión 2 y el notebook 01 usan el promedio de columnas.
 
+### 5.2b Encuesta de la boya recuperada (25 sep 2026)
+
+`Drive/Maestria/Articulos/AHP_GIS/Datos_encuesta_sin_GSM.xlsx` trae los juicios de los **4 expertos** del modelo de 4 criterios. La hoja «Todo» es la **media geométrica exacta** de los 4
+(diferencia < 1e-15) y **es la Tabla IV del artículo** (4.05, 4.16, 3.01, 0.58, 1.86, 2.45). Con esos 4 expertos la plataforma reproduce los pesos publicados
+0.5482 / 0.1423 / 0.2020 / 0.1075 (eigenvector; CR 0.0650 vs 0.0652 publicado). Están cargados como el ejemplo «Boya con datos» (identidad reservada, «Experto 1..4»; fixture anonimizado
+`scripts/validation/data/encuesta-2021.json`). CR por experto: 0.089, 0.065, 0.059 y **0.382** (el Experto 4 es inconsistente); consenso S* = 82.2 % (alto).
+
+**A confirmar por el autor:** en ese archivo el 4.º criterio se llama **«Distancia a zonas de bañistas»**, mientras que el artículo publica el mismo peso (0.1075) como **«zona batimétrica»**.
+Puede ser una etiqueta que no se actualizó en el archivo o un cambio de criterio posterior a la encuesta; conviene saber cuál antes de citar el peso como el de la batimetría.
+(Los 4 expertos son los mismos de `Datos_encuesta.xlsx`, el modelo de 2019 de 5 criterios.)
+
 ### 5.3 Pendiente
 
 1. Reproducir cada criterio **desde los vectores** (distancia euclidiana + rangos de la Tabla VI) en 2-3 ventanas y comparar píxel a píxel con
