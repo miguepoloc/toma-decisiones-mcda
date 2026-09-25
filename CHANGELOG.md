@@ -8,6 +8,7 @@ is planned in `plataforma/docs/PLAN_publicacion.md` (task R5).
 - AHP weights are now the principal eigenvector (Saaty) by default, in the app and in the exported Excel (live power-iteration formulas); the column-average shortcut taught in the course remains selectable and is shown next to it. Reference values re-derived with `numpy.linalg.eig`.
 
 ### Added
+- Geoviewer example «Boya con datos» (Polo-Castañeda et al. 2021): pack `boya-wsn-v1` (author's classified layers at 250 m, concessions excluded), example expert = rounded Table IV clearly marked as a reconstruction; engine check against the archived result polygon.
 - Group AHP diagnostics: consensus indicator S* (Goepel 2018) and Monte Carlo weight uncertainty.
 - «Mis proyectos» shows method or map type, size and expert progress for each project.
 - Geoviewer: «Subir el mapa de este criterio» flow.

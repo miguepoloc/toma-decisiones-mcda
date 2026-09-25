@@ -16,6 +16,7 @@ import dynamic from 'next/dynamic';
 const GeoVisor = dynamic(() => import('./GeoVisor'), { ssr: false, loading: () => <p className="muted">Cargando el geovisor…</p> });
 import { buildExample, EXAMPLE_IDS, type ExampleId } from '@/lib/geo/examples';
 import { useExamples } from '@/lib/geo/useExamples';
+import { seedExampleExpert } from '@/lib/geo/exampleExpert';
 import Results, { accentStyleFor } from './Results';
 import ScientificMethodModal, { type MethodKey } from './ScientificMethodModal';
 
@@ -130,6 +131,16 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
     const ex = examples.find((e) => e.id === id) ?? buildExample(id as ExampleId);
     await dropJudgments(() => true);
     patch({ criteria: ex.criteria, geo: ex.geo, ...(project.objective.trim() ? {} : { objective: ex.objective }) }, true);
+    const seedErr = await seedExampleExpert(supabase, project.id, ex);
+    if (seedErr) setMsg(seedErr);
+    else if (ex.expert) {
+      const { data: xs } = await supabase.from('experts').select('*').eq('project_id', project.id).order('position');
+      if (xs) {
+        setExperts(xs as ExpertRow[]);
+        const { data: js } = await supabase.from('judgments').select('*').in('expert_id', xs.map((x) => x.id));
+        if (js) setJudgments(js as JudgmentRow[]);
+      }
+    }
     setTab('Geovisor');
   }
   const twoClick = (key: string, fn: () => void | Promise<void>) => {

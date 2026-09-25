@@ -10,6 +10,7 @@ import { uid } from '@/lib/types';
 import { Icon, ICONS } from '@/components/GeoBits';
 import { blankMatrix, setCell, setType } from '@/lib/topsis';
 import { useExamples } from '@/lib/geo/useExamples';
+import { seedExampleExpert } from '@/lib/geo/exampleExpert';
 import type { GeoConfig, Kind } from '@/lib/types';
 import type { MethodKey } from '@/components/ScientificMethodModal';
 
@@ -131,6 +132,7 @@ function NewProjectForm({ userId }: { userId: string }) {
       prioritization: blankPrio(),
       geo,
     }).select('id').single();
+    if (data) await seedExampleExpert(createClient(), data.id, ex);
     setBusy(false);
     if (error || !data) setMsg(error ? friendlyError(error, 'No se pudo crear el proyecto.') : 'No se pudo crear el proyecto.');
     else router.push(`/projects/${data.id}`);

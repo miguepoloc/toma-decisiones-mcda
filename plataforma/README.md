@@ -126,8 +126,17 @@ boya oceanográfica — ver `docs/PLAN_geovisor_ahp_sig.md` (plan, UX, fases). S
 2026): mapa web real, carga de capas propias y exportación; ver Historial.
 
 - **Nace en blanco**, como un proyecto de decisión (3 criterios «Criterio 1/2/3»). Los ejemplos son
-  opcionales (`src/lib/geo/examples.ts`): *cacao SNSM* (trae datos) y *plantilla de la boya* (los 4
-  criterios y rangos de la Tabla VI del artículo, sin datos — el estudiante sube los suyos).
+  opcionales (`src/lib/geo/examples.ts`): *cacao SNSM* (trae datos), *boya con datos* (`boya-2021`, paquete
+  `public/geo-packs/boya-wsn-v1`) y *plantilla de la boya* (los 4 criterios y rangos de la Tabla VI, sin datos —
+  el estudiante sube los suyos).
+- **Boya con datos (`boya-wsn-v1`, 25 sep 2026).** Caso real de la tesis del docente (Polo-Castañeda et al. 2021): las 4 capas ya
+  clasificadas 1/2/3 por el autor (1 apto · 3 no apto), reducidas de 38.68×17.89 m a 250 m tomando la moda de cada bloque, EPSG:3116, las
+  concesiones como exclusión y fuera de la isóbata de 200 m como sin dato; ≈ 27 KB. Regla `classes` (1→1, 2→0.5, 3→0) y cortes 0.75/0.25
+  (= los cortes 1.5/2.5 de `Final/Resultado.shp`). Con los pesos publicados el motor da 83.20 / 13.62 / 3.18 % (original 82.89 / 14.03 /
+  3.07 %; **no** los 62.36 / 30.88 / 6.76 % del artículo, que eran un artefacto, ver `docs/PLAN_publicacion.md` §5). El proyecto trae un
+  **experto de ejemplo** con la Tabla IV redondeada a la escala entera (pesos 0.541/0.144/0.203/0.111), marcado como reconstrucción y no como
+  respuestas reales. Se regenera con `scripts/geo/export-boya-pack.ts` (necesita los rásteres del autor; no corre en CI) y lo prueba
+  `scripts/check-geo-boya-pack.ts`. Pendiente: partir de los vectores (distancias) en vez de las clases ya calculadas.
 - **`method` se fija en `'saw'`** aunque no haya matriz de decisión ni alternativas: es un atajo
   deliberado para que `JudgmentEditor`/`expert_get` (que ya solo muestran la hoja `crit` cuando
   `method !== 'ahp'`) sirvan sin tocarlos. Los pesos salen del mismo `sheetResult(CRIT_SHEET, …)` de
