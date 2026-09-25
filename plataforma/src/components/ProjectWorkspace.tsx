@@ -11,8 +11,11 @@ import { normalizeMatrix, setCell as setMatrixCell, setTarget as setMatrixTarget
 import JudgmentEditor from './JudgmentEditor';
 import PrioritizationEditor from './PrioritizationEditor';
 import DecisionMatrixEditor from './DecisionMatrixEditor';
-import GeoVisor from './GeoVisor';
+import dynamic from 'next/dynamic';
+
+const GeoVisor = dynamic(() => import('./GeoVisor'), { ssr: false, loading: () => <p className="muted">Cargando el geovisor…</p> });
 import { buildExample, EXAMPLE_IDS, type ExampleId } from '@/lib/geo/examples';
+import { useExamples } from '@/lib/geo/useExamples';
 import Results, { accentStyleFor } from './Results';
 import ScientificMethodModal, { type MethodKey } from './ScientificMethodModal';
 
@@ -75,6 +78,7 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
   const prio = useMemo(() => normalizePrio(project.prioritization), [project.prioritization]);
   const idx = useMemo(() => indexJudgments(judgments), [judgments]);
   const dm = useMemo(() => normalizeMatrix(project.decision_matrix), [project.decision_matrix]);
+  const examples = useExamples(supabase);
   const geoCfg = useMemo<GeoConfig>(() => {
     const g = project.geo as Partial<GeoConfig>;
     return { ...g, rules: g.rules ?? {}, classes: g.classes ?? { alta: 0.70, media: 0.45 } };
@@ -122,8 +126,8 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
   }
   // Reemplaza criterios y configuración del mapa por un ejemplo. Los juicios de los criterios
   // anteriores dejan de contar (ya no existen esos ids) — por eso solo se ofrece sin datos propios.
-  async function applyExample(id: ExampleId) {
-    const ex = buildExample(id);
+  async function applyExample(id: string) {
+    const ex = examples.find((e) => e.id === id) ?? buildExample(id as ExampleId);
     await dropJudgments(() => true);
     patch({ criteria: ex.criteria, geo: ex.geo, ...(project.objective.trim() ? {} : { objective: ex.objective }) }, true);
     setTab('Geovisor');
@@ -405,12 +409,12 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
                 {!geoCfg.packId && !geoCfg.grid && (
                   <div className="gv-examples">
                     <label className="lbl">¿Prefieres partir de un ejemplo?</label>
-                    {EXAMPLE_IDS.map((id) => { const ex = buildExample(id); return (
-                      <div className="gv-ex-row" key={id}>
-                        <div><b>{ex.label}</b><p>{ex.blurb}</p></div>
-                        <button type="button" className={'btn sm' + (pendDel === 'ex' + id ? ' danger' : '')} onClick={() => twoClick('ex' + id, () => applyExample(id))}>{pendDel === 'ex' + id ? '¿Seguro? Reemplaza tus criterios' : 'Cargar ejemplo'}</button>
+                    {examples.map((ex) => (
+                      <div className="gv-ex-row" key={ex.id}>
+                        <div><b>{ex.label}</b>{ex.source === 'catalog' && <em className="gv-tag">del curso</em>}<p>{ex.blurb}</p></div>
+                        <button type="button" className={'btn sm' + (pendDel === 'ex' + ex.id ? ' danger' : '')} onClick={() => twoClick('ex' + ex.id, () => applyExample(ex.id))}>{pendDel === 'ex' + ex.id ? '¿Seguro? Reemplaza tus criterios' : 'Cargar ejemplo'}</button>
                       </div>
-                    ); })}
+                    ))}
                   </div>
                 )}
               </div>
@@ -518,7 +522,9 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
             geo={geoCfg}
             supabase={supabase}
             onChangeGeo={(g, immediate) => patch({ geo: g }, immediate)}
+            examples={examples}
             onApplyExample={applyExample}
+            share={{ isPublic: project.is_public, token: project.public_token, onTogglePublic: (on) => patch({ is_public: on }, true) }}
           />
         </div>
       )}
@@ -584,7 +590,7 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
           <div className="card form">
             <h3>Resultados públicos</h3>
             {project.kind === 'spatial' ? (
-              <p className="muted" style={{ maxWidth: '70ch' }}>Los mapas de aptitud todavía no tienen vista pública (llega en una entrega siguiente). Por ahora este proyecto es privado; lo que sí puedes hacer es exportar el mapa desde la pestaña «Geovisor → Exportar».</p>
+              <p className="muted" style={{ maxWidth: '70ch' }}>Un mapa de aptitud se publica desde «Geovisor → Exportar → Vista pública»: ahí activas el enlace y eliges cuándo publicar o actualizar el mapa. La vista pública muestra solo el resultado (no tus capas ni tus expertos).</p>
             ) : (
               <>
                 <p className="muted" style={{ maxWidth: '70ch' }}>Por defecto, nadie más que tú ve tu proyecto. Si activas el enlace público, cualquier persona con el enlace podrá ver los resultados (ranking, pesos y consistencia). No verá nombres de expertos, ni sus enlaces, ni la priorización de criterios.</p>

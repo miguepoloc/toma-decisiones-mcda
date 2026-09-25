@@ -5,7 +5,7 @@ import { uid } from '../types.ts';
 import type { Criterion, GeoConfig } from '../types.ts';
 
 export type ExampleId = 'cacao-snsm' | 'boya-wsn';
-export type Example = { id: ExampleId; label: string; blurb: string; hasData: boolean; title: string; objective: string; criteria: Criterion[]; geo: GeoConfig };
+export type Example = { id: string; source?: 'builtin' | 'catalog'; label: string; blurb: string; hasData: boolean; title: string; objective: string; criteria: Criterion[]; geo: GeoConfig };
 
 const CLASSES = { alta: 0.70, media: 0.45 };
 
@@ -51,5 +51,5 @@ function boya(): Example {
   };
 }
 
-export function buildExample(id: ExampleId): Example { return id === 'cacao-snsm' ? cacao() : boya(); }
+export function buildExample(id: ExampleId): Example { return { ...(id === 'cacao-snsm' ? cacao() : boya()), source: 'builtin' }; }
 export const EXAMPLE_IDS: ExampleId[] = ['cacao-snsm', 'boya-wsn'];

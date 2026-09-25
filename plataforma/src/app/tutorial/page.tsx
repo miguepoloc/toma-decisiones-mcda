@@ -104,6 +104,68 @@ export default async function TutorialPage() {
             </div>
           </div>
 
+          <div className="tphase" id="mapas">
+            <span className="k">Cuando la pregunta es «dónde»</span>
+            <h2>Mapas de aptitud (AHP + SIG)</h2>
+
+            <div className="titem">
+              <span className="no">1</span>
+              <h3>Qué es y en qué se parece a lo de arriba</h3>
+              <p>Es el mismo AHP: tus expertos comparan <em>criterios</em> de a pares y de ahí salen los pesos. Lo que cambia es que las «alternativas» ya no son 3-9 filas de una tabla sino <b>las celdas de un mapa</b>. Cada criterio es una capa (una temperatura, una distancia, una profundidad…), una <b>regla de idoneidad</b> la traduce a un valor de 0 a 1, y el mapa final es la suma ponderada. Es el método de Polo-Castañeda et al. (2021) para ubicar una boya de monitoreo oceanográfico.</p>
+              <div className="tip"><b>Tip:</b> el resultado es un <b>índice de 0 a 100, no una probabilidad</b>. Sirve para comparar zonas entre sí, no para decir «hay 87 % de probabilidad de que funcione».</div>
+            </div>
+
+            <div className="titem">
+              <span className="no">2</span>
+              <h3>El recorrido: cuatro pasos</h3>
+              <p><b>Área</b> → <b>Capas</b> → <b>Reglas</b> → <b>Pesos</b>. En el proyecto, la pestaña «Geovisor» te lo muestra con marcas de progreso arriba a la izquierda. La primera vez arranca un recorrido guiado; puedes repetirlo con el botón «Recorrido».</p>
+              <ul>
+                <li><b>Proyecto y Expertos</b>: define tus criterios (uno por capa) e invita a tus expertos, igual que en AHP. Sin juicios, el mapa usa pesos iguales y te lo avisa.</li>
+                <li><b>Capas → Área de estudio</b>: sube un archivo y el área se propone sola, o dibuja un rectángulo en el mapa. Elige la resolución (metros por celda): más fino es más detalle pero más lento.</li>
+                <li><b>Capas → Añadir mapas</b>: arrastra <b>GeoTIFF</b>, <b>GeoJSON</b>, <b>shapefile en .zip</b> (con su .prj), <b>KML</b> o <b>GPX</b>. Los archivos se procesan en tu navegador; solo se guarda la grilla ya alineada.</li>
+                <li><b>Modelo</b>: para cada criterio elige la capa y la regla (por rangos, trapecio, más/menos es mejor) y un veto si aplica. El mapa se actualiza en vivo.</li>
+                <li><b>Clic en el mapa</b>: ves el % de idoneidad del punto y cuánto aporta cada criterio. <b>Exportar</b>: GeoTIFF (+ estilo para QGIS), PNG, KMZ, CSV, Excel y un .zip con todo; y una <b>vista pública</b> con enlace.</li>
+              </ul>
+            </div>
+
+            <div className="titem">
+              <span className="no">3</span>
+              <h3>Qué papel juega cada archivo</h3>
+              <p>Al subir cada archivo dices <b>qué es</b>:</p>
+              <ul>
+                <li><b>Criterio</b>: un valor por celda. Un vector se convierte en <em>distancia en metros</em> al elemento más cercano (p. ej. «distancia a zonas de pesca»), en <em>dentro/fuera</em>, o toma el <em>valor de un atributo</em> numérico.</li>
+                <li><b>Exclusión</b>: zonas donde no se puede (concesiones, áreas protegidas). Salen en gris y no entran al cálculo.</li>
+                <li><b>Área de estudio</b>: la zona que se analiza (p. ej. la isóbata de 200 m). Fuera de ella no se calcula nada.</li>
+              </ul>
+              <div className="tip"><b>Ojo con:</b> el sistema de coordenadas (un ráster sin CRS no se puede ubicar), las unidades (profundidad en metros <em>positivos</em>) y que un shapefile necesita <b>.shp, .dbf, .shx y .prj juntos en un .zip</b>.</div>
+            </div>
+
+            <div className="titem">
+              <span className="no">4</span>
+              <h3>Dos casos para practicar</h3>
+              <p>Al crear un proyecto de tipo «Mapa de aptitud» elige un punto de partida: <b>Aptitud cacaotera · Sierra Nevada</b> (trae los datos del notebook de la Sesión 5), o la <b>plantilla de la boya</b> (los 4 criterios y rangos del artículo, sin datos: subes los tuyos). Si tu docente publicó paquetes en el catálogo, aparecen ahí como «del curso».</p>
+            </div>
+
+            <div className="titem">
+              <span className="no">5</span>
+              <h3>Mini-tutorial: ¿dónde instalar una finca de paneles solares?</h3>
+              <p>Empieza con «En blanco» y estos criterios y archivos (todos gratuitos):</p>
+              <div className="tbl"><table>
+                <thead><tr><th>Criterio</th><th>Archivo</th><th>De dónde</th><th>Regla</th></tr></thead>
+                <tbody>
+                  <tr><td>Radiación solar</td><td>GeoTIFF de GHI (kWh/m²/día)</td><td>Global Solar Atlas (globalsolaratlas.info → Data download)</td><td>Más es mejor: 0 hasta 4.5, 1 desde 6</td></tr>
+                  <tr><td>Pendiente</td><td>GeoTIFF de pendiente (°)</td><td>DEM SRTM/Copernicus → QGIS «Pendiente»</td><td>Menos es mejor: 1 hasta 5°, 0 desde 15°; veto ≥ 20°</td></tr>
+                  <tr><td>Distancia a la red eléctrica</td><td>Líneas eléctricas (GeoJSON)</td><td>OpenStreetMap <code>power=line</code> (Overpass turbo)</td><td>Distancia (m): menos es mejor, 1 hasta 1 000, 0 desde 15 000</td></tr>
+                  <tr><td>Distancia a vías</td><td>Vías (GeoJSON)</td><td>OpenStreetMap <code>highway</code></td><td>Distancia (m): menos es mejor</td></tr>
+                  <tr><td>Exclusión</td><td>Áreas protegidas, cuerpos de agua, poblados</td><td>RUNAP/WDPA, IGAC, OSM</td><td>Papel «Exclusión»</td></tr>
+                  <tr><td>Área de estudio</td><td>Polígono del municipio</td><td>DANE / IGAC</td><td>Papel «Área de estudio»</td></tr>
+                </tbody>
+              </table></div>
+              <p>Pasos: 1) crea el proyecto en blanco y renombra los 4 criterios; 2) sube el polígono del municipio como <b>Área de estudio</b> (el área y la resolución se proponen solos); 3) sube cada archivo asignándolo a su criterio; 4) en «Modelo» ajusta las reglas de la tabla; 5) pide a tus expertos que comparen los criterios; 6) haz clic en el mapa sobre los mejores sitios y revisa qué criterio los limita; 7) exporta el GeoTIFF y sigue el análisis en QGIS (Sesión 6) si necesitas áreas contiguas mínimas.</p>
+              <div className="tip"><b>Tip:</b> para «voltaje de red = 110 V» u otros valores objetivo no hay regla «objetivo» en los mapas todavía: usa una regla de trapecio centrada en el valor deseado.</div>
+            </div>
+          </div>
+
           <div className="tphase" id="referencias">
             <span className="k">Marco Científico</span>
             <h2>Literatura y Referencias Fundacionales</h2>
@@ -152,7 +214,8 @@ export default async function TutorialPage() {
           <a href="#configurar">2. Configurar tu proyecto</a>
           <a href="#expertos">3. Los expertos</a>
           <a href="#resultados">4. Resultados</a>
-          <a href="#referencias">5. Referencias científicas</a>
+          <a href="#mapas">5. Mapas de aptitud (SIG)</a>
+          <a href="#referencias">6. Referencias científicas</a>
         </nav>
       </div>
 

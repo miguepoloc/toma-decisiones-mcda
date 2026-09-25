@@ -16,53 +16,48 @@ import { buildOverlayMap, gather, type OverlayMap } from '@/lib/geo/overlay';
 import { loadPack } from '@/lib/geo/pack';
 import { CLASS_HEX, CLASS_LABEL, paintCriterion, paintFlag, paintRaw, paintResult, rampColor } from '@/lib/geo/paint';
 import { describeFn, describeVeto, suitability, vetoed } from '@/lib/geo/membership';
-import { downloadLayer } from '@/lib/geo/store';
+import { downloadLayer, getQuota, type Quota } from '@/lib/geo/store';
+import { CAT_PREFIX, getCatalogRow, loadCatalogLayer } from '@/lib/geo/catalog';
+import { encodePlanes, type PublishedMeta } from '@/lib/geo/publish';
+import type { Example } from '@/lib/geo/examples';
+import GeoPublishPanel from './GeoPublishPanel';
+import GeoCatalogPanel from './GeoCatalogPanel';
+import GeoTour, { tourSeen, type TourStep } from './GeoTour';
 import {
   areaStats, CLASS_ALTA, CLASS_EXCLUDED, CLASS_MODERADA, CLASS_NO_APTA, CLASS_VETO, evaluateGrid, MASK_VALID, type CriterionRule,
 } from '@/lib/geo/suitability';
 import { kmz, pixelsCsv, qmlClasses, qmlPct, resultRaster, slug, toGeoTiff, zipFiles } from '@/lib/geo/export';
 import { downloadGeoExcelBytes, type GeoSummary } from '@/lib/geoExcel';
-import type { Criterion, ExpertRow, GeoConfig } from '@/lib/types';
-import type { ExampleId } from '@/lib/geo/examples';
-import { EXAMPLE_IDS, buildExample } from '@/lib/geo/examples';
+import type { Criterion, ExpertRow, GeoConfig, GeoLayerMeta } from '@/lib/types';
 import GeoMap, { BASEMAPS, type BasemapKey, type GeoMapHandle, type MapMarker, type RasterOverlay } from './GeoMap';
 import GeoLayersPanel, { type VecItem, type VisState } from './GeoLayersPanel';
 import GeoModelPanel from './GeoModelPanel';
 import { Icon, ICONS } from './GeoBits';
+import { BasemapChips, ResultLegend, StyleChips } from './GeoHud';
+import { canvasBytes, saveBytes, toCanvas, toUrl } from '@/lib/geo/canvas';
 
 type Props = {
   projectId: string; ownerId: string; title: string; objective: string;
   criteria: Criterion[]; experts: ExpertRow[]; idx: JIndex; geo: GeoConfig;
   supabase: SupabaseClient | null;
   onChangeGeo: (g: GeoConfig, immediate?: boolean) => void;
-  onApplyExample: (id: ExampleId) => void;
+  examples: Example[];
+  onApplyExample: (id: string) => void;
+  share: { isPublic: boolean; token: string; onTogglePublic: (on: boolean) => void } | null;
 };
 
 type Tab = 'capas' | 'modelo' | 'exportar';
+
+const TOUR: TourStep[] = [
+  { sel: '.gv-steps-bar', tab: 'capas', title: 'Cuatro pasos', text: 'Área → Capas → Reglas → Pesos. Cada marca se pone verde cuando ese paso está listo. Los pesos vienen de tus expertos (pestaña «Expertos» del proyecto).' },
+  { sel: '.gv-drop, .gv-sec', tab: 'capas', title: 'Sube tus mapas', text: 'Arrastra GeoTIFF, GeoJSON, shapefile en .zip, KML o GPX. El área de estudio se propone sola desde el primer archivo. Cada archivo puede ser un criterio, una exclusión o el área de estudio.' },
+  { sel: '.gv-side-body', tab: 'modelo', title: 'Pesos y reglas', text: 'Aquí ves los pesos del panel y, por cada criterio, eliges la capa y la regla que la traduce a idoneidad (0 a 1), con vista previa. El mapa cambia en vivo.' },
+  { sel: '.gv-leaflet', title: 'El mapa', text: 'Muévete y acerca como en cualquier mapa. Haz clic en un punto para ver su % de idoneidad, su clase y cuánto aporta cada criterio.' },
+  { sel: '.gv-hud-tr', title: 'Mapa base y estilo', text: 'Cambia el mapa base (satélite, calles, relieve, océano) y muestra el resultado continuo o en 3 clases.' },
+  { sel: '.gv-side-body', tab: 'exportar', title: 'Exportar y publicar', text: 'GeoTIFF (con estilo para QGIS), PNG, KMZ, CSV, Excel y un .zip con todo. Aquí también activas la vista pública con enlace.' },
+];
 type Deps = unknown[];
 const sameDeps = (a: Deps, b: Deps) => a.length === b.length && a.every((x, i) => x === b[i]);
-
-/** Reproyecta `rgba` (grilla) a la imagen del mapa y la deja en un canvas. */
-function toCanvas(map: OverlayMap, rgba: Uint32Array): HTMLCanvasElement {
-  const cv = document.createElement('canvas');
-  cv.width = map.width; cv.height = map.height;
-  const ctx = cv.getContext('2d')!;
-  const img = ctx.createImageData(map.width, map.height);
-  img.data.set(new Uint8ClampedArray(gather(map, rgba).buffer));
-  ctx.putImageData(img, 0, 0);
-  return cv;
-}
-const toUrl = (map: OverlayMap, rgba: Uint32Array) => toCanvas(map, rgba).toDataURL('image/png');
-
-function saveBytes(name: string, bytes: Uint8Array | string, mime: string) {
-  const blob = new Blob([bytes as BlobPart], { type: mime });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob); a.download = name;
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-}
-
-const canvasBytes = (cv: HTMLCanvasElement) => new Promise<Uint8Array>((res, rej) => cv.toBlob(async (b) => (b ? res(new Uint8Array(await b.arrayBuffer())) : rej(new Error('No se pudo generar el PNG'))), 'image/png'));
 
 export default function GeoVisor(props: Props) {
   const { criteria, experts, idx, geo, supabase } = props;
@@ -85,12 +80,20 @@ export default function GeoVisor(props: Props) {
   const [imgs, setImgs] = useState<Record<string, string>>({});
   const [expMsg, setExpMsg] = useState('');
   const [expBusy, setExpBusy] = useState('');
+  const [tour, setTour] = useState(false);
+  useEffect(() => { if (!tourSeen()) { const t = setTimeout(() => setTour(true), 900); return () => clearTimeout(t); } }, []);
 
   const mapRef = useRef<GeoMapHandle>(null);
   const coordRef = useRef<HTMLSpanElement>(null);
   const geoRef = useRef(geo);
   const cache = useRef<Record<string, Float32Array>>({});
+  const cachePack = useRef('');
   const paintCache = useRef(new Map<string, { deps: Deps; url: string }>());
+  const [quota, setQuota] = useState<Quota | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const refreshQuota = useCallback(() => { if (supabase) void getQuota(supabase).then(setQuota); }, [supabase]);
+  useEffect(() => { refreshQuota(); }, [refreshQuota]);
+  useEffect(() => { if (supabase) void supabase.rpc('is_admin').then(({ data }) => setIsAdmin(data === true)); }, [supabase]);
 
   useEffect(() => { geoRef.current = geo; }, [geo]);
   const commit = useCallback((mutate: (g: GeoConfig) => GeoConfig) => {
@@ -101,17 +104,30 @@ export default function GeoVisor(props: Props) {
 
   // ------------------------------------------------------------------ carga de datos
   const gridSig = geo.grid ? JSON.stringify(geo.grid) : '';
-  const layersSig = JSON.stringify(Object.entries(geo.layers ?? {}).map(([k, l]) => [k, l.path, l.role, l.bytes, l.min, l.max]));
+  const layersSig = geo.packId + '|' + JSON.stringify(Object.entries(geo.layers ?? {}).map(([k, l]) => [k, l.path, l.role, l.bytes, l.min, l.max]));
   useEffect(() => {
     let alive = true;
     setError('');
     (async () => {
-      if (geo.packId) {
+      const isCat = !!geo.packId?.startsWith(CAT_PREFIX);
+      if (geo.packId && !isCat) {
         setLoading(true); setProgress(0);
         const p = await loadPack(geo.packId, (l, t) => alive && setProgress(l / t));
         if (alive) { setData(fromPack(p)); setLost(0); }
-      } else if (geo.grid) {
-        const metas = geo.layers ?? {};
+      } else if (isCat || geo.grid) {
+        const pk = geo.packId ?? '';
+        if (cachePack.current !== pk) { cache.current = {}; cachePack.current = pk; }
+        let grid = geo.grid, metas = geo.layers ?? {}, attribution: string | undefined;
+        let fetchLayer = (m: GeoLayerMeta) => downloadLayer(supabase!, m.path);
+        if (isCat) {
+          if (!supabase) throw new Error('El catálogo necesita conexión con la base de datos.');
+          setLoading(true);
+          const row = await getCatalogRow(supabase, geo.packId!.slice(CAT_PREFIX.length));
+          if (!row) throw new Error('Este paquete del catálogo ya no está disponible (el docente lo retiró).');
+          grid = row.definition.geo.grid; metas = row.definition.geo.layers; attribution = row.attribution;
+          fetchLayer = (m) => loadCatalogLayer(supabase, m.path);
+        }
+        if (!grid) { if (alive) setData(null); return; }
         // La caché la llenan también las cargas en curso (GeoLayersPanel), así que aquí nunca se
         // purga por comparación con `geo.layers` — un render intermedio la vaciaría a mitad de un
         // lote. Solo se descarta al quedar el proyecto sin capas; borrar una capa o cambiar el área
@@ -122,7 +138,7 @@ export default function GeoVisor(props: Props) {
         let done = 0;
         for (const k of need) {
           if (!supabase) continue;
-          cache.current[k] = await downloadLayer(supabase, metas[k].path);
+          cache.current[k] = await fetchLayer(metas[k]);
           if (alive) setProgress(++done / need.length);
         }
         if (!alive) return;
@@ -134,7 +150,7 @@ export default function GeoVisor(props: Props) {
           info[k] = { label: m.label, unit: m.unit, role: m.role, min: m.min, max: m.max, origin: m.origin, source: m.source, bytes: m.bytes };
         }
         setLost(missing);
-        setData({ grid: geo.grid, layers, info, mask: buildMask(geo.grid, layers, info), points: {} });
+        setData({ grid, layers, info, mask: buildMask(grid, layers, info), points: {}, attribution });
       } else setData(null);
     })().catch((e) => alive && setError(e instanceof Error ? e.message : String(e))).finally(() => alive && setLoading(false));
     return () => { alive = false; };
@@ -320,6 +336,29 @@ export default function GeoVisor(props: Props) {
     saveBytes(`${base}_paquete.zip`, zipFiles(files), 'application/zip');
   };
 
+  // ------------------------------------------------------------------ publicar
+  const resultSig = useMemo(() => {
+    const str = JSON.stringify([weightResult.agg.w.map((w) => Math.round(w * 1e6)), geo.rules, thresholds, layersSig, geo.packId ?? '']);
+    let h = 5381;
+    for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) | 0;
+    return (h >>> 0).toString(36);
+  }, [weightResult, geo.rules, thresholds, layersSig, geo.packId]);
+
+  async function buildPublish() {
+    if (!data || !ev || !stats || !gridBounds) throw new Error('No hay mapa que publicar.');
+    const b64 = await encodePlanes(ev.pct, ev.cls, data.mask);
+    const meta: PublishedMeta = {
+      v: 1, grid: data.grid, bounds: gridBounds,
+      weights: criteria.filter((c) => geo.rules[c.id] && data.layers[geo.rules[c.id].layerKey]).map((c) => ({ name: c.name, weight: weights[criteria.indexOf(c)] ?? 0 })),
+      cr: weightResult.agg.cr, nExperts: expertIds.length,
+      weightsOrigin: expertIds.length ? 'Panel de expertos (AHP)' : 'Pesos iguales (sin juicios de expertos)',
+      thresholds, classes: { alta: stats.alta.ha, media: stats.media.ha, noapta: stats.noapta.ha, excl: stats.excl.ha },
+      pct: { alta: stats.alta.pct, media: stats.media.pct, noapta: stats.noapta.pct }, evaluableHa: stats.evaluableHa,
+      attribution: data.attribution, sig: resultSig,
+    };
+    return { b64, meta };
+  }
+
   // ------------------------------------------------------------------ estado / checklist
   const critLayers = data ? Object.values(data.info).filter((l) => l.role === 'criterion').length : 0;
   const rulesReady = criteria.filter((c) => geo.rules[c.id] && data?.layers[geo.rules[c.id].layerKey]).length;
@@ -336,6 +375,7 @@ export default function GeoVisor(props: Props) {
 
   return (
     <div className="gv-shell">
+      <GeoTour steps={TOUR} open={tour} onClose={() => setTour(false)} onTab={setTab} />
       <aside className="gv-side">
         <div className="gv-steps-bar" aria-label="Progreso">
           <span className={hasArea ? 'ok' : ''}><Icon d={hasArea ? ICONS.check : ICONS.minus} size={12} /> Área</span>
@@ -353,7 +393,8 @@ export default function GeoVisor(props: Props) {
           {error && <div className="banner"><span><b>No se pudo cargar:</b> {error}</span></div>}
           {tab === 'capas' && (
             <GeoLayersPanel geo={geo} data={data} criteria={criteria} commit={commit} cache={cache} sb={supabase} ownerId={props.ownerId} projectId={props.projectId}
-              vecs={vecs} setVecs={setVecs} vis={vis} setVis={setVis} fit={(b) => mapRef.current?.fit(b)} draft={draft} setDraft={setDraft} drawing={drawing} setDrawing={setDrawing} />
+              vecs={vecs} setVecs={setVecs} vis={vis} setVis={setVis} fit={(b) => mapRef.current?.fit(b)} draft={draft} setDraft={setDraft} drawing={drawing} setDrawing={setDrawing}
+              quota={quota} onQuotaChange={refreshQuota} />
           )}
           {tab === 'modelo' && (
             <GeoModelPanel criteria={criteria} weights={weightResult.agg.w} cr={weightResult.agg.cr} nExperts={expertIds.length} layers={data?.info ?? {}} rules={geo.rules}
@@ -364,6 +405,13 @@ export default function GeoVisor(props: Props) {
           {tab === 'exportar' && (
             <div className="gv-sec-stack">
               {!ready && <p className="gv-hint">Para exportar hace falta un mapa calculado: define el área, sube capas y asígnalas a criterios con su regla.</p>}
+              {props.share && (
+                <GeoPublishPanel sb={supabase} projectId={props.projectId} isPublic={props.share.isPublic} token={props.share.token} onTogglePublic={props.share.onTogglePublic}
+                  ready={ready} exploring={exploring} sig={resultSig} build={buildPublish} />
+              )}
+              {isAdmin && supabase && !geo.packId && (
+                <GeoCatalogPanel sb={supabase} userId={props.ownerId} title={props.title} objective={props.objective} criteria={criteria} geo={geo} cache={cache} ready={ready && !!geo.grid} />
+              )}
               <ExportList disabled={!ready} busy={expBusy} msg={expMsg} items={[
                 { k: 'zip', label: 'Paquete completo (.zip)', desc: 'Todo lo de abajo + cada capa de entrada como GeoTIFF + receta JSON. Lo que entregas al docente o abres en QGIS.', run: zip, primary: true },
                 { k: 'tif', label: 'GeoTIFF de idoneidad (0–100) + estilo .qml', desc: `Ráster georreferenciado en ${data?.grid.crs ?? 'UTM'}. Ábrelo en QGIS/ArcGIS y carga el .qml para los colores.`, run: geotiffPct },
@@ -386,15 +434,9 @@ export default function GeoVisor(props: Props) {
             onDrawn={(b) => { setDraft(b); setDrawing(false); }} />
 
           <div className="gv-hud gv-hud-tr">
-            <div className="gv-chips" role="group" aria-label="Mapa base">
-              {(Object.keys(BASEMAPS) as BasemapKey[]).map((k) => (
-                <button key={k} type="button" aria-pressed={basemap === k} onClick={() => setBasemap(k)}>{BASEMAPS[k].label}</button>
-              ))}
-            </div>
-            <div className="gv-chips" role="group" aria-label="Estilo del resultado">
-              <button type="button" aria-pressed={style === 'continuous'} onClick={() => setStyle('continuous')}>Continuo</button>
-              <button type="button" aria-pressed={style === 'classes'} onClick={() => setStyle('classes')}>3 clases</button>
-            </div>
+            <BasemapChips value={basemap} onChange={setBasemap} />
+            <StyleChips value={style} onChange={setStyle} />
+            <button type="button" className="gv-fit" onClick={() => setTour(true)} title="Repetir el recorrido guiado">?  Recorrido</button>
             {gridBounds && <button type="button" className="gv-fit" onClick={() => mapRef.current?.fit(gridBounds)} title="Encajar el área de estudio"><Icon d={ICONS.fit} size={15} /> Área</button>}
           </div>
 
@@ -403,24 +445,7 @@ export default function GeoVisor(props: Props) {
           {loading && <div className="gv-toast">Cargando capas… {Math.round(progress * 100)}%</div>}
           {!ready && data && !loading && <div className="gv-toast">Asigna capas a tus criterios (pestaña Modelo) para ver el resultado.</div>}
 
-          {ready && legend === 'result' && (
-            <div className="gv-legend">
-              <b>Idoneidad AHP + SIG</b>
-              {style === 'continuous' ? (
-                <>
-                  <div className="ramp" style={{ background: `linear-gradient(90deg, ${[0, 0.5, 1].map((t) => { const [r, g, b] = rampColor(t); return `rgb(${r},${g},${b})`; }).join(',')})` }} />
-                  <div className="ends mono"><span>0</span><span>50</span><span>100</span></div>
-                </>
-              ) : (
-                <>
-                  <div className="row"><i style={{ background: CLASS_HEX[CLASS_ALTA] }} />Alta · ≥ {Math.round(thresholds.alta * 100)}</div>
-                  <div className="row"><i style={{ background: CLASS_HEX[CLASS_MODERADA] }} />Moderada · {Math.round(thresholds.media * 100)}–{Math.round(thresholds.alta * 100)}</div>
-                  <div className="row"><i style={{ background: CLASS_HEX[CLASS_NO_APTA] }} />No apta · &lt; {Math.round(thresholds.media * 100)}</div>
-                </>
-              )}
-              <div className="row"><i style={{ background: CLASS_HEX[CLASS_EXCLUDED] }} />Exclusión</div>
-            </div>
-          )}
+          {ready && legend === 'result' && <ResultLegend style={style} thresholds={thresholds} />}
 
           {point && (
             <div className="gv-point" role="status">
@@ -447,11 +472,11 @@ export default function GeoVisor(props: Props) {
               <h3>Tu mapa de aptitud</h3>
               <p>Combina mapas (distancias, temperatura, profundidad, pendiente…) con los pesos de tus expertos para encontrar dónde es mejor ubicar algo: una boya, una finca solar, un cultivo.</p>
               <div className="gv-empty-acts">
-                {EXAMPLE_IDS.map((id) => { const ex = buildExample(id); return (
-                  <button key={id} type="button" className="gv-ex" onClick={() => props.onApplyExample(id)}>
-                    <b>{ex.label}</b><span>{ex.blurb}</span>
+                {props.examples.map((ex) => (
+                  <button key={ex.id} type="button" className="gv-ex" onClick={() => props.onApplyExample(ex.id)}>
+                    <b>{ex.label}{ex.source === 'catalog' && <em className="gv-tag">del curso</em>}</b><span>{ex.blurb}</span>
                   </button>
-                ); })}
+                ))}
               </div>
               <p className="small">O empieza en blanco: define tus criterios en «Proyecto» y sube tus mapas en la pestaña «Capas».</p>
             </div>
@@ -470,7 +495,7 @@ export default function GeoVisor(props: Props) {
               ))}
             </div>
             <div className="muted mono" style={{ fontSize: 12 }}>
-              Área evaluada: {stats.evaluableHa.toLocaleString('es-CO', { maximumFractionDigits: 0 })} ha · {data!.grid.resM} × {data!.grid.resM} m por celda{exploring ? ' · con pesos explorados' : ''}
+              Área evaluada: {stats.evaluableHa.toLocaleString('es-CO', { maximumFractionDigits: 0 })} ha · {data!.grid.resM} × {data!.grid.resM} m por celda{exploring ? ' · con pesos explorados' : ''}{data!.attribution ? ` · Datos: ${data!.attribution}` : ''}
             </div>
           </div>
         )}

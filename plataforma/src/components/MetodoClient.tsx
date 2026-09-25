@@ -157,6 +157,17 @@ export default function MetodoClient({ loggedIn, userEmail }: { loggedIn: boolea
         </p>
       </div>
 
+      <div className="card" style={{ marginTop: 20, display: 'flex', gap: 14, justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', borderLeft: '3px solid var(--geo-accent)' }}>
+        <div style={{ maxWidth: '62ch' }}>
+          <b>¿Tu pregunta es «dónde»?</b>
+          <p className="muted" style={{ margin: '4px 0 0', fontSize: 13.5 }}>
+            Si vas a ubicar o zonificar algo en un territorio (una boya, una finca solar, un cultivo), no eliges entre 3-9 alternativas:
+            eliges entre las celdas de un mapa. Eso es un <b>mapa de aptitud (AHP + SIG)</b>, con los mismos pesos AHP de tus expertos.
+          </p>
+        </div>
+        <Link className="btn" href="/tutorial#mapas">Ver cómo se hace</Link>
+      </div>
+
       {/* Cuestionario Interactivo con Choice Cards */}
       <div style={{ marginTop: 28 }}>
         {isQuestion && currentQ && (

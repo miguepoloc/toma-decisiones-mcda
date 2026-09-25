@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState, useEffect, Suspense } from 'react';
+import { useRef, useState, useEffect, useMemo, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
@@ -9,7 +9,7 @@ import { blankPrio } from '@/lib/prio';
 import { uid } from '@/lib/types';
 import { Icon, ICONS } from '@/components/GeoBits';
 import { blankMatrix, setCell, setType } from '@/lib/topsis';
-import { buildExample, EXAMPLE_IDS, type ExampleId } from '@/lib/geo/examples';
+import { useExamples } from '@/lib/geo/useExamples';
 import type { GeoConfig, Kind } from '@/lib/types';
 import type { MethodKey } from '@/components/ScientificMethodModal';
 
@@ -50,7 +50,9 @@ function NewProjectForm({ userId }: { userId: string }) {
   const [title, setTitle] = useState('');
   const [objective, setObjective] = useState('');
   const [kind, setKind] = useState<Kind>('decision');
-  const [start, setStart] = useState<ExampleId | 'blank'>('blank');
+  const sb = useMemo(() => createClient(), []);
+  const examples = useExamples(sb);
+  const [start, setStart] = useState<string>('blank');
   const [method, setMethod] = useState<MethodKey>(validMethod);
   const [useIotCase, setUseIotCase] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -110,7 +112,7 @@ function NewProjectForm({ userId }: { userId: string }) {
   // existente de pesar criterios por pares (JudgmentEditor solo muestra la hoja 'crit' cuando
   // method !== 'ahp').
   async function createSpatial() {
-    const ex = start === 'blank' ? null : buildExample(start);
+    const ex = start === 'blank' ? null : examples.find((e) => e.id === start) ?? null;
     const finalTitle = title.trim() || ex?.title || '';
     if (!finalTitle) return;
     setBusy(true);
@@ -248,12 +250,12 @@ function NewProjectForm({ userId }: { userId: string }) {
         {kind === 'spatial' && (
           <div>
             <label className="lbl" htmlFor="ps">Punto de partida</label>
-            <select id="ps" value={start} onChange={(e) => setStart(e.target.value as ExampleId | 'blank')} style={{ width: '100%' }}>
+            <select id="ps" value={start} onChange={(e) => setStart(e.target.value)} style={{ width: '100%' }}>
               <option value="blank">En blanco — yo defino criterios y subo mis mapas</option>
-              {EXAMPLE_IDS.map((id) => <option key={id} value={id}>{buildExample(id).label}</option>)}
+              {examples.map((ex) => <option key={ex.id} value={ex.id}>{ex.source === 'catalog' ? 'Del curso: ' : ''}{ex.label}</option>)}
             </select>
             <p className="muted" style={{ fontSize: 12.5, marginTop: 6 }}>
-              {start === 'blank' ? 'Empiezas con 3 criterios genéricos y un mapa mundial vacío. Después subes tus capas en el Geovisor.' : buildExample(start).blurb}
+              {start === 'blank' ? 'Empiezas con 3 criterios genéricos y un mapa mundial vacío. Después subes tus capas en el Geovisor.' : examples.find((e) => e.id === start)?.blurb}
             </p>
           </div>
         )}

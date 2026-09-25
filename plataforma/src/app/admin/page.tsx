@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import Topbar from '@/components/Topbar';
+import GeoAdmin from '@/components/GeoAdmin';
 import type { AdminAhpRawProject, AdminStats, Method, WeightingMethod } from '@/lib/types';
 import { computeAhpConsistency, fmtDate, sparklinePoints } from '@/lib/admin';
 
@@ -101,7 +102,7 @@ export default async function AdminPage() {
 
   return (
     <div className="wrap">
-      <Topbar badge="ADMIN" subtitle="Backoffice · solo lectura" loggedIn userEmail={user.email} showNav={false} />
+      <Topbar badge="ADMIN" subtitle="Backoffice" loggedIn userEmail={user.email} showNav={false} />
       <div className="panel">
         <header>
           <h1 style={{ fontSize: 30 }}>Backoffice</h1>
@@ -299,6 +300,8 @@ export default async function AdminPage() {
             </div>
           </details>
         </div>
+
+        <GeoAdmin />
       </div>
     </div>
   );

@@ -96,9 +96,12 @@ plataforma/
 │                                      membership, suitability, crs, grid, vector, raster, mapper, overlay, paint, export,
 │                                      data, examples — puros; pack, parse, store — solo navegador), geoExcel.ts
 ├─ scripts/                            check-{ahp,topsis,vikor,promethee,electre}.ts (matemática), check-excel.ts
-│                                      (exportación e ida y vuelta), check-geo-{membership,suitability,crs,raster,export}.ts,
+│                                      (exportación e ida y vuelta), check-geo-{membership,suitability,crs,raster,export,publish}.ts,
 │                                      geo/export_pack.py (genera public/geo-packs/ desde data/ahp_sig_snsm/cache/
 │                                      del repo raíz — no corre en CI, es manual cuando cambia el caso guiado)
+├─ supabase/tests/                     run.sh + stubs.sql + geo_rls.sql: corre TODAS las migraciones en un PostgreSQL 17
+│                                      temporal y prueba RLS/cuota/publicación/catálogo (`npm run test:db`, necesita
+│                                      `brew install postgresql@17`; no toca ninguna base real)
 ├─ public/geo-packs/                   Paquetes estáticos del geovisor (snsm-cacao-v1: ~810 KB, capas + hillshade)
 └─ prototipos/                         Herramientas HTML autónomas, Excel de ejemplo y datos semilla (referencia,
                                        incluye datos de tesis de Harold — ver Notas sobre hacerlo público)
@@ -171,9 +174,40 @@ boya oceanográfica — ver `docs/PLAN_geovisor_ahp_sig.md` (plan, UX, fases). S
   **No verificado**: la subida/descarga a Supabase Storage (no hay login en la prueba: sin migración
   aplicada la capa queda «solo en esta sesión» y la UI lo avisa), la RLS del bucket, la pestaña dentro
   de `ProjectWorkspace` autenticado, shapefiles con `.prj` exóticos, GeoTIFF > 200 MB.
-- **Falta** (ver el plan): vista pública `/p/<token>` con clic-para-consultar, cuota/admin editable,
-  catálogo docente editable, tutorial (página + coachmarks + caso finca solar), `/metodo`, borrar los
-  archivos de Storage al borrar el proyecto (hoy quedan huérfanos), GeoTIFF multibanda/rotado.
+- **Vista pública** (`/p/<token>` para `kind:'spatial'`): «Geovisor → Exportar → Vista pública». El resultado se
+  guarda EN la base (`geo_results`: 2 planos Uint8 idoneidad+clase, gzip, base64, `publish.ts`) y se sirve solo por
+  `public_geo_get(token)` (rate limit, exige `is_public`; devuelve `{status:'unpublished'}` si aún no se publicó; nunca
+  capas de entrada ni expertos). `PublicGeoView.tsx`: mapa, pesos, superficie por clase, clic → % de idoneidad y clase.
+  Al quitar «público» se revoca al instante. Un `sig` en los metadatos avisa si el mapa publicado quedó desactualizado.
+  `PublicView.tsx` prueba primero `public_geo_get` y, si es null, cae al `public_get` de siempre.
+- **Cuota editable** (migración 12): se mide sobre los objetos REALES de Storage (`storage.objects.metadata.size`), no
+  sobre lo que declare el cliente; `geo_check_upload(ruta, bytes)` la exige antes de cada subida (y `cloneLayers` al
+  duplicar). Topes globales en `app_settings` (cuota MB, capas, celdas, tamaño publicable) y cuota individual en
+  `profiles.geo_quota_mb`, editables desde `/admin` (`GeoAdmin.tsx`). **Bajar la cuota no borra nada**: solo bloquea
+  nuevas subidas. La interfaz muestra el uso y «sobre la cuota».
+- **Catálogo del docente**: un admin publica un proyecto de mapa suyo como paquete (Geovisor → Exportar → «Catálogo
+  del curso»): las capas ya alineadas van al bucket PÚBLICO `geo-catalog` y la configuración a `geo_packs`. Aparece
+  como «del curso» en «Punto de partida» de proyectos nuevos y se abre de solo lectura (`geo.packId = 'cat:<id>'`).
+  `/admin` los activa, oculta o borra. Los paquetes estáticos (`public/geo-packs`) siguen funcionando.
+- **Limpieza de Storage**: al borrar un proyecto se borran sus archivos (`removeProjectFolder`); duplicar un mapa copia
+  las capas a la carpeta del duplicado (antes duplicar un mapa lo convertía en proyecto de decisión sin datos: bug
+  corregido). Huérfanos: `admin_geo_orphans()` los lista y el admin los borra desde `/admin` — solo huérfanos, con
+  una política de Storage acotada (`_geo_is_orphan`); el admin NO puede leer ni borrar capas de proyectos vivos.
+- **Tutorial**: `/tutorial#mapas` (qué es, los 4 pasos, papeles de cada archivo, casos, mini-tutorial de la finca
+  solar con fuentes de datos y reglas), recorrido guiado in-app (`GeoTour.tsx`, primera visita + botón «Recorrido»),
+  aviso en `/metodo`.
+- **Verificado**: además de lo anterior, `check-geo-publish` (ida y vuelta del mapa publicado) y
+  `supabase/tests/geo_rls.sql` — 65 comprobaciones contra un PostgreSQL 17 real con roles `anon`/`authenticated` y
+  `request.jwt.claim.sub` (RLS de `geo_results`/`geo_packs`/Storage, cuota, tope de capas, publicación, vista pública,
+  revocación, rate limit, catálogo, huérfanos, EXECUTE cerrado a `anon`; migraciones 10–12 idempotentes). En navegador
+  (Playwright, Supabase simulado en memoria) con **datos reales de la tesis** (shapefiles SIAM/INVEMAR en MAGNA Bogotá:
+  área de estudio, ecosistemas, rutas de lanchas, pesca artesanal, batimetría, concesiones ANH): carga, recorte al
+  área, exclusión, cuota, publicar, vista pública con clic, publicar al catálogo y crear otro proyecto desde él
+  (mismas estadísticas), panel de admin. **No verificado**: contra Supabase Storage/Auth reales (los mocks no prueban
+  las políticas de Storage reales — solo los stubs de Postgres), el flujo autenticado dentro de `ProjectWorkspace`.
+- **Falta**: derivar una superficie desde isolíneas (batimetría de la tesis son líneas de 100 m: hoy se usa como
+  distancia o se sube ráster/polígono), regla «valor objetivo», GeoTIFF multibanda/rotado, comparar dos escenarios,
+  filtro de área mínima contigua (útil para fincas solares), catálogo con licencias por capa.
 
 ## Qué está verificado y qué no
 Verificado aquí: compila (`next build`), el chequeo de tipos pasa, la matemática de los 7 métodos de ranking
@@ -204,6 +238,20 @@ del SQL (políticas + funciones `SECURITY DEFINER`) se ve correcta, pero eso no 
 5. Descargar el Excel y abrirlo.
 
 ## Historial de cambios
+
+**25 sep 2026 (geovisor AHP + SIG, tercera entrega: publicar, cuota, catálogo, tutorial):** el docente pidió cerrar
+lo pendiente y dio la ruta de su tesis (`Maestria/Tesis/MAPAS`, `Maestria/Tesis_Mapas`), que sirvió de prueba real.
+- Migración `20240101000012_geo_publish_quota_catalog.sql` (**aplicar**, además de la 11): `is_admin()`, `app_settings`,
+  `geo_quota`/`geo_check_upload`/`geo_settings`, `geo_results` + `geo_publish_result` + `public_geo_get`, `geo_packs` +
+  bucket público `geo-catalog`, funciones `admin_*`, y revocación explícita de EXECUTE a `anon` (en Supabase, `revoke
+  from public` no quita los grants por defecto a `anon`/`authenticated`; incluye `_rate_limit`, que estaba abierta).
+- Hallazgos al probar contra Postgres real: un `DELETE ... WHERE` en Storage exige también política de `SELECT`
+  (el admin no podía limpiar huérfanos); y con datos reales, un archivo de concesiones de todo el país agrandaba el
+  área propuesta a Colombia entera — ahora manda el archivo marcado «Área de estudio».
+- Nuevo: `supabase/tests/` (`npm run test:db`), `check-geo-publish.ts`, `GeoPublishPanel`, `GeoCatalogPanel`,
+  `GeoAdmin`, `PublicGeoView`, `GeoTour`, `GeoHud`, `lib/geo/{publish,catalog,useExamples,canvas}.ts`.
+- `GeoVisor` y `PublicGeoView` se cargan con `next/dynamic` (`/projects/[id]` bajó de 311 a 241 kB).
+- Trampa (otra vez): `npm run build` con `npm run dev` activo pisa `.next`; reiniciar el dev server.
 
 **25 sep 2026 (geovisor AHP + SIG, segunda entrega: mapa web real, capas propias y exportación):** el
 docente probó la primera entrega y señaló tres fallos de diseño: cargaba criterios y datos «de una»
@@ -523,10 +571,9 @@ el selector de método del proyecto.
 3. **Rol de profesor** — el docente no puede ver los proyectos de sus estudiantes desde la plataforma todavía
    (decidido con el docente, 20 sep 2026: no es prioridad mientras la calificación se haga sobre el Excel/informe
    que cada estudiante entrega aparte, ver `evaluacion_v1.md` del curso).
-4. **Geovisor (S5), lo que resta** — vista pública `/p/<token>` para `kind:'spatial'` (clic en un punto → % de
-   viabilidad), cuota/admin editable y catálogo docente editable, tutorial (página + proyecto ejemplo + coachmarks +
-   caso finca solar), borrado de archivos de Storage al borrar el proyecto. Ver § "Geovisor" y
-   `docs/PLAN_geovisor_ahp_sig.md`.
+4. **Geovisor (S5), lo que resta** — superficie desde isolíneas, regla «valor objetivo», comparar escenarios, filtro de
+   área mínima contigua, licencias por capa del catálogo; y probar el flujo contra Supabase real (Storage y Auth) una vez
+   aplicadas las migraciones 11 y 12. Ver § "Geovisor" y `docs/PLAN_geovisor_ahp_sig.md`.
 
 Los 7 métodos ya tienen Excel propio con fórmulas vivas y color de acento propio (ver "Historial de cambios",
 20 sep 2026 noche).

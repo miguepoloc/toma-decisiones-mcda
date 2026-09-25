@@ -3,9 +3,16 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 export const BUCKET = 'geo-layers';
-/** Tope blando por proyecto (suma de bytes comprimidos). La cuota por usuario editable por el
- * administrador es una entrega posterior (ver plataforma/docs/PLAN_geovisor_ahp_sig.md). */
-export const MAX_PROJECT_BYTES = 60 * 1024 * 1024;
+/** Cuota real del usuario (la fija el administrador, ver `geo_quota()` en la migración 12). */
+export type Quota = { used_bytes: number; quota_bytes: number; layers: number; max_layers: number; max_pixels: number };
+
+export async function getQuota(sb: SupabaseClient): Promise<Quota | null> {
+  const { data, error } = await sb.rpc('geo_quota');
+  return error || !data ? null : (data as Quota);
+}
+
+/** Errores de cuota/tope: la capa NO se acepta ni siquiera «solo en esta sesión». */
+export const isQuotaError = (m: string) => /Cuota de mapas|Máximo de \d+ capas/i.test(m);
 
 async function pipe(bytes: Uint8Array, stream: CompressionStream | DecompressionStream): Promise<Uint8Array> {
   const src = new Blob([bytes as BlobPart]).stream().pipeThrough(stream as unknown as ReadableWritablePair<Uint8Array, Uint8Array>);
@@ -18,6 +25,8 @@ export const layerPath = (ownerId: string, projectId: string, key: string) => `$
 
 export async function uploadLayer(sb: SupabaseClient, path: string, data: Float32Array): Promise<number> {
   const gz = await gzip(new Uint8Array(data.buffer, data.byteOffset, data.byteLength));
+  const chk = await sb.rpc('geo_check_upload', { p_path: path, p_bytes: gz.byteLength });
+  if (chk.error) throw new Error(chk.error.message);
   const { error } = await sb.storage.from(BUCKET).upload(path, new Blob([gz as BlobPart], { type: 'application/gzip' }), { upsert: true, contentType: 'application/gzip' });
   if (error) throw new Error(error.message);
   return gz.byteLength;
@@ -34,4 +43,40 @@ export async function removeLayers(sb: SupabaseClient, paths: string[]): Promise
   if (!paths.length) return;
   const { error } = await sb.storage.from(BUCKET).remove(paths);
   if (error) throw new Error(error.message);
+}
+
+/** Borra todos los archivos de un proyecto (`<uid>/<proyecto>/…`). Mejor esfuerzo: si falla, el admin
+ * los ve como huérfanos y los limpia desde /admin. */
+export async function removeProjectFolder(sb: SupabaseClient, ownerId: string, projectId: string): Promise<void> {
+  const prefix = `${ownerId}/${projectId}`;
+  const { data } = await sb.storage.from(BUCKET).list(prefix, { limit: 200 });
+  const names = (data ?? []).map((o) => `${prefix}/${o.name}`);
+  if (names.length) await removeLayers(sb, names);
+}
+
+/** Copia las capas propias de un proyecto a la carpeta de otro (duplicar). Cada copia pasa por la
+ * cuota (`geo_check_upload`); si algo falla se borran las ya copiadas y se lanza el error. Devuelve
+ * las capas con sus rutas nuevas. Los paquetes del catálogo/estáticos no se copian (no hay `path` propio). */
+export async function cloneLayers<T extends { path: string; bytes: number }>(
+  sb: SupabaseClient, ownerId: string, fromProject: string, toProject: string, layers: Record<string, T>,
+): Promise<Record<string, T>> {
+  const out: Record<string, T> = {};
+  const done: string[] = [];
+  try {
+    for (const [key, meta] of Object.entries(layers)) {
+      if (!meta.path) { out[key] = meta; continue; }
+      const dest = layerPath(ownerId, toProject, key);
+      const chk = await sb.rpc('geo_check_upload', { p_path: dest, p_bytes: meta.bytes });
+      if (chk.error) throw new Error(chk.error.message);
+      const { error } = await sb.storage.from(BUCKET).copy(meta.path, dest);
+      if (error) throw new Error(error.message);
+      done.push(dest);
+      out[key] = { ...meta, path: dest };
+    }
+  } catch (e) {
+    if (done.length) { try { await removeLayers(sb, done); } catch { /* huérfanos: los limpia el admin */ } }
+    throw e;
+  }
+  void fromProject;
+  return out;
 }

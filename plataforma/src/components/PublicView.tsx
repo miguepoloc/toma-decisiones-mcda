@@ -5,18 +5,45 @@ import { createClient } from '@/lib/supabase/client';
 import type { PublicGet } from '@/lib/types';
 import Results from './Results';
 import Topbar from './Topbar';
+import dynamic from 'next/dynamic';
+import type { PublicGeo } from './PublicGeoView';
+
+const PublicGeoView = dynamic(() => import('./PublicGeoView'), { ssr: false, loading: () => <p className="muted">Cargando el mapa…</p> });
 
 export default function PublicView({ token, loggedIn, userEmail }: { token: string; loggedIn: boolean; userEmail?: string }) {
   const supabase = useMemo(() => createClient(), []);
   const [data, setData] = useState<PublicGet | null | undefined>(undefined);
+  const [geo, setGeo] = useState<PublicGeo | { status: 'unpublished'; title: string; objective: string } | null>(null);
 
   useEffect(() => {
     let alive = true;
-    supabase.rpc('public_get', { p_token: token }).then(({ data: d, error }) => {
+    // Un mapa de aptitud sale por public_geo_get; el resto de proyectos, por public_get de siempre.
+    supabase.rpc('public_geo_get', { p_token: token }).then(async ({ data: g, error: ge }) => {
+      if (!alive) return;
+      if (!ge && g) { setGeo(g as PublicGeo); setData(null); return; }
+      const { data: d, error } = await supabase.rpc('public_get', { p_token: token });
       if (alive) setData(error || !d ? null : (d as PublicGet));
     });
     return () => { alive = false; };
   }, [supabase, token]);
+
+  if (geo) {
+    return (
+      <div className="wrap" style={{ maxWidth: 'none' }}>
+        <Topbar badge="PÚBLICO" subtitle="Mapa de aptitud" loggedIn={loggedIn} userEmail={userEmail}>
+          <span className="muted" style={{ fontSize: 13, background: 'var(--surface2)', padding: '6px 12px', borderRadius: 8, border: '1px solid var(--line)' }}>Vista pública de solo lectura</span>
+        </Topbar>
+        <header style={{ margin: '8px 0 16px' }}>
+          <div className="eyebrow">Mapa de aptitud (AHP + SIG)</div>
+          <h1 style={{ fontSize: 30 }}>{geo.title}</h1>
+          {geo.objective && <p className="muted" style={{ maxWidth: '70ch' }}><b>Objetivo:</b> {geo.objective}</p>}
+        </header>
+        {geo.status === 'ok'
+          ? <PublicGeoView data={geo} />
+          : <div className="card"><p className="muted">El autor activó el enlace público pero todavía no publicó el mapa. Vuelve más tarde.</p></div>}
+      </div>
+    );
+  }
 
   if (data === undefined) return <div className="wrap"><p className="muted">Cargando…</p></div>;
   if (data === null) {

@@ -103,8 +103,9 @@ datos del notebook `07_ahp_sig_cacao_snsm.ipynb`, o plantilla de la boya de la t
 Polo-Castañeda et al. 2021, `03_Bibliografia_general/combinaciones/`). Mapa web real (Leaflet, mapa base mundial),
 carga de capas propias (GeoTIFF, GeoJSON, shapefile .zip, KML; vector → distancia/dentro-fuera/atributo; papel
 criterio, exclusión o área de estudio), reglas de idoneidad editables (por rangos, trapecio…), pesos reales del
-panel de expertos, consulta de punto y exportación (GeoTIFF + QML, PNG, KMZ, CSV, Excel, zip). Requiere la migración
-`20240101000011_geo_storage.sql`. Falta vista pública, cuota admin y tutorial — ver `plataforma/README.md` §
+panel de expertos, consulta de punto y exportación (GeoTIFF + QML, PNG, KMZ, CSV, Excel, zip). Vista pública `/p/<token>`, cuota editable y catálogo del docente desde `/admin`, tutorial con recorrido guiado. Requiere
+las migraciones `20240101000011_geo_storage.sql` y `…12_geo_publish_quota_catalog.sql`; `npm run test:db` las prueba en un
+PostgreSQL temporal (RLS incluida). Ver `plataforma/README.md` §
 "Geovisor" y `plataforma/docs/PLAN_geovisor_ahp_sig.md`. Trampa: `npm run build` con `npm run dev` activo pisa
 `.next`; reiniciar el dev server.
 

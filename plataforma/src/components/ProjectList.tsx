@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
+import { cloneLayers, removeProjectFolder } from '@/lib/geo/store';
 
 type Row = { id: string; title: string; objective: string; is_public: boolean };
 
@@ -57,7 +58,13 @@ export default function ProjectList({ initial }: { initial: Row[] }) {
   async function confirmDelete() {
     if (!target) return;
     setBusy(true);
-    const { error } = await createClient().from('projects').delete().eq('id', target.id);
+    const sb = createClient();
+    try {
+      // Borra también los mapas subidos (Storage no se borra en cascada con la fila).
+      const { data: u } = await sb.auth.getUser();
+      if (u.user) await removeProjectFolder(sb, u.user.id, target.id);
+    } catch { /* mejor esfuerzo: si falla, el admin los ve como huérfanos */ }
+    const { error } = await sb.from('projects').delete().eq('id', target.id);
     setBusy(false);
     if (error) { setMsg(friendlyError(error, 'No se pudo eliminar el proyecto.')); setTarget(null); return; }
     setProjects((prev) => prev.filter((p) => p.id !== target.id));
@@ -105,6 +112,8 @@ export default function ProjectList({ initial }: { initial: Row[] }) {
         alternatives: orig.alternatives,
         decision_matrix: orig.decision_matrix,
         prioritization: orig.prioritization,
+        kind: orig.kind ?? 'decision',
+        geo: orig.geo ?? {},
         is_public: false,
       })
       .select('id, title, objective, is_public')
@@ -114,6 +123,21 @@ export default function ProjectList({ initial }: { initial: Row[] }) {
       setMsg(insertErr ? friendlyError(insertErr, 'Error al duplicar el proyecto.') : 'Error al duplicar el proyecto.');
       setBusy(false);
       return;
+    }
+
+    // Un mapa de aptitud arrastra sus capas propias: se copian a la carpeta del duplicado (con cuota),
+    // para que borrar uno no rompa al otro.
+    if (orig.kind === 'spatial' && orig.geo?.layers && Object.keys(orig.geo.layers).length) {
+      try {
+        const layers = await cloneLayers(supabase, currentUserId, orig.id, copyRow.id, orig.geo.layers);
+        const { error: ge } = await supabase.from('projects').update({ geo: { ...orig.geo, layers } }).eq('id', copyRow.id);
+        if (ge) throw new Error(ge.message);
+      } catch (e) {
+        await supabase.from('projects').delete().eq('id', copyRow.id);
+        setMsg('No se pudo duplicar el mapa: ' + (e instanceof Error ? e.message : String(e)));
+        setBusy(false);
+        return;
+      }
     }
 
     // Duplicar también expertos y sus juicios si existen
