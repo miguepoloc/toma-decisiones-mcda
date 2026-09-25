@@ -46,7 +46,9 @@ const colL = (i: number) => { let s = '', k = i + 1; while (k > 0) { const r = (
 // Mismo cómputo de filas que electreSheet() en excel.ts: concordancia, luego una grilla de discordancia
 // POR CRITERIO (m de ellas), luego la discordancia combinada (MAX de las anteriores), luego relación.
 const m = criteria.length;
-const rG0 = 5, rConHead = rG0 + n + 1, rCon0 = rConHead + 1;
+// rG0 = 7: rHead=2, rP=3, rW=4, más 2 filas de celdas editables c*/d* (rCStarCell=5, rDStarCell=6) antes
+// de la matriz g — ver electreSheet() en excel-electre-sheet.ts.
+const rG0 = 7, rConHead = rG0 + n + 1, rCon0 = rConHead + 1;
 const rDisCritHead = criteria.map((_, j) => rCon0 + n + 1 + j * (n + 2));
 const rDisHead = rDisCritHead[m - 1] + n + 2, rDis0 = rDisHead + 1, rRelHead = rDis0 + n + 1, rRel0 = rRelHead + 1;
 const cNet = colL(n + 1);

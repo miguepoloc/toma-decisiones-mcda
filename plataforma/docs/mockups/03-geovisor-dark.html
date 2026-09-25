@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="es" data-theme="dark">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Geovisor · Plataforma MCDA</title>
+<link rel="stylesheet" href="../../src/app/globals.css">
+<link rel="stylesheet" href="geo.css">
+<style>.mock-tag{position:fixed;top:8px;right:8px;z-index:999;background:#F43F5E;color:#fff;font:600 11px var(--f-mono);padding:3px 8px;border-radius:5px}</style>
+</head>
+<body>
+<div class="mock-tag">MAQUETA · sin implementar</div>
+
+<div class="topbar">
+  <a class="brand" href="#"><span style="width:26px;height:26px;border-radius:6px;background:var(--m-sig);display:inline-block"></span>
+    <div><div style="display:flex;align-items:center;gap:6px"><span>Plataforma MCDA</span>
+      <span style="font-size:10px;font-family:var(--f-mono);padding:1px 5px;border-radius:4px;background:rgba(255,255,255,.1);color:var(--muted)">PROYECTO</span></div></div>
+  </a>
+  <div class="topbar-right">
+    <nav class="topbar-nav">
+      <a class="navlink" href="#">Inicio</a><a class="navlink" href="#">¿Qué método uso?</a><a class="navlink" href="#">Cómo funciona</a>
+    </nav>
+    <div class="topbar-actions"><span class="user">ana@correo.edu.co</span><button class="btn sm">Salir</button></div>
+  </div>
+</div>
+
+<div class="wrap geo">
+  <div class="head">
+    <div class="eyebrow">Mapa de aptitud (SIG) · AHP + SIG</div>
+    <h1>Aptitud cacaotera — Sierra Nevada de Santa Marta</h1>
+    <p class="obj muted">Zonificar dónde es biofísicamente apto cultivar cacao, combinando clima, suelo y relieve con los pesos del panel de expertos.</p>
+  </div>
+
+  <div class="tabsbar" role="tablist">
+    <button role="tab">Proyecto</button>
+    <button role="tab">Área y capas</button>
+    <button role="tab">Reglas</button>
+    <button role="tab">Priorización (A)</button>
+    <button role="tab">Expertos</button>
+    <button role="tab" aria-selected="true">Geovisor</button>
+    <button role="tab">Compartir</button>
+  </div>
+
+  <div class="geo-steps">
+    <span class="st done"><span class="n">✓</span>Área</span><span class="sep"></span>
+    <span class="st done"><span class="n">✓</span>Capas</span><span class="sep"></span>
+    <span class="st done"><span class="n">✓</span>Reglas</span><span class="sep"></span>
+    <span class="st done"><span class="n">✓</span>Pesos</span><span class="sep"></span>
+    <span class="st now"><span class="n">5</span>Mapa</span>
+  </div>
+
+  <div class="geo-grid">
+    <!-- panel modelo -->
+    <div class="card geo-panel">
+      <header><h3 class="eyebrow">Modelo</h3></header>
+
+      <div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <span class="lbl" style="margin:0">Pesos · AHP</span>
+          <span class="cr-chip"><svg class="icon" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>CR 0.07</span>
+        </div>
+        <div class="wbar2"><span class="nm">Precipitación</span><span class="v">.32</span><span class="track"><span class="fill" style="width:32%"></span></span></div>
+        <div class="wbar2"><span class="nm">Temperatura</span><span class="v">.24</span><span class="track"><span class="fill" style="width:24%"></span></span></div>
+        <div class="wbar2"><span class="nm">pH del suelo</span><span class="v">.12</span><span class="track"><span class="fill" style="width:12%"></span></span></div>
+        <div class="wbar2"><span class="nm">Pendiente</span><span class="v">.19</span><span class="track"><span class="fill" style="width:19%"></span></span></div>
+      </div>
+
+      <div class="explore-toggle">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox"> Explorar pesos</label>
+      </div>
+      <div class="explore-banner">
+        <span>Estás explorando: no son los pesos del panel.</span>
+        <button>Volver</button>
+      </div>
+
+      <div>
+        <span class="lbl">Clases del mapa</span>
+        <div class="class-row"><i style="background:var(--geo-alta)"></i><span>Alta aptitud ≥</span><input type="number" value="70"></div>
+        <div class="class-row"><i style="background:var(--geo-media)"></i><span>Moderada ≥</span><input type="number" value="45"></div>
+        <div class="class-row"><i style="background:var(--geo-noapta)"></i><span>No apta &lt; 45</span><span></span></div>
+        <div class="class-row"><i style="background:var(--geo-excl)"></i><span>Exclusión legal / veto</span><span></span></div>
+      </div>
+
+      <button class="btn sm" style="justify-self:start">Ajustar en «Reglas»</button>
+    </div>
+
+    <!-- mapa -->
+    <div>
+      <div class="geo-map">
+        <img class="layer base" src="assets/base_dark.png" alt="">
+        <img class="layer overlay" src="assets/result.png" alt="Índice de idoneidad biofísica" style="--geo-op:.92">
+        <div class="map-crosshair"></div>
+
+        <div class="map-north" title="Norte"><svg class="icon" viewBox="0 0 24 24" style="stroke:#fff"><path d="M12 3v18M12 3l4 6M12 3 8 9"/></svg></div>
+
+        <div class="map-hud">
+          <div class="grp">
+            <label class="lbl" style="margin:0;font-size:10px">Capa</label>
+            <select><option>Resultado</option><option>Precipitación (s)</option><option>Temperatura (s)</option><option>pH (s)</option><option>Pendiente (s)</option><option>Exclusiones</option></select>
+          </div>
+          <div class="grp">
+            <label class="lbl" style="margin:0;font-size:10px">Opacidad</label>
+            <input type="range" min="0" max="100" value="92">
+          </div>
+          <div class="grp">
+            <label class="lbl" style="margin:0;font-size:10px">Mapa base</label>
+            <select><option>Oscuro</option><option>Calles</option><option>Satélite</option></select>
+          </div>
+          <div class="zoomctl"><button>+</button><button>−</button></div>
+        </div>
+
+        <div class="map-legend">
+          <b style="font:600 11px var(--f-body)">Idoneidad biofísica</b>
+          <div class="row"><i style="background:var(--geo-alta)"></i>Alta · ≥ 70</div>
+          <div class="row"><i style="background:var(--geo-media)"></i>Moderada · 45–70</div>
+          <div class="row"><i style="background:var(--geo-noapta)"></i>No apta · &lt; 45</div>
+          <div class="row"><i style="background:var(--geo-excl)"></i>Exclusión legal (PNN, páramo)</div>
+        </div>
+        <div class="map-scale"><span>0&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;25 km</span><span class="bar"></span></div>
+
+        <!-- marcadores reales (row/col del notebook) -->
+        <div class="marker" style="left:29.8%;top:18.4%" title="Guachaca"></div>
+        <div class="marker" style="left:8.4%;top:19.6%" title="Bonda"></div>
+        <div class="marker sel" style="left:14.0%;top:44.6%"><span class="lbl">San Pedro · 99.7 %</span></div>
+        <div class="marker" style="left:15.6%;top:55.2%" title="Palmor"></div>
+      </div>
+
+      <div class="card geo-stats" style="margin-top:14px">
+        <div class="bars">
+          <div class="brow"><span>Alta aptitud</span><span class="track"><span class="fill" style="width:52.6%;background:var(--geo-alta)"></span></span><span class="mono">898 k ha</span></div>
+          <div class="brow"><span>Moderada</span><span class="track"><span class="fill" style="width:0.4%;background:var(--geo-media)"></span></span><span class="mono">3 450 ha</span></div>
+          <div class="brow"><span>No apta</span><span class="track"><span class="fill" style="width:0.2%;background:var(--geo-noapta)"></span></span><span class="mono">1 988 ha</span></div>
+          <div class="brow"><span>Exclusión legal</span><span class="track"><span class="fill" style="width:47.1%;background:var(--geo-excl)"></span></span><span class="mono">804 k ha</span></div>
+        </div>
+        <div class="muted mono" style="font-size:12px">Total área de estudio: 1 707 275 ha (250×250 m/píxel)</div>
+      </div>
+
+      <div class="acts" style="margin-top:14px">
+        <button class="btn primary">Exportar ▾</button>
+        <button class="btn">Publicar ▾</button>
+        <span class="muted" style="font-size:12.5px">Última publicación: hace 2 días · <a href="#">ver enlace público</a></span>
+      </div>
+    </div>
+
+    <!-- panel punto -->
+    <div class="card geo-panel point-card">
+      <header><h3 class="eyebrow">Punto consultado</h3></header>
+      <div class="big">99.7&nbsp;%</div>
+      <span class="cls-pill" style="background:color-mix(in srgb, var(--geo-alta) 20%, transparent);color:var(--geo-alta)"><i class="icon" style="width:8px;height:8px;border-radius:99px;background:var(--geo-alta);display:inline-block"></i>Alta aptitud</span>
+      <div class="point-coords">San Pedro de la Sierra<br>10.9070, -74.0459 · 1 350 msnm</div>
+
+      <div class="point-tbl">
+        <div class="r"><span class="rl"><span class="k">Precipitación</span><span class="pv">1 493 mm/año</span></span><span class="pc">1.00 × .32</span></div>
+        <div class="r"><span class="rl"><span class="k">Temperatura</span><span class="pv">22.5 °C</span></span><span class="pc">1.00 × .24</span></div>
+        <div class="r"><span class="rl"><span class="k">pH del suelo</span><span class="pv">5.52</span></span><span class="pc">1.00 × .12</span></div>
+        <div class="r"><span class="rl"><span class="k">Pendiente</span><span class="pv">9.8°</span></span><span class="pc">1.00 × .19</span></div>
+      </div>
+
+      <button class="btn sm" style="justify-self:start">☆ Guardar como punto</button>
+      <div class="disclaimer">Índice de idoneidad 0–100, no una probabilidad. San Pedro (1 350 msnm) mantiene 22.5 °C pese a la altitud — la Sierra no corta en línea recta a 1 200 msnm.</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

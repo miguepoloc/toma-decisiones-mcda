@@ -37,6 +37,40 @@ export type DecisionMatrix = {
    * Vive aquí, dentro del JSON de `decision_matrix`, para que `public_get`/`expert_get`, los respaldos
    * `.json` y la hoja `_datos` del Excel lo lleven sin migración. Si falta, se asume 0.5. */
   vikorV?: number;
+  /** Solo ELECTRE: c* (concordancia mínima) y d* (discordancia máxima), ambos en [0, 1]. Igual que
+   * vikorV, NO se derivan de los datos: los elige quien decide, según qué tan exigente quiera ser
+   * (c* alto = más exigente, d* bajo = más exigente). Viven aquí sin migración; si faltan, rige el
+   * valor por defecto de la plataforma (ver ELECTRE_C_STAR_DEFAULT/ELECTRE_D_STAR_DEFAULT en electre.ts). */
+  electreCStar?: number;
+  electreDStar?: number;
+};
+
+/** 'decision': proyecto de siempre (alternativas comparadas por AHP o rankeadas con una matriz de
+ * decisión). 'spatial': "Mapa de aptitud (SIG)" — las alternativas son píxeles de un territorio, no
+ * hay `alternatives` ni `decision_matrix`; `method` se fija en 'saw' solo para que el panel de
+ * expertos reutilice el mecanismo ya existente de pesar criterios por pares (JudgmentEditor ya
+ * muestra únicamente la hoja `crit` cuando `method !== 'ahp'`, sin cambios). La configuración propia
+ * del mapa vive en `geo`. Ver plataforma/docs/PLAN_geovisor_ahp_sig.md. */
+export type Kind = 'decision' | 'spatial';
+
+/** Regla de idoneidad de un criterio espacial: ver `src/lib/geo/membership.ts` (FnSpec/VetoSpec) —
+ * mismo tipo, repetido aquí porque `types.ts` no importa ese módulo (evita un ciclo con `ahp.ts`). */
+export type GeoFnSpec =
+  | { type: 'trapezoid'; a: number; b: number; c: number; d: number }
+  | { type: 'up'; a: number; b: number }
+  | { type: 'down'; a: number; b: number }
+  | { type: 'classes'; map: Record<string, number> };
+export type GeoVetoSpec = { op: '<' | '>' | '<=' | '>='; value: number };
+
+/** Configuración de un proyecto `kind:'spatial'`. `packId` referencia un paquete del catálogo
+ * (`public/geo-packs/<packId>/manifest.json`, generado por `scripts/geo/export_pack.py` — la v1 no
+ * soporta cargar capas propias, ver el plan § "Qué falta"). `rules` mapea el `id` de cada criterio
+ * de `ProjectRow.criteria` a la capa del paquete que lo alimenta (`layerKey`) y su función de
+ * idoneidad; un criterio sin regla (`rules[id]` ausente) no participa del cálculo todavía. */
+export type GeoConfig = {
+  packId: string;
+  rules: Record<string, { layerKey: string; fn: GeoFnSpec; veto?: GeoVetoSpec }>;
+  classes: { alta: number; media: number };
 };
 
 export type ProjectRow = {
@@ -44,6 +78,7 @@ export type ProjectRow = {
   owner_id: string;
   title: string;
   objective: string;
+  kind: Kind;
   method: Method;
   /** Cómo se calculan los pesos de criterios. Default 'ahp'. Solo relevante cuando method !== 'ahp'. */
   weighting_method: WeightingMethod;
@@ -51,6 +86,9 @@ export type ProjectRow = {
   alternatives: Alternative[];
   decision_matrix: DecisionMatrix | Record<string, never>;
   prioritization: PrioState | Record<string, never>;
+  /** Solo con kind:'spatial'. `{}` si el proyecto aún no se configuró (no debería pasar: se crea ya
+   * con `geo` puesto — ver NewProject.tsx). */
+  geo: GeoConfig | Record<string, never>;
   is_public: boolean;
   public_token: string;
   created_at: string;

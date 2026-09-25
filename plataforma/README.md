@@ -90,23 +90,72 @@ plataforma/
 │                                      /p/[token], /admin (backoffice, solo profiles.role = 'admin', sin link en el nav)
 │                                      icon.tsx, apple-icon.tsx (favicon generado con next/og, ver Historial)
 ├─ src/components/                     JudgmentEditor, DecisionMatrixEditor, Results, PrioritizationEditor,
-│                                      ProjectWorkspace, Logo, …
+│                                      ProjectWorkspace, GeoVisor (kind:'spatial', ver Historial 25 sep 2026), Logo, …
 ├─ src/lib/                            ahp.ts, topsis.ts, vikor.ts, promethee.ts, electre.ts (cálculo), prio.ts
-│                                      (Parte A), excel.ts, legacy.ts/importer.ts, supabase/*
+│                                      (Parte A), excel.ts, legacy.ts/importer.ts, supabase/*, geo/ (membership,
+│                                      suitability, quant, pack, crs — geovisor AHP+SIG, todo puro salvo pack.ts)
 ├─ scripts/                            check-{ahp,topsis,vikor,promethee,electre}.ts (matemática), check-excel.ts
-│                                      (exportación e ida y vuelta)
+│                                      (exportación e ida y vuelta), check-geo-{membership,suitability,crs}.ts,
+│                                      geo/export_pack.py (genera public/geo-packs/ desde data/ahp_sig_snsm/cache/
+│                                      del repo raíz — no corre en CI, es manual cuando cambia el caso guiado)
+├─ public/geo-packs/                   Paquetes estáticos del geovisor (snsm-cacao-v1: ~810 KB, capas + hillshade)
 └─ prototipos/                         Herramientas HTML autónomas, Excel de ejemplo y datos semilla (referencia,
                                        incluye datos de tesis de Harold — ver Notas sobre hacerlo público)
 ```
 
 ## Modelo de datos
-- `projects`: dueño, título, objetivo, `method` (`'ahp' | 'topsis' | 'vikor' | 'electre' | 'promethee'`), `criteria` y
+- `projects`: dueño, título, objetivo, `kind` (`'decision' | 'spatial'`, default `'decision'` — ver "Geovisor" abajo),
+  `method` (`'ahp' | 'topsis' | 'vikor' | 'electre' | 'promethee' | 'saw' | 'fuzzy_topsis'`), `criteria` y
   `alternatives` (JSON), `decision_matrix` (JSON, solo con `method != 'ahp'`: valores por alternativa×criterio + tipo
-  beneficio/costo por criterio — un único formato que reusan los 4 métodos, `src/lib/types.ts` § `DecisionMatrix`),
-  `prioritization` (JSON de la Parte A), `is_public`, `public_token`.
+  beneficio/costo por criterio — un único formato que reusan los métodos de matriz, `src/lib/types.ts` § `DecisionMatrix`),
+  `prioritization` (JSON de la Parte A), `geo` (JSON, solo con `kind:'spatial'` — `src/lib/types.ts` § `GeoConfig`),
+  `is_public`, `public_token`.
 - `experts`: uno por experto del proyecto, con `invite_token`, estado (`pending` → `in_progress` → `submitted`) y quién lo llenó.
 - `judgments`: un renglón por par comparado: `(expert_id, sheet, pair_key, value)`. `value ∈ [-8, 8]`; 0 = igual; negativo = gana el primero;
   la intensidad de Saaty es `|value| + 1`. `sheet` es `crit` o `alt:<id del criterio>`.
+
+## Geovisor (AHP + SIG, `kind:'spatial'`)
+Un proyecto `kind:'spatial'` ("Mapa de aptitud (SIG)") reemplaza las alternativas por los píxeles de
+un territorio: en vez de comparar 3-9 opciones, se zonifica un mapa. Es la versión con app de lo que
+hace `07_ahp_sig_cacao_snsm.ipynb` (raíz del repo, Sesión 5) — ver
+`docs/PLAN_geovisor_ahp_sig.md` para el plan completo (fases, UX, lo que falta). Primera entrega
+(25 sep 2026, ver Historial): el geovisor en sí, con datos y matemática reales, sin carga de capas
+propias todavía.
+
+- **`method` se fija en `'saw'`** aunque no haya matriz de decisión ni alternativas: es un atajo
+  deliberado para que `JudgmentEditor`/`expert_get` (que ya solo muestran la hoja `crit` cuando
+  `method !== 'ahp'`) sirvan sin tocarlos. Los pesos de criterios salen del mismo
+  `sheetResult(CRIT_SHEET, …)` de `ahp.ts` que usan TOPSIS/VIKOR/etc. — no hay una segunda
+  implementación de AHP para el geovisor.
+- **Un paquete del catálogo por proyecto** (`GeoConfig.packId`), archivos estáticos en
+  `public/geo-packs/<id>/`: `manifest.json` (grilla, CRS, afín, un registro por capa con
+  min/max/unidad, 4 puntos de referencia) + una capa por criterio cuantizada a `Uint8` (`.u8.gz`,
+  254 niveles + 255=sin dato — ver la nota de precisión en `src/lib/geo/quant.ts`) + una máscara de
+  exclusión legal + un hillshade de fondo. Se generan con `scripts/geo/export_pack.py` a partir del
+  caché ya calculado del notebook (`data/ahp_sig_snsm/cache/` en la raíz del repo) — no descarga
+  nada nuevo. El único paquete hoy es `snsm-cacao-v1` (~810 KB).
+- **Todo el cálculo es del lado del navegador**: `src/lib/geo/pack.ts` hace `fetch` +
+  `DecompressionStream('gzip')` (sin dependencia nueva de compresión) + deshace la cuantización;
+  `src/lib/geo/{membership,suitability}.ts` (puros) calculan `S = Σ wᵢ·sᵢ(x) × vetos` y clasifican
+  en 4 clases (convención UPRA del notebook); `GeoVisor.tsx` pinta un `<canvas>` sobre el hillshade,
+  con zoom/pan por CSS transform, consulta de punto (con `src/lib/geo/crs.ts`, EPSG:9377↔lon/lat vía
+  `proj4`), pesos "Explorar" sin tocar los del panel, umbrales de clase editables y exportar PNG.
+- **`idoneidad_pendiente` no está definida en `membership.py`** (el notebook la importa y usa, pero
+  falta) — se reconstruyó por regresión contra ~200 000 píxeles reales de
+  `idoneidad_biofisica_250m.npy` del caché: resulta ser `down(x, 12, 45)` (idoneidad 1 hasta 12°,
+  rampa lineal a 0 en 45°), error < 0.01 en toda la grilla. Documentado en
+  `src/lib/geo/membership.ts` § `SNSM_CACAO_RULES.pend` — pendiente que el docente decida si el
+  notebook debería definirla así.
+- **Verificado**: `check-geo-membership.ts` y `check-geo-suitability.ts` reproducen a 6 decimales
+  los 4 puntos de ejemplo (Palmor/San Pedro/Bonda/Guachaca) contra `idoneidad_biofisica_250m.npy`
+  real; `check-geo-crs.ts` invierte pixel↔lon/lat exacto (ida y vuelta) y recupera el lon/lat real
+  de esos 4 puntos dentro de medio píxel; `scripts/geo/smoke-fetch.mjs` (manual, no en `npm test`)
+  confirma contra un `next build && next start` real que fetch+gzip+dequantize reproducen el dato
+  del notebook dentro del error de cuantización esperado. **No verificado / no hecho todavía**:
+  cargar capas propias (GeoTIFF/shapefile del estudiante), exportar GeoTIFF, publicar
+  (`/p/<token>` para `kind:'spatial'`), cuota/admin, RLS de las tablas nuevas que trae eso (`geo`
+  hoy vive en la misma fila de `projects`, cubierta por la política `projects_owner` existente, sin
+  tabla ni función nueva). Ver `docs/PLAN_geovisor_ahp_sig.md` para el resto de fases.
 
 ## Qué está verificado y qué no
 Verificado aquí: compila (`next build`), el chequeo de tipos pasa, la matemática de los 7 métodos de ranking
@@ -137,6 +186,37 @@ del SQL (políticas + funciones `SECURITY DEFINER`) se ve correcta, pero eso no 
 5. Descargar el Excel y abrirlo.
 
 ## Historial de cambios
+
+**25 sep 2026 (geovisor AHP + SIG, primera entrega real — no maqueta):** tras una ronda de maquetas
+estáticas (`docs/PLAN_geovisor_ahp_sig.md`, hechas con datos y CSS reales pero sin código de app) el
+docente pidió aplicarlo. Se implementó el geovisor de punta a punta para el caso guiado de la Sesión
+5 (aptitud cacaotera, Sierra Nevada de Santa Marta), con datos y matemática reales, no simulados:
+- `projects.kind` (`'decision'|'spatial'`) + `projects.geo` (jsonb), migración `20240101000010_spatial_projects.sql`.
+  Sin RLS nueva: la política `projects_owner` de 0001_init.sql ya cubre estas columnas por ser de la misma fila.
+- `src/lib/geo/{membership,suitability,quant,crs}.ts` (puros, `check-geo-*.ts` los verifica contra
+  el notebook 07: los 4 puntos de ejemplo a 6 decimales, ida y vuelta de coordenadas exacta) y
+  `src/lib/geo/pack.ts` (fetch + `DecompressionStream` nativo, sin dependencia de compresión).
+- `scripts/geo/export_pack.py`: genera `public/geo-packs/snsm-cacao-v1/` (~810 KB) desde
+  `data/ahp_sig_snsm/cache/` del repo raíz — el mismo caché que ya calculó el notebook, no se
+  descargó ni recalculó nada.
+- `GeoVisor.tsx`: pesos reales del panel de expertos (mismo `sheetResult` que ya usan
+  TOPSIS/VIKOR/…), mapa en `<canvas>` con zoom/pan, consulta de punto con coordenadas reales
+  (EPSG:9377→lon/lat vía `proj4`), "Explorar pesos" sin tocar los del panel, umbrales de clase
+  editables en vivo, hectáreas por clase, exportar PNG. Cableado en `ProjectWorkspace.tsx`
+  (`TABS_SPATIAL`, sin Matriz de decisión/Resultados/Comparativa — las alternativas son píxeles) y
+  `NewProject.tsx` (selector Decisión/SIG, caso guiado precarga los 4 criterios con sus reglas).
+- **Hallazgo al construir el paquete**: `idoneidad_pendiente` no existe en `membership.py` aunque el
+  notebook la usa — se reconstruyó por regresión contra el raster real (`down(x,12,45)`, error <
+  0.01), documentado en `membership.ts` § `SNSM_CACAO_RULES`. No se tocó el notebook; el docente
+  decide si corresponde definirla ahí.
+- **Corregido en la maqueta previa, aplica también aquí**: nombres de clase CSS cortos y genéricos
+  (`.val`, `.track`, `.fill`…) chocan con reglas ya existentes en `globals.css` — todo lo nuevo del
+  geovisor usa el prefijo `.gv-`.
+- Verificado: `npm test` (incluye los 3 `check-geo-*.ts` nuevos), `npm run typecheck`, `npm run
+  build` — los tres en verde —, y `scripts/geo/smoke-fetch.mjs` (manual) contra un `next start`
+  real: fetch + gzip + decuantización reproducen el dato del notebook. **No verificado / no hecho**:
+  cargar capas propias, exportar GeoTIFF, vista pública para `kind:'spatial'`, cuota/admin — quedan
+  para la siguiente entrega del plan.
 
 **24 sep 2026 (criterio de tipo OBJETIVO en la matriz de decisión; grill-me con el docente):** un estudiante quería
 ubicar paneles solares donde el voltaje de la red fuera 110 V, y la plataforma solo conocía beneficio (más es mejor)
@@ -405,6 +485,9 @@ el selector de método del proyecto.
 3. **Rol de profesor** — el docente no puede ver los proyectos de sus estudiantes desde la plataforma todavía
    (decidido con el docente, 20 sep 2026: no es prioridad mientras la calificación se haga sobre el Excel/informe
    que cada estudiante entrega aparte, ver `evaluacion_v1.md` del curso).
+4. **Geovisor (S5) más allá del caso guiado** — cargar capas propias (GeoTIFF/shapefile, caso finca solar del
+   grill-me), exportar GeoTIFF, publicar (`/p/<token>` para `kind:'spatial'`), cuota/admin y catálogo editable.
+   Ver § "Geovisor" arriba y `docs/PLAN_geovisor_ahp_sig.md` (fases 3 en adelante).
 
 Los 7 métodos ya tienen Excel propio con fórmulas vivas y color de acento propio (ver "Historial de cambios",
 20 sep 2026 noche).
@@ -434,7 +517,7 @@ código ya tiene un notebook de referencia por método
 | S2 | **AHP** | Juicios de a pares (Saaty) → *deriva* los pesos (ya está) |
 | S3 | **TOPSIS**, **VIKOR** | Matriz de decisión (alternativas × criterios, datos reales) + pesos que ya recibe como dato |
 | S4 | Taller comparativo: AHP, TOPSIS, VIKOR, **ELECTRE**, **PROMETHEE**, ANP | (los 6 anteriores + ANP, mismo caso) |
-| S5 | AHP + SIG (extensión espacial) | AHP sobre capas raster/vectoriales, fuera de alcance de esta plataforma por ahora |
+| S5 | AHP + SIG (extensión espacial) | **hecho** (25 sep 2026, primera entrega): `kind:'spatial'`, ver § "Geovisor" arriba y `docs/PLAN_geovisor_ahp_sig.md` para lo que falta (capas propias, publicar) |
 | S6 | **ANP** (supermatriz) | Generaliza AHP: criterios/alternativas con dependencias/retroalimentación, no solo jerarquía |
 
 **Fuzzy no es una sesión propia**: el propio curso lo cataloga como "mencionado como enriquecimiento... la extensión Fuzzy

@@ -27,6 +27,9 @@ export function normalizeMatrix(x: unknown): DecisionMatrix {
     if (Object.keys(t).length) out.targets = t;
   }
   if (typeof s.vikorV === 'number' && Number.isFinite(s.vikorV) && s.vikorV >= 0 && s.vikorV <= 1) out.vikorV = s.vikorV;
+  // c*/d* de ELECTRE: mismo criterio de validación que vikorV (número finito en [0, 1], si no se ignora).
+  if (typeof s.electreCStar === 'number' && Number.isFinite(s.electreCStar) && s.electreCStar >= 0 && s.electreCStar <= 1) out.electreCStar = s.electreCStar;
+  if (typeof s.electreDStar === 'number' && Number.isFinite(s.electreDStar) && s.electreDStar >= 0 && s.electreDStar <= 1) out.electreDStar = s.electreDStar;
   return out;
 }
 

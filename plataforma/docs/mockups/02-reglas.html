@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="es" data-theme="dark">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Reglas · Plataforma MCDA</title>
+<link rel="stylesheet" href="../../src/app/globals.css">
+<link rel="stylesheet" href="geo.css">
+<style>
+  .mock-tag{position:fixed;top:8px;right:8px;z-index:999;background:#F43F5E;color:#fff;font:600 11px var(--f-mono);padding:3px 8px;border-radius:5px}
+  .crit-list{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}
+  .crit-list button{appearance:none;font:600 13px var(--f-body);border:1px solid var(--line);background:var(--surface);color:var(--muted);border-radius:8px;padding:8px 14px;cursor:pointer;display:flex;align-items:center;gap:8px}
+  .crit-list button[aria-pressed=true]{border-color:var(--accent);background:var(--accent-soft);color:var(--ink)}
+  .crit-list .w{font:500 11px var(--f-mono);color:var(--muted)}
+  .axislbl{font:500 10px var(--f-mono);fill:var(--muted)}
+  .handle{fill:var(--accent);stroke:var(--bg);stroke-width:2;cursor:ew-resize}
+  .handle:hover{fill:color-mix(in srgb, var(--accent) 80%, white)}
+</style>
+</head>
+<body>
+<div class="mock-tag">MAQUETA · sin implementar</div>
+
+<div class="topbar">
+  <a class="brand" href="#"><span style="width:26px;height:26px;border-radius:6px;background:var(--m-sig);display:inline-block"></span>
+    <div><div style="display:flex;align-items:center;gap:6px"><span>Plataforma MCDA</span>
+      <span style="font-size:10px;font-family:var(--f-mono);padding:1px 5px;border-radius:4px;background:rgba(255,255,255,.1);color:var(--muted)">PROYECTO</span></div></div>
+  </a>
+  <div class="topbar-right">
+    <nav class="topbar-nav"><a class="navlink" href="#">Inicio</a><a class="navlink" href="#">¿Qué método uso?</a><a class="navlink" href="#">Cómo funciona</a></nav>
+    <div class="topbar-actions"><span class="user">ana@correo.edu.co</span><button class="btn sm">Salir</button></div>
+  </div>
+</div>
+
+<div class="wrap geo">
+  <div class="head">
+    <div class="eyebrow">Mapa de aptitud (SIG) · AHP + SIG</div>
+    <h1>Reglas de idoneidad</h1>
+    <p class="obj muted">Por cada criterio, define qué valores son óptimos (idoneidad 1), cuáles son inaceptables (idoneidad 0) y cómo se degrada entre medio. Arrastra los puntos o escribe los números.</p>
+  </div>
+
+  <div class="tabsbar" role="tablist">
+    <button role="tab">Proyecto</button>
+    <button role="tab">Área y capas</button>
+    <button role="tab" aria-selected="true">Reglas</button>
+    <button role="tab">Priorización (A)</button>
+    <button role="tab">Expertos</button>
+    <button role="tab">Geovisor</button>
+    <button role="tab">Compartir</button>
+  </div>
+
+  <div class="geo-steps">
+    <span class="st done"><span class="n">✓</span>Área</span><span class="sep"></span>
+    <span class="st done"><span class="n">✓</span>Capas</span><span class="sep"></span>
+    <span class="st now"><span class="n">3</span>Reglas</span><span class="sep"></span>
+    <span class="st"><span class="n">4</span>Pesos</span><span class="sep"></span>
+    <span class="st"><span class="n">5</span>Mapa</span>
+  </div>
+
+  <div class="crit-list">
+    <button aria-pressed="false">Precipitación <span class="w">.32</span></button>
+    <button aria-pressed="true">Temperatura <span class="w">.24</span></button>
+    <button aria-pressed="false">pH del suelo <span class="w">.12</span></button>
+    <button aria-pressed="false">Pendiente <span class="w">.19</span></button>
+  </div>
+
+  <div class="card">
+    <header style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:6px">
+      <div>
+        <h3 style="font-size:16px">Temperatura media anual</h3>
+        <span class="muted" style="font-size:13px">Capa: WorldClim BIO1 · unidad: °C</span>
+      </div>
+      <span class="pill">Peso AHP: 0.24</span>
+    </header>
+
+    <div class="fn-editor" style="margin-top:14px">
+      <div>
+        <div class="fn-plot">
+          <svg viewBox="0 0 520 200" width="100%" role="img" aria-label="Función de idoneidad trapezoidal: 0 hasta 15°C, sube a 1 en 22°C, se mantiene en 1 hasta 30°C, baja a 0 en 38°C">
+            <line x1="30" y1="40" x2="490" y2="40" stroke="var(--line)" stroke-dasharray="2 3"/>
+            <line x1="30" y1="170" x2="490" y2="170" stroke="var(--line)"/>
+            <line x1="30" y1="30" x2="30" y2="170" stroke="var(--line)"/>
+            <text x="12" y="44" class="axislbl">1.0</text>
+            <text x="8" y="174" class="axislbl">0.0</text>
+            <text x="26" y="188" class="axislbl">0°C</text>
+            <text x="470" y="188" class="axislbl">45°C</text>
+            <path d="M30.0,170.0 L183.3,170.0 L254.9,40.0 L336.7,40.0 L418.4,170.0 L490.0,170.0" fill="color-mix(in srgb, var(--accent) 14%, transparent)" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round"/>
+            <line x1="418.4" y1="0" x2="418.4" y2="200" stroke="var(--warn)" stroke-width="1.5" stroke-dasharray="4 3" opacity=".85"/>
+            <text x="424" y="14" class="axislbl" style="fill:var(--warn)">veto ≥ 38°C</text>
+            <g>
+              <circle class="handle" cx="183.3" cy="170" r="7"/>
+              <circle class="handle" cx="254.9" cy="40" r="7"/>
+              <circle class="handle" cx="336.7" cy="40" r="7"/>
+              <circle class="handle" cx="418.4" cy="170" r="7"/>
+            </g>
+          </svg>
+        </div>
+        <div class="fn-fields">
+          <label>a — inicia tolerable<input type="number" value="15"></label>
+          <label>b — inicia óptimo<input type="number" value="22"></label>
+          <label>c — termina óptimo<input type="number" value="30"></label>
+          <label>d — termina tolerable<input type="number" value="38"></label>
+        </div>
+        <div class="hint" style="margin-top:10px;font-size:12.5px">FEDECACAO (2015): óptimo 22–30 °C. Por debajo de 15 °C el cacao sufre marchitez fisiológica — se trata como veto, no como penalización.</div>
+      </div>
+
+      <div class="fn-side">
+        <div>
+          <span class="lbl">Tipo de función</span>
+          <div class="seg" style="display:flex;flex-wrap:wrap">
+            <button aria-pressed="false">Creciente</button>
+            <button aria-pressed="false">Decreciente</button>
+            <button aria-pressed="true">Trapezoidal</button>
+            <button aria-pressed="false">Categorías</button>
+          </div>
+        </div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" checked> Usar como veto duro (idoneidad 0 fuera del rango tolerable)</label>
+        <div>
+          <span class="lbl">¿Por qué estos umbrales? <span style="color:var(--warn);text-transform:none">*obligatorio</span></span>
+          <textarea rows="3">FEDECACAO (2015), Guía técnica para el cultivo del cacao: rango óptimo 22-30°C, límites fisiológicos 15-38°C.</textarea>
+        </div>
+        <div class="hint" style="background:var(--surface2);font-size:12px;color:var(--muted)">
+          Histograma de esta capa en tu área: la mayoría de píxeles cae entre 20 y 28 °C.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <header style="margin-bottom:10px"><h3 class="eyebrow">Exclusiones y clases globales</h3></header>
+    <div class="two eq">
+      <div>
+        <span class="lbl">Máscaras de exclusión</span>
+        <div class="chips">
+          <span class="pill neutral">PNN Sierra Nevada + Tayrona</span>
+          <span class="pill neutral">Páramo · elevación ≥ 3000 m</span>
+        </div>
+      </div>
+      <div>
+        <span class="lbl">Umbrales de clase</span>
+        <div class="class-row"><i style="background:var(--geo-alta)"></i><span>Alta aptitud ≥</span><input type="number" value="70"></div>
+        <div class="class-row"><i style="background:var(--geo-media)"></i><span>Moderada ≥</span><input type="number" value="45"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="acts" style="margin-top:16px">
+    <button class="btn">← Volver a Área y capas</button>
+    <button class="btn primary">Continuar a Priorización (A) →</button>
+  </div>
+</div>
+</body>
+</html>

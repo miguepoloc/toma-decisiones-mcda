@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { colL, qs, stl, W, type MatInfo } from './excel-core.ts';
 import { getCell, getType } from './topsis.ts';
-import { electre, electreSynthesis } from './electre.ts';
+import { electre, electreCStar, electreDStar, electreSynthesis } from './electre.ts';
 import type { Alternative, Criterion, DecisionMatrix } from './types.ts';
 
 /** ELECTRE I con fórmulas vivas: misma matriz "dirección beneficio" g y rango P que PROMETHEE.
@@ -17,14 +17,18 @@ import type { Alternative, Criterion, DecisionMatrix } from './types.ts';
  * da un ranking (ver electre.ts). La superación neta (para intuición, no un ranking real) se calcula
  * directamente de las grillas de concordancia/discordancia, no de la grilla "Relación" (que es texto):
  * la diagonal (i=k) siempre cumple concordancia=1/discordancia=0 en la aritmética cruda, pero se cancela
- * sola al restar superaciones-a-favor menos superaciones-en-contra. Verificado en check-excel-electre.ts. */
+ * sola al restar superaciones-a-favor menos superaciones-en-contra. c* y d* son 2 CELDAS editables (las
+ * que guardan `decision_matrix.electreCStar`/`electreDStar`, ver electre.ts) y las fórmulas de Relación
+ * y Superación neta apuntan a ellas — mismo patrón que v en excel-vikor-sheet.ts. Verificado en
+ * check-excel-electre.ts. */
 export function electreSheet(criteria: Criterion[], alternatives: Alternative[], dm: DecisionMatrix, weights: number[], matInfo: MatInfo, matName: string, critInfo: { rN0: number; vc: number }) {
   const m = criteria.length, n = alternatives.length, { put, fin } = W();
   const matrix = alternatives.map((a) => criteria.map((c) => getCell(dm, a.id, c.id) ?? 0));
   const types = criteria.map((c) => getType(dm, c.id));
-  const r = electre(matrix, weights, types);
-  const syn = electreSynthesis(criteria, alternatives, dm, weights);
-  const rHead = 2, rP = 3, rW = 4, rG0 = 5;
+  const cStar = electreCStar(dm), dStar = electreDStar(dm);
+  const r = electre(matrix, weights, types, cStar, dStar);
+  const syn = electreSynthesis(criteria, alternatives, dm, weights, cStar, dStar);
+  const rHead = 2, rP = 3, rW = 4, rCStarCell = rW + 1, rDStarCell = rCStarCell + 1, rG0 = rDStarCell + 1;
   const rConHead = rG0 + n + 1, rCon0 = rConHead + 1;
   // Discordancia por criterio, una grilla n×n por cada uno, ANTES de la grilla combinada: MAX() solo
   // es confiable sobre celdas reales (aquí, una por criterio), no sobre una expresión-arreglo armada
@@ -35,7 +39,7 @@ export function electreSheet(criteria: Criterion[], alternatives: Alternative[],
   const rRelHead = rDis0 + n + 1, rRel0 = rRelHead + 1;
   const MN = qs(matName), lastCrit = colL(m), lastAlt = colL(n), cNet = n + 1;
   put(1, 0, 'ELECTRE I — relación de superación', { s: stl.title });
-  put(1, 1, `g convierte cada criterio a "mayor es mejor". Concordancia[i,k]: peso de los criterios donde i >= k. Discordancia[i,k]: mayor objeción normalizada a que i supere a k. i supera a k si concordancia >= c* (${r.cStar}) y discordancia <= d* (${r.dStar}) — puede no haber relación en ningún sentido (incomparables), ELECTRE no da un ranking.`, { s: stl.note });
+  put(1, 1, `g convierte cada criterio a "mayor es mejor". Concordancia[i,k]: peso de los criterios donde i >= k. Discordancia[i,k]: mayor objeción normalizada a que i supere a k. i supera a k si concordancia >= c* (celda B${rCStarCell}, editable) y discordancia <= d* (celda B${rDStarCell}, editable) — ninguno se deriva de los datos, los elige quien decide. Puede no haber relación en ningún sentido (incomparables), ELECTRE no da un ranking.`, { s: stl.note });
   put(rHead, 0, 'Alternativa', { s: stl.hdrL });
   criteria.forEach((c, j) => put(rHead, 1 + j, c.name, { s: stl.hdr }));
   put(rP, 0, 'P (rango del criterio)', { s: stl.b });
@@ -45,6 +49,10 @@ export function electreSheet(criteria: Criterion[], alternatives: Alternative[],
     put(rP, 1 + j, r.ranges[j], { f: `IF(MAX(${rng})-MIN(${rng})=0,1,MAX(${rng})-MIN(${rng}))`, z: '0.0000' });
     put(rW, 1 + j, r.weights[j], { f: `Criterios!${colL(critInfo.vc)}${critInfo.rN0 + j}`, z: '0.0000' });
   });
+  put(rCStarCell, 0, 'c* (editable, concordancia mínima)', { s: stl.b });
+  put(rCStarCell, 1, cStar, { s: stl.key, z: '0.00' });
+  put(rDStarCell, 0, 'd* (editable, discordancia máxima)', { s: stl.b });
+  put(rDStarCell, 1, dStar, { s: stl.key, z: '0.00' });
   alternatives.forEach((a, i) => {
     put(rG0 + i, 0, a.name, { s: stl.hdrL });
     criteria.forEach((_, j) => {
@@ -101,10 +109,10 @@ export function electreSheet(criteria: Criterion[], alternatives: Alternative[],
     alternatives.forEach((_, k) => {
       if (i === k) { put(rr, 1 + k, '', { s: stl.c }); return; }
       const cCell = colL(1 + k) + conRow, dCell = colL(1 + k) + disRow;
-      put(rr, 1 + k, r.outranks[i][k] ? 'Sí' : '', { f: `IF(AND(${cCell}>=${r.cStar},${dCell}<=${r.dStar}),"Sí","")`, s: stl.c });
+      put(rr, 1 + k, r.outranks[i][k] ? 'Sí' : '', { f: `IF(AND(${cCell}>=$B$${rCStarCell},${dCell}<=$B$${rDStarCell}),"Sí","")`, s: stl.c });
     });
     put(rr, cNet, syn.netOutdegree[i], {
-      f: `SUMPRODUCT((B${conRow}:${lastAlt}${conRow}>=${r.cStar})*(B${disRow}:${lastAlt}${disRow}<=${r.dStar}))-SUMPRODUCT((${colL(1 + i)}${rCon0}:${colL(1 + i)}${rCon0 + n - 1}>=${r.cStar})*(${colL(1 + i)}${rDis0}:${colL(1 + i)}${rDis0 + n - 1}<=${r.dStar}))`,
+      f: `SUMPRODUCT((B${conRow}:${lastAlt}${conRow}>=$B$${rCStarCell})*(B${disRow}:${lastAlt}${disRow}<=$B$${rDStarCell}))-SUMPRODUCT((${colL(1 + i)}${rCon0}:${colL(1 + i)}${rCon0 + n - 1}>=$B$${rCStarCell})*(${colL(1 + i)}${rDis0}:${colL(1 + i)}${rDis0 + n - 1}<=$B$${rDStarCell}))`,
       s: stl.key, z: '0',
     });
   });

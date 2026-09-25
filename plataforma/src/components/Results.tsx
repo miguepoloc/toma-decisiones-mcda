@@ -9,7 +9,7 @@ import { getCell, getKind, getTarget, missingTargets, normalizeMatrix, resolveTa
 import { vikorSynthesis, vikorV } from '@/lib/vikor';
 import VikorPanel from './VikorPanel';
 import { prometheeSynthesis } from '@/lib/promethee';
-import { electreSynthesis } from '@/lib/electre';
+import { electreCStar, electreDStar, electreSynthesis } from '@/lib/electre';
 import { sawSynthesis } from '@/lib/saw';
 import { fuzzyTopsisSynthesis } from '@/lib/fuzzy_topsis';
 import { criticWeights, entropyWeights } from '@/lib/weights';
@@ -40,6 +40,11 @@ type Props = {
   /** Solo VIKOR. Si se pasa (dueño del proyecto), el selector de v se guarda en `decision_matrix.vikorV`.
    * Si no (vista pública), el selector funciona solo en pantalla y no modifica el proyecto. */
   onChangeV?: (v: number) => void;
+  /** Solo ELECTRE, mismo patrón que onChangeV: si se pasan (dueño del proyecto), los selectores de c* y
+   * d* se guardan en `decision_matrix.electreCStar`/`electreDStar`. Si no (vista pública), cambian solo
+   * en pantalla. */
+  onChangeCStar?: (c: number) => void;
+  onChangeDStar?: (d: number) => void;
 };
 
 const METHOD_LABEL: Record<Method, string> = {
@@ -140,7 +145,7 @@ function Table({ names, M, f }: { names: string[]; M: number[][]; f: (x: number)
   );
 }
 
-export default function Results({ mode, criteria, alternatives, experts, judgments, method = 'ahp', weightingMethod = 'ahp', decisionMatrix, showPerExpert, projectTitle = 'Proyecto MCDA', projectObjective = '', onChangeV }: Props) {
+export default function Results({ mode, criteria, alternatives, experts, judgments, method = 'ahp', weightingMethod = 'ahp', decisionMatrix, showPerExpert, projectTitle = 'Proyecto MCDA', projectObjective = '', onChangeV, onChangeCStar, onChangeDStar }: Props) {
   const [showReportModal, setShowReportModal] = useState(false);
   const idx = useMemo(() => indexJudgments(judgments), [judgments]);
   const withData = useMemo(() => experts.filter((e) => Object.keys(idx[e.id] ?? {}).length > 0).map((e) => e.id), [experts, idx]);
@@ -152,19 +157,29 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
   // Pesos de AHP (siempre calculados para la pestaña de detalle por hoja)
   const ahpWeights = useMemo(() => sheetResult(CRIT_SHEET, criteria, used, idx).agg.w, [criteria, used, idx]);
   // Pesos efectivos para los métodos de ranking: CRITIC, Entropía o AHP según weighting_method
-  // v de VIKOR: el dueño lo guarda en decision_matrix.vikorV (onChangeV); en la vista pública el selector
-  // solo cambia una copia local, sin tocar el proyecto.
+  // v de VIKOR y c*/d* de ELECTRE: el dueño los guarda en decision_matrix (onChangeV/onChangeCStar/
+  // onChangeDStar); en la vista pública cada selector solo cambia una copia local, sin tocar el proyecto.
   const [vLocal, setVLocal] = useState<number | null>(null);
+  const [cLocal, setCLocal] = useState<number | null>(null);
+  const [dLocal, setDLocal] = useState<number | null>(null);
   // dmRaw = lo que ingresó el usuario (con tipo 'target' y su objetivo); dm = matriz EFECTIVA que leen todos los
   // métodos: cada criterio de tipo objetivo ya convertido en su distancia al objetivo, como costo (resolveTargets).
   const dmRaw = useMemo(() => {
     const base = normalizeMatrix(decisionMatrix);
-    return !onChangeV && vLocal != null ? { ...base, vikorV: vLocal } : base;
-  }, [decisionMatrix, onChangeV, vLocal]);
+    const overrides: Partial<DecisionMatrix> = {};
+    if (!onChangeV && vLocal != null) overrides.vikorV = vLocal;
+    if (!onChangeCStar && cLocal != null) overrides.electreCStar = cLocal;
+    if (!onChangeDStar && dLocal != null) overrides.electreDStar = dLocal;
+    return Object.keys(overrides).length ? { ...base, ...overrides } : base;
+  }, [decisionMatrix, onChangeV, vLocal, onChangeCStar, cLocal, onChangeDStar, dLocal]);
   const dm = useMemo(() => resolveTargets(criteria, alternatives, dmRaw), [criteria, alternatives, dmRaw]);
   const noTarget = useMemo(() => missingTargets(criteria, dmRaw), [criteria, dmRaw]);
   const vEff = vikorV(dmRaw);
+  const cEff = electreCStar(dmRaw);
+  const dEff = electreDStar(dmRaw);
   const changeV = (v: number) => (onChangeV ? onChangeV(v) : setVLocal(v));
+  const changeCStar = (c: number) => (onChangeCStar ? onChangeCStar(c) : setCLocal(c));
+  const changeDStar = (d: number) => (onChangeDStar ? onChangeDStar(d) : setDLocal(d));
   const critWeights = useMemo(() => {
     if (method === 'ahp') return ahpWeights;
     if (weightingMethod === 'critic') return criticWeights(criteria, alternatives, dm);
@@ -175,7 +190,7 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
   const topSyn = useMemo(() => topsisSynthesis(criteria, alternatives, dm, critWeights), [criteria, alternatives, dm, critWeights]);
   const vikSyn = useMemo(() => vikorSynthesis(criteria, alternatives, dm, critWeights), [criteria, alternatives, dm, critWeights]);
   const promSyn = useMemo(() => prometheeSynthesis(criteria, alternatives, dm, critWeights), [criteria, alternatives, dm, critWeights]);
-  const elecSyn = useMemo(() => electreSynthesis(criteria, alternatives, dm, critWeights), [criteria, alternatives, dm, critWeights]);
+  const elecSyn = useMemo(() => electreSynthesis(criteria, alternatives, dm, critWeights, cEff, dEff), [criteria, alternatives, dm, critWeights, cEff, dEff]);
   const sawSyn  = useMemo(() => sawSynthesis(criteria, alternatives, dm, critWeights), [criteria, alternatives, dm, critWeights]);
   const fuzzyTopSyn = useMemo(() => fuzzyTopsisSynthesis(criteria, alternatives, dm, critWeights), [criteria, alternatives, dm, critWeights]);
   const syn = useMemo(() => synthesis(criteria, alternatives, used, idx), [criteria, alternatives, used, idx]);
@@ -252,7 +267,40 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
       <div className="card win">
         <span className="eyebrow">ELECTRE no da un solo ganador</span>
         <span className="big">Relación de superación ({elecSyn.relations.length} relación{elecSyn.relations.length === 1 ? '' : 'es'})</span>
-        <span className="muted" style={{ fontSize: 13 }}>c* (concordancia mínima) {elecSyn.result.cStar.toFixed(2)} · d* (discordancia máxima) {elecSyn.result.dStar.toFixed(2)} — convención del curso.</span>
+        <span className="muted" style={{ fontSize: 13 }}>c* (concordancia mínima) {elecSyn.result.cStar.toFixed(2)} · d* (discordancia máxima) {elecSyn.result.dStar.toFixed(2)}.</span>
+      </div>
+      {/* Igual que el selector de v en VIKOR: c* y d* NO salen de los datos, los elige quien decide, y
+          cambiarlos cambia el resultado (qué pares terminan con relación y cuáles quedan incomparables). */}
+      <div className="card">
+        <div className="eyebrow">Umbrales c* y d* de ELECTRE</div>
+        <h3 style={{ margin: '4px 0 6px' }}>c* = {cEff.toFixed(2)} <span className="muted" style={{ fontSize: 13, fontWeight: 400 }}>· concordancia mínima</span> &nbsp;·&nbsp; d* = {dEff.toFixed(2)} <span className="muted" style={{ fontSize: 13, fontWeight: 400 }}>· discordancia máxima</span></h3>
+        <div style={{ display: 'grid', gap: 12, maxWidth: 480 }}>
+          <label style={{ display: 'grid', gap: 4, fontSize: 13 }}>
+            <span>c* (más alto = más exigente: pide más evidencia a favor)</span>
+            <input
+              type="range" min="0" max="1" step="0.05" value={cEff} aria-label="Valor de c*"
+              onChange={(e) => changeCStar(Math.round(parseFloat(e.target.value) * 100) / 100)}
+              style={{ accentColor: 'var(--accent)', cursor: 'pointer' }}
+            />
+          </label>
+          <label style={{ display: 'grid', gap: 4, fontSize: 13 }}>
+            <span>d* (más bajo = más exigente: tolera menos cualquier rechazo fuerte)</span>
+            <input
+              type="range" min="0" max="1" step="0.05" value={dEff} aria-label="Valor de d*"
+              onChange={(e) => changeDStar(Math.round(parseFloat(e.target.value) * 100) / 100)}
+              style={{ accentColor: 'var(--accent)', cursor: 'pointer' }}
+            />
+          </label>
+        </div>
+        <p className="muted" style={{ fontSize: 13, margin: '10px 0 0', maxWidth: '78ch' }}>
+          <b>c* y d* no se calculan a partir de los datos: los eliges tú.</b> A diferencia de CR en AHP (que sí
+          tiene un valor de referencia ampliamente citado, 0.10), no hay un estándar único para c*/d* — cámbialos
+          y observa si cambian las relaciones y los pares incomparables de abajo; si es sensible a la elección,
+          repórtalo en tu informe.
+          {onChangeCStar || onChangeDStar
+            ? ' Se guardan con el proyecto y los ven quienes abran el enlace público.'
+            : ' Aquí solo cambian en tu pantalla: no modifican el proyecto.'}
+        </p>
       </div>
       <div className="card">
         <h3 style={{ marginBottom: 10 }}>Quién supera a quién</h3>

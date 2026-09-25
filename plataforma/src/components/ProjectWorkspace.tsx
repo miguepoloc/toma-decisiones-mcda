@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { hexToken, uid, type Alternative, type Criterion, type ExpertRow, type JudgmentRow, type Method, type WeightingMethod, type ProjectRow } from '@/lib/types';
+import { hexToken, uid, type Alternative, type Criterion, type ExpertRow, type GeoConfig, type JudgmentRow, type Method, type WeightingMethod, type ProjectRow } from '@/lib/types';
 import { indexJudgments, type JMap } from '@/lib/ahp';
 import { finalists, normalizePrio, type PrioState } from '@/lib/prio';
 import { downloadExcel, downloadPrioExcel } from '@/lib/excel';
@@ -11,13 +11,17 @@ import { normalizeMatrix, setCell as setMatrixCell, setTarget as setMatrixTarget
 import JudgmentEditor from './JudgmentEditor';
 import PrioritizationEditor from './PrioritizationEditor';
 import DecisionMatrixEditor from './DecisionMatrixEditor';
+import GeoVisor from './GeoVisor';
 import Results, { accentStyleFor } from './Results';
 import ScientificMethodModal, { type MethodKey } from './ScientificMethodModal';
 
 type Props = { initialProject: ProjectRow; initialExperts: ExpertRow[]; initialJudgments: JudgmentRow[] };
-type Patch = Partial<Pick<ProjectRow, 'title' | 'objective' | 'method' | 'weighting_method' | 'criteria' | 'alternatives' | 'decision_matrix' | 'prioritization' | 'is_public' | 'public_token'>>;
+type Patch = Partial<Pick<ProjectRow, 'title' | 'objective' | 'method' | 'weighting_method' | 'criteria' | 'alternatives' | 'decision_matrix' | 'prioritization' | 'is_public' | 'public_token' | 'geo'>>;
 const TABS_AHP = ['Proyecto', 'Priorización (A)', 'Expertos', 'Resultados', 'Comparativa', 'Compartir'];
 const TABS_MATRIX = ['Proyecto', 'Priorización (A)', 'Expertos', 'Matriz de decisión', 'Resultados', 'Comparativa', 'Compartir'];
+// kind:'spatial' — ver GeoVisor.tsx y plataforma/docs/PLAN_geovisor_ahp_sig.md. Sin «Matriz de
+// decisión»/«Resultados»/«Comparativa»: las alternativas son píxeles, no filas de esas tablas.
+const TABS_SPATIAL = ['Proyecto', 'Priorización (A)', 'Expertos', 'Geovisor', 'Compartir'];
 const METHOD_OPTIONS: { key: Method; label: string; family: string; desc: string; citation: string }[] = [
   { key: 'ahp', label: 'AHP', family: 'Pares Saaty', desc: 'Tus expertos comparan las alternativas de a pares con la escala fundamental 1–9. Calcula autovalores y consistencia λmáx.', citation: 'Saaty, T. L. (1980). The Analytic Hierarchy Process. McGraw-Hill.' },
   { key: 'topsis', label: 'TOPSIS', family: 'Distancia Ideal', desc: 'Escribes el valor cuantitativo real de cada alternativa; ranquea por cercanía euclidiana a la solución ideal (PIS) y lejanía de la anti-ideal (NIS).', citation: 'Hwang, C. L., & Yoon, K. (1981). Multiple Attribute Decision Making. Springer-Verlag.' },
@@ -46,7 +50,7 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
   const [save, setSave] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [saveErr, setSaveErr] = useState('');
   const [showSciModal, setShowSciModal] = useState(false);
-  const TABS = project.method === 'ahp' ? TABS_AHP : TABS_MATRIX;
+  const TABS = project.kind === 'spatial' ? TABS_SPATIAL : project.method === 'ahp' ? TABS_AHP : TABS_MATRIX;
 
   // Respaldo de borrador local continuo
   useEffect(() => {
@@ -186,6 +190,13 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
   /** v de VIKOR: se guarda dentro de decision_matrix (sin migración), ver types.ts. */
   function setVikorV(v: number) {
     patch({ decision_matrix: { ...dm, vikorV: v } });
+  }
+  /** c* y d* de ELECTRE: mismo patrón que v de VIKOR, dentro de decision_matrix (sin migración). */
+  function setElectreCStar(c: number) {
+    patch({ decision_matrix: { ...dm, electreCStar: c } });
+  }
+  function setElectreDStar(d: number) {
+    patch({ decision_matrix: { ...dm, electreDStar: d } });
   }
 
   const studyExport = () => ({
@@ -365,16 +376,23 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
               <div className="acts"><button type="button" className="btn sm" onClick={() => patch({ criteria: [...project.criteria, { id: uid('k'), name: 'Nuevo criterio', hint: '', src: null } as Criterion] }, true)}>+ Agregar criterio</button></div>
               <p className="muted" style={{ fontSize: 13 }}>Ojo con los criterios donde menos es mejor (por ejemplo costo o riesgo): la regla te recuerda comparar en la dirección correcta. Al quitar un criterio se borran los juicios que lo usan.</p>
             </div>
-            <div className="fgrp">
-              <label className="lbl">Alternativas ({project.alternatives.length})</label>
-              {project.alternatives.map((a, i) => (
-                <div className="lrow" key={a.id}>
-                  <input type="text" value={a.name} aria-label={`Alternativa ${i + 1}`} onChange={(e) => patch({ alternatives: project.alternatives.map((x) => (x.id === a.id ? { ...x, name: e.target.value } : x)) })} />
-                  {project.alternatives.length > 2 && <button type="button" className={'btn icon sm' + (pendDel === 'a' + a.id ? ' danger' : '')} onClick={() => twoClick('a' + a.id, () => removeAlternative(a.id))}>{pendDel === 'a' + a.id ? '¿Seguro?' : '✕'}</button>}
-                </div>
-              ))}
-              <div className="acts"><button type="button" className="btn sm" onClick={() => patch({ alternatives: [...project.alternatives, { id: uid('a'), name: 'Nueva alternativa' } as Alternative] }, true)}>+ Agregar alternativa</button></div>
-            </div>
+            {project.kind === 'spatial' ? (
+              <div className="fgrp">
+                <label className="lbl">Alternativas</label>
+                <p className="muted" style={{ fontSize: 13 }}>En un mapa de aptitud, las alternativas son los píxeles del territorio — no hay una lista que editar aquí. El mapa vive en la pestaña «Geovisor».</p>
+              </div>
+            ) : (
+              <div className="fgrp">
+                <label className="lbl">Alternativas ({project.alternatives.length})</label>
+                {project.alternatives.map((a, i) => (
+                  <div className="lrow" key={a.id}>
+                    <input type="text" value={a.name} aria-label={`Alternativa ${i + 1}`} onChange={(e) => patch({ alternatives: project.alternatives.map((x) => (x.id === a.id ? { ...x, name: e.target.value } : x)) })} />
+                    {project.alternatives.length > 2 && <button type="button" className={'btn icon sm' + (pendDel === 'a' + a.id ? ' danger' : '')} onClick={() => twoClick('a' + a.id, () => removeAlternative(a.id))}>{pendDel === 'a' + a.id ? '¿Seguro?' : '✕'}</button>}
+                  </div>
+                ))}
+                <div className="acts"><button type="button" className="btn sm" onClick={() => patch({ alternatives: [...project.alternatives, { id: uid('a'), name: 'Nueva alternativa' } as Alternative] }, true)}>+ Agregar alternativa</button></div>
+              </div>
+            )}
             {(project.criteria.length > 9 || project.alternatives.length > 9) && <div className="banner"><span><b>Ojo:</b> Saaty recomienda comparar hasta 9 elementos por matriz; con más, la consistencia es difícil de lograr.</span></div>}
           </div>
         </div>
@@ -441,6 +459,22 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
         </div>
       )}
 
+      {tab === 'Geovisor' && project.kind === 'spatial' && (
+        (project.geo as GeoConfig).packId ? (
+          <div className="gv-wrap">
+            <GeoVisor
+              criteria={project.criteria}
+              experts={experts}
+              idx={idx}
+              geo={project.geo as GeoConfig}
+              onPatchClasses={(classes) => patch({ geo: { ...(project.geo as GeoConfig), classes } }, true)}
+            />
+          </div>
+        ) : (
+          <div className="banner"><span>Este proyecto espacial todavía no tiene un paquete de capas configurado.</span></div>
+        )
+      )}
+
       {tab === 'Matriz de decisión' && (
         <DecisionMatrixEditor
           criteria={project.criteria}
@@ -473,6 +507,8 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
             projectTitle={project.title}
             projectObjective={project.objective}
             onChangeV={setVikorV}
+            onChangeCStar={setElectreCStar}
+            onChangeDStar={setElectreDStar}
           />
         </div>
       )}
@@ -499,29 +535,46 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
         <div className="panel">
           <div className="card form">
             <h3>Resultados públicos</h3>
-            <p className="muted" style={{ maxWidth: '70ch' }}>Por defecto, nadie más que tú ve tu proyecto. Si activas el enlace público, cualquier persona con el enlace podrá ver los resultados (ranking, pesos y consistencia). No verá nombres de expertos, ni sus enlaces, ni la priorización de criterios.</p>
-            <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontWeight: 600 }}>
-              <input type="checkbox" checked={project.is_public} onChange={(e) => patch({ is_public: e.target.checked }, true)} /> Hacer público con enlace
-            </label>
-            {project.is_public ? (
+            {project.kind === 'spatial' ? (
+              <p className="muted" style={{ maxWidth: '70ch' }}>Los mapas de aptitud todavía no tienen vista pública (llega en una entrega siguiente, junto con la carga de capas propias). Por ahora este proyecto es privado sin importar este control.</p>
+            ) : (
               <>
-                <div className="linkbox"><input type="text" readOnly value={publicUrl} aria-label="Enlace público" onFocus={(ev) => ev.target.select()} /><button type="button" className="btn sm" onClick={() => copy(publicUrl)}>Copiar</button></div>
-                <div className="acts"><button type="button" className={'btn sm' + (pendDel === 'tok' ? ' danger' : '')} onClick={() => twoClick('tok', () => patch({ public_token: hexToken() }, true))}>{pendDel === 'tok' ? '¿Seguro? El enlace anterior deja de funcionar' : 'Generar enlace nuevo'}</button></div>
+                <p className="muted" style={{ maxWidth: '70ch' }}>Por defecto, nadie más que tú ve tu proyecto. Si activas el enlace público, cualquier persona con el enlace podrá ver los resultados (ranking, pesos y consistencia). No verá nombres de expertos, ni sus enlaces, ni la priorización de criterios.</p>
+                <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontWeight: 600 }}>
+                  <input type="checkbox" checked={project.is_public} onChange={(e) => patch({ is_public: e.target.checked }, true)} /> Hacer público con enlace
+                </label>
+                {project.is_public ? (
+                  <>
+                    <div className="linkbox"><input type="text" readOnly value={publicUrl} aria-label="Enlace público" onFocus={(ev) => ev.target.select()} /><button type="button" className="btn sm" onClick={() => copy(publicUrl)}>Copiar</button></div>
+                    <div className="acts"><button type="button" className={'btn sm' + (pendDel === 'tok' ? ' danger' : '')} onClick={() => twoClick('tok', () => patch({ public_token: hexToken() }, true))}>{pendDel === 'tok' ? '¿Seguro? El enlace anterior deja de funcionar' : 'Generar enlace nuevo'}</button></div>
+                  </>
+                ) : <p className="muted" style={{ fontSize: 13 }}>Ahora mismo es privado: solo tú lo ves.</p>}
               </>
-            ) : <p className="muted" style={{ fontSize: 13 }}>Ahora mismo es privado: solo tú lo ves.</p>}
+            )}
           </div>
           <div className="card form">
             <h3>Exportar</h3>
-            <p className="muted">
-              {project.method === 'ahp'
-                ? 'Excel con la misma estructura del ejercicio del curso: Notas, Criterios, una hoja por criterio y Síntesis.'
-                : `Excel con Notas, Criterios, Matriz de decisión y ${METHOD_OPTIONS.find((m) => m.key === project.method)?.label} (fórmulas vivas, con su propio color de acento).`}
-              {' '}La priorización de criterios (Sesión 1) es un Excel aparte, para no descargarla siempre que solo hace falta el método.
-            </p>
-            <div className="acts">
-              <button className="btn primary" type="button" onClick={exportExcel}>Descargar Excel</button>
-              <button className="btn" type="button" onClick={exportPrioExcel}>Descargar Excel de priorización</button>
-            </div>
+            {project.kind === 'spatial' ? (
+              <>
+                <p className="muted">El mapa se exporta como PNG desde la pestaña «Geovisor» (botón «Descargar PNG»). GeoTIFF y el Excel del mapa llegan en una entrega siguiente.</p>
+                <div className="acts">
+                  <button className="btn" type="button" onClick={exportPrioExcel}>Descargar Excel de priorización</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="muted">
+                  {project.method === 'ahp'
+                    ? 'Excel con la misma estructura del ejercicio del curso: Notas, Criterios, una hoja por criterio y Síntesis.'
+                    : `Excel con Notas, Criterios, Matriz de decisión y ${METHOD_OPTIONS.find((m) => m.key === project.method)?.label} (fórmulas vivas, con su propio color de acento).`}
+                  {' '}La priorización de criterios (Sesión 1) es un Excel aparte, para no descargarla siempre que solo hace falta el método.
+                </p>
+                <div className="acts">
+                  <button className="btn primary" type="button" onClick={exportExcel}>Descargar Excel</button>
+                  <button className="btn" type="button" onClick={exportPrioExcel}>Descargar Excel de priorización</button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

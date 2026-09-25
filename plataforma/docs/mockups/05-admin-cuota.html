@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="es" data-theme="light">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Admin · Almacenamiento geoespacial</title>
+<link rel="stylesheet" href="../../src/app/globals.css">
+<link rel="stylesheet" href="geo.css">
+<style>
+  .mock-tag{position:fixed;top:8px;right:8px;z-index:999;background:#F43F5E;color:#fff;font:600 11px var(--f-mono);padding:3px 8px;border-radius:5px}
+  .usage-bar{width:120px;height:8px;background:var(--surface2);border-radius:99px;overflow:hidden;display:inline-block;vertical-align:middle;margin-right:8px}
+  .usage-bar i{display:block;height:100%;background:var(--accent)}
+  .usage-bar.over i{background:var(--warn)}
+  tr.over td{background:color-mix(in srgb, var(--warn) 7%, transparent)}
+</style>
+</head>
+<body>
+<div class="mock-tag">MAQUETA · sin implementar</div>
+
+<div class="topbar">
+  <a class="brand" href="#"><span style="width:26px;height:26px;border-radius:6px;background:var(--ink);display:inline-block"></span>
+    <div><div style="display:flex;align-items:center;gap:6px"><span>Plataforma MCDA</span>
+      <span style="font-size:10px;font-family:var(--f-mono);padding:1px 5px;border-radius:4px;background:rgba(0,0,0,.06);color:var(--muted)">ADMIN</span></div></div>
+  </a>
+  <div class="topbar-right">
+    <div class="topbar-actions"><span class="user">miguel@unimagdalena.edu.co</span><button class="btn sm">Salir</button></div>
+  </div>
+</div>
+
+<div class="wrap geo">
+  <div class="head">
+    <div class="eyebrow">Backoffice · solo administradores</div>
+    <h1>Almacenamiento geoespacial</h1>
+    <p class="obj muted">Cuotas de los proyectos «Mapa de aptitud (SIG)»: capas cargadas por los estudiantes y resultados publicados.</p>
+  </div>
+
+  <div class="stat-group">
+    <div class="stat-grid">
+      <div class="stat"><span class="n">2.4</span><span class="l">GB usados</span><span class="sub">de un total sin límite explícito (Supabase)</span></div>
+      <div class="stat"><span class="n">23</span><span class="l">proyectos SIG</span><span class="sub">de 41 proyectos totales</span></div>
+      <div class="stat"><span class="n">3</span><span class="l">sobre su cuota</span><span class="sub">bloqueados para subir capas nuevas</span></div>
+      <div class="stat"><span class="n">6</span><span class="l">paquetes en el catálogo</span><span class="sub">1 activo: snsm-cacao-v1</span></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:20px">
+    <header style="margin-bottom:14px"><h3 class="eyebrow">Topes globales</h3></header>
+    <div class="two eq" style="max-width:640px">
+      <div><label class="lbl">Cuota por estudiante</label><div style="display:flex;align-items:center;gap:8px"><input type="number" value="30" style="max-width:100px"><span class="muted mono">MB</span></div></div>
+      <div><label class="lbl">Capas por proyecto</label><input type="number" value="12" style="max-width:100px"></div>
+      <div><label class="lbl">Píxeles máx. por capa</label><input type="number" value="2000000" style="width:110px"></div>
+      <div><label class="lbl">Tamaño máx. por archivo</label><span class="mono muted" style="font-size:13px">8 MB · fijo en el bucket de Storage</span></div>
+    </div>
+    <div class="acts" style="margin-top:16px"><button class="btn primary">Guardar cambios</button><span class="muted mono" style="font-size:12px">Último cambio: 20 sep 2026 por miguel@unimagdalena.edu.co</span></div>
+  </div>
+
+  <div class="card" style="margin-top:20px">
+    <header style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px">
+      <h3 class="eyebrow">Uso por estudiante</h3>
+      <input type="text" placeholder="Buscar por correo…" style="max-width:220px">
+    </header>
+    <div class="tbl">
+      <table>
+        <thead><tr><th>Correo</th><th class="n">Proyectos</th><th class="n">Capas</th><th>Uso / cuota</th><th>Cuota</th><th></th></tr></thead>
+        <tbody>
+          <tr>
+            <td>ana.rodriguez@unimagdalena.edu.co</td><td class="n">2</td><td class="n">9</td>
+            <td><span class="usage-bar"><i style="width:61%"></i></span><span class="mono" style="font-size:12.5px">18.2 / 30 MB</span></td>
+            <td class="mono muted" style="font-size:12.5px">usa el global</td>
+            <td><button class="btn sm">Cambiar cuota</button></td>
+          </tr>
+          <tr class="over">
+            <td>luis.martinez@unimagdalena.edu.co</td><td class="n">1</td><td class="n">5</td>
+            <td><span class="usage-bar over"><i style="width:100%"></i></span><span class="mono" style="font-size:12.5px;color:var(--warn)">31.4 / 20 MB · sobre cuota</span></td>
+            <td class="mono" style="font-size:12.5px">20 MB <span class="tag">individual</span></td>
+            <td><button class="btn sm">Cambiar cuota</button></td>
+          </tr>
+          <tr>
+            <td>harold.gomez@unimagdalena.edu.co</td><td class="n">1</td><td class="n">6</td>
+            <td><span class="usage-bar"><i style="width:24%"></i></span><span class="mono" style="font-size:12.5px">7.1 / 30 MB</span></td>
+            <td class="mono muted" style="font-size:12.5px">usa el global</td>
+            <td><button class="btn sm">Cambiar cuota</button></td>
+          </tr>
+          <tr>
+            <td>paola.diaz@unimagdalena.edu.co</td><td class="n">3</td><td class="n">14</td>
+            <td><span class="usage-bar"><i style="width:78%"></i></span><span class="mono" style="font-size:12.5px">23.4 / 30 MB</span></td>
+            <td class="mono muted" style="font-size:12.5px">usa el global</td>
+            <td><button class="btn sm">Cambiar cuota</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:20px">
+    <header style="margin-bottom:14px"><h3 class="eyebrow">Catálogo de paquetes</h3></header>
+    <div class="layer-row">
+      <div><div class="nm">snsm-cacao-v1 · Aptitud cacaotera — Sierra Nevada</div><div class="src">WorldClim, SoilGrids, Copernicus DEM, RUNAP · 4 capas · 2.1 MB</div></div>
+      <span class="pill">Activo</span>
+    </div>
+    <div class="layer-row">
+      <div><div class="nm">palmor-iot-v1 <span class="muted">(en preparación)</span></div><div class="src">—</div></div>
+      <span class="pill neutral">Inactivo</span>
+    </div>
+  </div>
+</div>
+</body>
+</html>

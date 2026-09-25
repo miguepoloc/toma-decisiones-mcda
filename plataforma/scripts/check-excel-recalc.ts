@@ -20,6 +20,7 @@ import { blankMatrix, setCell, setTarget, setType, resolveTargets, type Decision
 import { sawSynthesis } from '../src/lib/saw.ts';
 import { fuzzyTopsisSynthesis } from '../src/lib/fuzzy_topsis.ts';
 import { vikorSynthesis } from '../src/lib/vikor.ts';
+import { electreSynthesis } from '../src/lib/electre.ts';
 import type { DecisionMatrix as DM } from '../src/lib/types.ts';
 
 let fallos = 0;
@@ -212,6 +213,60 @@ for (const caso of ['iot', 'viaje', 'solar'] as const) {
   ok(ws['B' + rC2]?.v === (exp.verdict!.c2 ? 'Sí' : 'No'), `[LibreOffice recalculó] VIKOR (${caso}) Condición 2 = ${ws['B' + rC2]?.v} (esperado ${exp.verdict!.c2 ? 'Sí' : 'No'})`);
   const esperadoVerd = exp.verdict!.kind === 'unique' ? 'Ganador único' : exp.verdict!.kind === 'two' ? 'Sin ganador único: se proponen el 1º y el 2º' : 'Sin ganador único: conjunto de compromiso (columna «En conjunto de compromiso»)';
   ok(ws['B' + rVerd]?.v === esperadoVerd, `[LibreOffice recalculó] VIKOR (${caso}) Veredicto = ${ws['B' + rVerd]?.v}`);
+}
+
+// ---- ELECTRE: c*/d* editables (fórmulas vivas) ----
+// A diferencia de check-excel-electre.ts (que solo compara contra el valor cacheado, calculado por el
+// mismo JS que arma el archivo), aquí se usan c*/d* DISTINTOS del default de la plataforma (0.65/0.30 →
+// 0.30/0.90, mucho más laxos: pasa de 2 a 7 relaciones en este dataset) para además comprobar que las
+// fórmulas de Relación/Superación neta LEEN las celdas editables ($B$rCStarCell/$B$rDStarCell) en vez de
+// tener el umbral incrustado como número fijo.
+{
+  const criteria = ['Alcance', 'Autonomía', 'Infraestructura', 'Madurez'].map((name, i) => ({ id: 'k' + i, name, hint: '' }));
+  const alternatives = ['LoRaWAN', 'GSM/GPRS', 'Sigfox', 'Zigbee'].map((name, i) => ({ id: 'a' + i, name }));
+  const dataset = [[10, 8, 2, 5], [10.5, 0.5, 3, 2], [40, 2, 5, 2], [0.07, 1.5, 2, 4]];
+  let dm: DecisionMatrix = blankMatrix();
+  alternatives.forEach((a, i) => criteria.forEach((c, j) => { dm = setCell(dm, a.id, c.id, dataset[i][j]); }));
+  criteria.forEach((c) => { dm = setType(dm, c.id, 'max'); });
+  dm = { ...dm, electreCStar: 0.3, electreDStar: 0.9 };
+  const experts = [{ id: 'e0', name: 'Experto 1', role_desc: 'Ingeniero de redes' }];
+  const rows: { expert_id: string; sheet: string; pair_key: string; value: number }[] = [];
+  pairsOf(4).forEach(([i, j], n) => rows.push({ expert_id: 'e0', sheet: 'crit', pair_key: `k${i}-k${j}`, value: ((n * 3) % 7) - 3 }));
+  const study = {
+    title: 'Proyecto ELECTRE de prueba', objective: 'Elegir tecnología IoT para Palmor', criteria, alternatives, experts,
+    idx: indexJudgments(rows), prio: normalizePrio(blankPrio()), method: 'electre' as const, decisionMatrix: dm,
+  };
+  const wb = buildWorkbook(XLSX, study);
+  const nCorrupted = corruptCachedValues(wb, 'ELECTRE') + corruptCachedValues(wb, 'Criterios');
+  const corruptPath = path.join(tmpdir(), 'plataforma_recalc_electre.xlsx');
+  writeFileSync(corruptPath, XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' }));
+  console.log(`ELECTRE: ${nCorrupted} celdas con fórmula arruinadas a propósito, recalculando en LibreOffice…`);
+  const recalced = recalcViaLibreOffice(soffice, corruptPath, path.join(tmpdir(), 'plataforma_recalc_out_electre'));
+  const ws = XLSX.read(readFileSync(recalced), { type: 'buffer' }).Sheets['ELECTRE'];
+  const weights = analyze(aggMatrix(criteria, [Object.fromEntries(rows.filter((r) => r.sheet === 'crit').map((r) => [r.pair_key, r.value]))])).w;
+  const exp = electreSynthesis(criteria, alternatives, dm, weights);
+  const m = criteria.length, n = alternatives.length;
+  const rCStarCell = 5, rDStarCell = 6, rG0 = 7;
+  const rConHead = rG0 + n + 1, rCon0 = rConHead + 1;
+  const rDisCritHead = criteria.map((_, j) => rCon0 + n + 1 + j * (n + 2));
+  const rDisHead = rDisCritHead[m - 1] + n + 2, rDis0 = rDisHead + 1, rRelHead = rDis0 + n + 1, rRel0 = rRelHead + 1;
+  const cNet = colL(n + 1);
+  ok(cerca(ws['B' + rCStarCell]?.v, 0.3), `[LibreOffice recalculó] ELECTRE!B${rCStarCell} c* = ${ws['B' + rCStarCell]?.v} (esperado 0.30)`);
+  ok(cerca(ws['B' + rDStarCell]?.v, 0.9), `[LibreOffice recalculó] ELECTRE!B${rDStarCell} d* = ${ws['B' + rDStarCell]?.v} (esperado 0.90)`);
+  alternatives.forEach((a, i) => {
+    alternatives.forEach((b, k) => {
+      if (i === k) return;
+      const relCell = ws[colL(1 + k) + (rRel0 + i)];
+      const esperaSi = exp.result.outranks[i][k];
+      ok((relCell?.v === 'Sí') === esperaSi, `[LibreOffice recalculó] ELECTRE (c*=0.30, d*=0.90) relación(${a.name} supera a ${b.name}) = "${relCell?.v ?? ''}" (esperado ${esperaSi ? 'Sí' : 'vacío'})`);
+    });
+    const netCell = ws[cNet + (rRel0 + i)];
+    ok(!!netCell && netCell.v === exp.netOutdegree[i], `[LibreOffice recalculó] ELECTRE (c*=0.30, d*=0.90) superación neta(${a.name}) = ${netCell?.v} (esperado ${exp.netOutdegree[i]})`);
+  });
+  // c*=0.30/d*=0.90 (mucho más laxo que el default 0.65/0.30) debe dar MÁS relaciones que las 2 del
+  // default (ver check-excel-electre.ts, verificado en JS puro arriba: da 7) — si esto fallara, sería
+  // señal de que las fórmulas ignoraron las celdas editables y siguen usando el umbral incrustado de antes.
+  ok(exp.relations.length > 2, `ELECTRE con c*=0.30/d*=0.90 da más relaciones que el default 0.65/0.30 (da ${exp.relations.length})`);
 }
 
 if (existsSync(profileDir)) rmSync(profileDir, { recursive: true, force: true });

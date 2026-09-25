@@ -97,5 +97,12 @@ diseño antes de tocar código) y la extensión Fuzzy (el temario la trata como 
 método, no un método aparte). Detalle completo en `plataforma/README.md` § "Visión: plataforma multicriterio
 completa".
 
+**Geovisor AHP + SIG (Sesión 5, 25 sep 2026):** primera entrega real (no maqueta) de `kind:'spatial'` — un
+proyecto donde las alternativas son píxeles de un territorio en vez de filas de una tabla, resuelto con el caso
+guiado de `07_ahp_sig_cacao_snsm.ipynb` (aptitud cacaotera, Sierra Nevada de Santa Marta). Pesos reales del panel
+de expertos, datos reales del caché del notebook, matemática verificada contra él. Falta cargar capas propias,
+exportar GeoTIFF y publicar — ver `plataforma/README.md` § "Geovisor" y `plataforma/docs/PLAN_geovisor_ahp_sig.md`
+(el plan completo, con las maquetas que le precedieron).
+
 ### Artefactos publicados en claude.ai (privados, del propietario de la sesión)
 Priorizador de criterios (`Tu8BSq5BvgYRwjdxcd9k3o`), MCDA para ASR con datos de Harold (`9dKxsYtKh7P1m27RUnEYSr`) y plantilla en blanco (`KULzPjwGLgGk562R2fQtgy`). El estado de cada uno vive en el `localStorage` de su propio origen; no se comparte entre ellos.

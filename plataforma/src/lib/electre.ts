@@ -3,10 +3,28 @@
 // normalización distinta a la enseñada en clase). A diferencia de AHP/TOPSIS/VIKOR/PROMETHEE, ELECTRE
 // NO produce un ranking total: produce una relación de superación ("a supera a b") donde algunos pares
 // pueden quedar incomparables — es el punto pedagógico del método, no una limitación de esta
-// implementación. c* (concordancia mínima) y d* (discordancia máxima) por defecto 0.65/0.30, "convención
-// del curso" (Sesión 4).
+// implementación. c* (concordancia mínima) y d* (discordancia máxima) SON justo como v en vikor.ts:
+// no se derivan de los datos, los elige quien decide, y afectan el resultado (qué pares terminan con
+// relación y cuáles quedan incomparables) — por eso se guardan en `decision_matrix` (electreCStar/
+// electreDStar, ver types.ts) igual que vikorV, en vez de venir fijos por código.
 import type { Alternative, Criterion, DecisionMatrix, MatrixType } from './types.ts';
 import { getCell, getType } from './topsis.ts';
+
+/** c* y d* por defecto, convención de esta plataforma (no un estándar de la literatura). */
+export const ELECTRE_C_STAR_DEFAULT = 0.65;
+export const ELECTRE_D_STAR_DEFAULT = 0.30;
+
+/** c* guardado en la matriz de decisión del proyecto; ELECTRE_C_STAR_DEFAULT si falta o es inválido. */
+export function electreCStar(dm: DecisionMatrix): number {
+  const c = dm.electreCStar;
+  return typeof c === 'number' && Number.isFinite(c) && c >= 0 && c <= 1 ? c : ELECTRE_C_STAR_DEFAULT;
+}
+
+/** d* guardado en la matriz de decisión del proyecto; ELECTRE_D_STAR_DEFAULT si falta o es inválido. */
+export function electreDStar(dm: DecisionMatrix): number {
+  const d = dm.electreDStar;
+  return typeof d === 'number' && Number.isFinite(d) && d >= 0 && d <= 1 ? d : ELECTRE_D_STAR_DEFAULT;
+}
 
 export type ElectreResult = {
   n: number;
@@ -24,7 +42,7 @@ export type ElectreResult = {
   g: number[][];
 };
 
-export function electre(matrix: number[][], weights: number[], types: MatrixType[], cStar = 0.65, dStar = 0.30): ElectreResult {
+export function electre(matrix: number[][], weights: number[], types: MatrixType[], cStar = ELECTRE_C_STAR_DEFAULT, dStar = ELECTRE_D_STAR_DEFAULT): ElectreResult {
   const n = matrix.length;
   const m = weights.length;
   if (n === 0 || m === 0) return { n, concordance: [], discordance: [], outranks: [], cStar, dStar, weights: [], ranges: [], g: [] };
@@ -72,7 +90,7 @@ export type ElectreSynth = {
   netOutdegree: number[];
 };
 
-export function electreSynthesis(criteria: Criterion[], alternatives: Alternative[], dm: DecisionMatrix, weights: number[], cStar = 0.65, dStar = 0.30): ElectreSynth {
+export function electreSynthesis(criteria: Criterion[], alternatives: Alternative[], dm: DecisionMatrix, weights: number[], cStar: number = electreCStar(dm), dStar: number = electreDStar(dm)): ElectreSynth {
   const matrix = alternatives.map((a) => criteria.map((c) => getCell(dm, a.id, c.id) ?? 0));
   const types = criteria.map((c) => getType(dm, c.id));
   const result = electre(matrix, weights, types, cStar, dStar);

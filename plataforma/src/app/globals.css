@@ -7,6 +7,10 @@
   --pass:#10B981;--pass-soft:#ECFDF5;--warn:#F59E0B;--warn-soft:#FEF3C7;--other:#94A3B8;
   --s1:#3B82F6;--s2:#F97316;--s3:#10B981;--s4:#EAB308;--s5:#EC4899;
   --m-ahp:#8B5CF6;--m-topsis:#00E5FF;--m-vikor:#10B981;--m-promethee:#F43F5E;--m-electre:#F59E0B;--m-saw:#FB923C;--m-fuzzy:#2DD4BF;
+  /* Geovisor (kind:'spatial'): acento propio (no es un método de ranking, es ortogonal a --m-*) y
+     los 4 colores de clase de zonificación UPRA del notebook 07 — iguales en claro y oscuro. */
+  --geo-accent:#84CC16;--geo-accent-soft:#F1F8E0;
+  --geo-alta:#2E7D32;--geo-media:#F0AD4E;--geo-noapta:#D9534F;--geo-excl:#7F8C8D;
   --f-display:'Bricolage Grotesque','Segoe UI',system-ui,sans-serif;
   --f-body:'Plus Jakarta Sans','Segoe UI',system-ui,sans-serif;
   --f-mono:'IBM Plex Mono',ui-monospace,Menlo,monospace;
@@ -17,14 +21,16 @@
   --pb:#00E5FF;--pb-soft:#082F49;--pb-ink:#0B0F17;
   --pass:#34D399;--pass-soft:#064E3B;--warn:#FBBF24;--warn-soft:#451A03;--other:#64748B;
   --s1:#60A5FA;--s2:#FB923C;--s3:#34D399;--s4:#FACC15;--s5:#F472B6;
-  --m-ahp:#8B5CF6;--m-topsis:#00E5FF;--m-vikor:#10B981;--m-promethee:#F43F5E;--m-electre:#F59E0B;--m-saw:#FB923C;--m-fuzzy:#2DD4BF;}}
+  --m-ahp:#8B5CF6;--m-topsis:#00E5FF;--m-vikor:#10B981;--m-promethee:#F43F5E;--m-electre:#F59E0B;--m-saw:#FB923C;--m-fuzzy:#2DD4BF;
+  --geo-accent-soft:#1A2E05;}}
 :root[data-theme="dark"]{
   --bg:#0B0F17;--surface:#111827;--surface2:#162032;--ink:#F1F5F9;--muted:#94A3B8;--line:rgba(255,255,255,0.09);
   --pa:#818CF8;--pa-soft:#1E1B4B;--pa-ink:#FFFFFF;
   --pb:#00E5FF;--pb-soft:#082F49;--pb-ink:#0B0F17;
   --pass:#34D399;--pass-soft:#064E3B;--warn:#FBBF24;--warn-soft:#451A03;--other:#64748B;
   --s1:#60A5FA;--s2:#FB923C;--s3:#34D399;--s4:#FACC15;--s5:#F472B6;
-  --m-ahp:#8B5CF6;--m-topsis:#00E5FF;--m-vikor:#10B981;--m-promethee:#F43F5E;--m-electre:#F59E0B;--m-saw:#FB923C;--m-fuzzy:#2DD4BF;}
+  --m-ahp:#8B5CF6;--m-topsis:#00E5FF;--m-vikor:#10B981;--m-promethee:#F43F5E;--m-electre:#F59E0B;--m-saw:#FB923C;--m-fuzzy:#2DD4BF;
+  --geo-accent-soft:#1A2E05;}
 
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 var(--f-body);padding-inline:16px;transition:background-color .2s ease,color .2s ease}
@@ -441,3 +447,58 @@ a{color:var(--accent)}
 .spark svg{display:block;width:100%;height:32px}
 .afunnel{display:grid;gap:4px}
 .afunnel-step{font-size:12px;color:var(--muted);padding-left:2px}
+
+/* ---- geovisor (kind:'spatial') — todo prefijado .gv- para no chocar con clases cortas ya
+   usadas arriba (.val, .track, .fill, .n, .st… viven en otros componentes; ver
+   plataforma/docs/PLAN_geovisor_ahp_sig.md sobre el bug real que motivó este prefijo) ---- */
+.gv-wrap{--accent:var(--geo-accent);--accent-soft:var(--geo-accent-soft);--accent-ink:#0B0F17}
+.gv-grid{display:grid;grid-template-columns:230px minmax(0,1fr) 260px;gap:14px;align-items:start}
+@media(max-width:1080px){.gv-grid{grid-template-columns:1fr}}
+.gv-panel{display:grid;gap:14px;align-content:start}
+.gv-wbar{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;align-items:center;padding-block:3px}
+.gv-wbar .nm{font-size:12.5px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gv-wbar .v{font:500 12px var(--f-mono);color:var(--muted);text-align:right}
+.gv-wbar .track{grid-column:1/-1;position:relative;height:8px;background:var(--surface2);border-radius:99px;overflow:hidden}
+.gv-wbar .fill{position:absolute;inset:0 auto 0 0;background:var(--accent);border-radius:99px}
+.gv-cr{display:inline-flex;align-items:center;gap:6px;font:500 12px var(--f-mono);padding:4px 10px;border-radius:99px;background:var(--pass-soft);color:var(--pass);border:1px solid var(--pass);justify-self:start}
+.gv-cr.bad{background:var(--warn-soft);color:var(--warn);border-color:var(--warn)}
+.gv-cr svg{width:12px;height:12px}
+.gv-explore-banner{display:flex;background:var(--warn-soft);border:1px solid var(--warn);border-radius:8px;padding:8px 10px;font-size:12.5px;color:var(--warn);gap:6px;align-items:center;justify-content:space-between}
+.gv-explore-banner button{font:600 11px var(--f-mono);background:transparent;border:1px solid var(--warn);color:var(--warn);border-radius:6px;padding:3px 8px;cursor:pointer}
+.gv-class-row{display:grid;grid-template-columns:14px minmax(0,1fr) auto;gap:8px;align-items:center;font-size:12.5px}
+.gv-class-row i{width:12px;height:12px;border-radius:3px;display:block}
+.gv-class-row input[type=number]{width:56px;min-height:28px;padding:3px 6px;text-align:right;font-size:12px}
+.gv-map{position:relative;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#0B0F17;aspect-ratio:16/13.2}
+.gv-map-inner{position:absolute;inset:0;transform-origin:center center}
+.gv-map-inner img,.gv-map-inner canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;user-select:none}
+.gv-map-inner canvas{cursor:crosshair;image-rendering:pixelated}
+.gv-map .marker{position:absolute;width:13px;height:13px;margin:-7px 0 0 -7px;border-radius:99px;background:#fff;border:2.5px solid var(--ink);box-shadow:0 0 0 3px rgba(0,0,0,.25);cursor:pointer;z-index:2;pointer-events:auto}
+.gv-map .marker.sel{border-color:var(--accent);box-shadow:0 0 0 4px color-mix(in srgb, var(--accent) 45%, transparent)}
+.gv-hud{position:absolute;top:10px;right:10px;display:grid;gap:6px;z-index:3}
+.gv-hud .grp{background:color-mix(in srgb, var(--surface) 92%, transparent);border:1px solid var(--line);border-radius:8px;padding:6px;display:grid;gap:5px;backdrop-filter:blur(6px)}
+.gv-hud select,.gv-hud input[type=range]{font-size:11.5px}
+.gv-zoom{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--surface)}
+.gv-zoom button{appearance:none;border:0;background:transparent;color:var(--ink);width:30px;height:30px;font-size:16px;cursor:pointer;line-height:1}
+.gv-zoom button:not(:last-child){border-bottom:1px solid var(--line)}
+.gv-legend{position:absolute;left:10px;bottom:10px;z-index:3;background:color-mix(in srgb, var(--surface) 92%, transparent);border:1px solid var(--line);border-radius:8px;padding:9px 11px;font-size:11.5px;backdrop-filter:blur(6px);display:grid;gap:5px;max-width:190px}
+.gv-legend .row{display:flex;align-items:center;gap:7px}
+.gv-legend i{width:11px;height:11px;border-radius:3px;flex:none}
+.gv-point-empty{display:grid;place-items:center;text-align:center;gap:8px;color:var(--muted);font-size:13px;min-height:180px;border:1px dashed var(--line);border-radius:10px;padding:18px}
+.gv-point .big{font:700 40px var(--f-display);line-height:1;color:var(--accent)}
+.gv-point .cls-pill{display:inline-flex;align-items:center;gap:6px;font:600 12px var(--f-mono);padding:3px 10px;border-radius:99px;margin-top:6px}
+.gv-point-coords{font:500 12px var(--f-mono);color:var(--muted);margin-top:6px}
+.gv-point-tbl{display:grid;gap:0;margin-top:12px;font-size:12.5px}
+.gv-point-tbl .r{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;padding:7px 0;border-bottom:1px solid var(--line);align-items:baseline}
+.gv-point-tbl .r:last-child{border-bottom:0}
+.gv-point-tbl .r .rl{display:grid;gap:2px;min-width:0}
+.gv-point-tbl .r .k{font-size:12.5px;color:var(--ink)}
+.gv-point-tbl .r .pv{font:400 11px var(--f-mono);color:var(--muted)}
+.gv-point-tbl .r .pc{font:600 12.5px var(--f-mono);white-space:nowrap}
+.gv-point-tbl .r.veto{color:var(--warn)}
+.gv-point-tbl .r.veto .pc{color:var(--warn)}
+.gv-disclaimer{font-size:11px;color:var(--muted);border-top:1px solid var(--line);padding-top:8px;margin-top:4px}
+.gv-stats{display:flex;flex-wrap:wrap;gap:10px 26px;align-items:flex-end}
+.gv-stats .bars{flex:1 1 320px;display:grid;gap:8px}
+.gv-stats .brow{display:grid;grid-template-columns:110px minmax(0,1fr) 70px;gap:10px;align-items:center;font-size:12.5px}
+.gv-stats .brow .track{height:18px;background:var(--surface2);border-radius:4px;overflow:hidden}
+.gv-stats .brow .fill{height:100%}

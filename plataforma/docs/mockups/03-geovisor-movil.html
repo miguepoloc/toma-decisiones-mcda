@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="es" data-theme="dark">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Geovisor · móvil</title>
+<link rel="stylesheet" href="../../src/app/globals.css">
+<link rel="stylesheet" href="geo.css">
+<style>
+  .mock-tag{position:fixed;top:6px;right:6px;z-index:999;background:#F43F5E;color:#fff;font:600 10px var(--f-mono);padding:2px 6px;border-radius:4px}
+  body{padding-inline:0}
+  .mtop{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--bg) 90%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);padding:10px 14px;display:flex;align-items:center;gap:10px}
+  .mtop b{font:700 14px var(--f-display)}
+  .mmap{position:relative;height:60dvh;min-height:340px}
+  .mmap img.layer{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+  .mtabsbar{display:flex;overflow-x:auto;gap:4px;border-bottom:1px solid var(--line);padding:0 10px}
+  .mtabsbar button{flex:none;appearance:none;background:transparent;border:0;border-bottom:2px solid transparent;color:var(--muted);font:600 12.5px var(--f-body);padding:9px 10px;min-height:44px}
+  .mtabsbar button[aria-selected=true]{color:var(--ink);border-color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="mock-tag">MAQUETA · 375px</div>
+<div class="mobile-frame">
+
+  <div class="mtop">
+    <span style="width:20px;height:20px;border-radius:5px;background:var(--m-sig);display:inline-block"></span>
+    <b>Aptitud cacaotera</b>
+  </div>
+  <div class="mtabsbar" role="tablist">
+    <button role="tab">Proyecto</button><button role="tab">Área/capas</button><button role="tab">Reglas</button>
+    <button role="tab">Expertos</button><button role="tab" aria-selected="true">Geovisor</button><button role="tab">Compartir</button>
+  </div>
+
+  <div class="mmap wrap geo" style="padding:0">
+    <img class="layer" src="assets/base_dark.png" alt="">
+    <img class="layer" src="assets/result.png" alt="" style="opacity:.92">
+    <div class="map-north" style="top:10px;left:10px"><svg class="icon" viewBox="0 0 24 24" style="stroke:#fff"><path d="M12 3v18M12 3l4 6M12 3 8 9"/></svg></div>
+    <div class="zoomctl" style="position:absolute;top:10px;right:10px;z-index:3"><button>+</button><button>−</button></div>
+    <div class="marker sel" style="left:14.0%;top:44.6%"><span class="lbl">San Pedro · 99.7 %</span></div>
+    <div class="marker" style="left:15.6%;top:55.2%"></div>
+    <div class="marker" style="left:8.4%;top:19.6%"></div>
+    <div class="marker" style="left:29.8%;top:18.4%"></div>
+    <div class="map-scale"><span>0&nbsp;&nbsp;&nbsp;25 km</span><span class="bar"></span></div>
+  </div>
+
+  <div class="sheet" style="position:sticky;bottom:0;border-radius:16px 16px 0 0;max-height:none">
+    <div class="sheet-handle"></div>
+    <div class="sheet-tabs" role="tablist">
+      <button role="tab">Modelo</button>
+      <button role="tab">Capas</button>
+      <button role="tab" aria-selected="true">Punto</button>
+      <button role="tab">Exportar</button>
+    </div>
+    <div class="sheet-body point-card">
+      <div class="big" style="font-size:34px">99.7&nbsp;%</div>
+      <span class="cls-pill" style="background:color-mix(in srgb, var(--geo-alta) 20%, transparent);color:var(--geo-alta)"><i style="width:8px;height:8px;border-radius:99px;background:var(--geo-alta);display:inline-block"></i>Alta aptitud</span>
+      <div class="point-coords">San Pedro de la Sierra<br>10.9070, -74.0459 · 1 350 msnm</div>
+      <div class="point-tbl">
+        <div class="r"><span class="rl"><span class="k">Precipitación</span><span class="pv">1 493 mm/año</span></span><span class="pc">1.00 × .32</span></div>
+        <div class="r"><span class="rl"><span class="k">Temperatura</span><span class="pv">22.5 °C</span></span><span class="pc">1.00 × .24</span></div>
+        <div class="r"><span class="rl"><span class="k">pH del suelo</span><span class="pv">5.52</span></span><span class="pc">1.00 × .12</span></div>
+        <div class="r"><span class="rl"><span class="k">Pendiente</span><span class="pv">9.8°</span></span><span class="pc">1.00 × .19</span></div>
+      </div>
+      <button class="btn sm" style="justify-self:start;margin-top:10px">☆ Guardar como punto</button>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

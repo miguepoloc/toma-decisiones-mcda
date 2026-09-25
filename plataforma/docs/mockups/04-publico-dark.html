@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="es" data-theme="dark">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Vista pública · Aptitud cacaotera</title>
+<link rel="stylesheet" href="../../src/app/globals.css">
+<link rel="stylesheet" href="geo.css">
+<style>.mock-tag{position:fixed;top:8px;right:8px;z-index:999;background:#F43F5E;color:#fff;font:600 11px var(--f-mono);padding:3px 8px;border-radius:5px}</style>
+</head>
+<body>
+<div class="mock-tag">MAQUETA · sin implementar</div>
+
+<div class="topbar">
+  <a class="brand" href="#"><span style="width:26px;height:26px;border-radius:6px;background:var(--m-sig);display:inline-block"></span>
+    <div><div style="display:flex;align-items:center;gap:6px"><span>Plataforma MCDA</span>
+      <span style="font-size:10px;font-family:var(--f-mono);padding:1px 5px;border-radius:4px;background:rgba(255,255,255,.1);color:var(--muted)">PÚBLICO</span></div>
+      <div class="brand-sub">Vista de Resultados</div>
+    </div>
+  </a>
+  <div class="topbar-right">
+    <span class="muted" style="font-size:13px;background:var(--surface2);padding:6px 12px;border-radius:8px;border:1px solid var(--line)">Vista pública de solo lectura</span>
+    <div class="topbar-actions"><a class="btn sm primary" href="#">Crear tu propio mapa</a></div>
+  </div>
+</div>
+
+<div class="wrap geo">
+  <div class="head">
+    <div class="eyebrow">Resultados · Mapa de aptitud (SIG)</div>
+    <h1>Aptitud cacaotera — Sierra Nevada de Santa Marta</h1>
+    <p class="obj muted"><b>Objetivo:</b> zonificar dónde es biofísicamente apto cultivar cacao, combinando clima, suelo y relieve con los pesos de un panel de 4 expertos.</p>
+  </div>
+
+  <div class="geo-grid" style="grid-template-columns:220px minmax(0,1fr) 250px">
+    <div class="card geo-panel">
+      <header><h3 class="eyebrow">Pesos usados</h3></header>
+      <div class="wbar2"><span class="nm">Precipitación</span><span class="v">.32</span><span class="track"><span class="fill" style="width:32%"></span></span></div>
+      <div class="wbar2"><span class="nm">Temperatura</span><span class="v">.24</span><span class="track"><span class="fill" style="width:24%"></span></span></div>
+      <div class="wbar2"><span class="nm">pH del suelo</span><span class="v">.12</span><span class="track"><span class="fill" style="width:12%"></span></span></div>
+      <div class="wbar2"><span class="nm">Pendiente</span><span class="v">.19</span><span class="track"><span class="fill" style="width:19%"></span></span></div>
+      <span class="cr-chip" style="justify-self:start"><svg class="icon" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>CR 0.07 · consistente</span>
+      <div class="disclaimer">Método: AHP para pesos + funciones de idoneidad (SIG). Publicado hace 2 días.</div>
+    </div>
+
+    <div>
+      <div class="geo-map">
+        <img class="layer base" src="assets/base_dark.png" alt="">
+        <img class="layer overlay" src="assets/result.png" alt="Índice de idoneidad biofísica" style="--geo-op:.92">
+        <div class="map-crosshair"></div>
+        <div class="map-north" title="Norte"><svg class="icon" viewBox="0 0 24 24" style="stroke:#fff"><path d="M12 3v18M12 3l4 6M12 3 8 9"/></svg></div>
+        <div class="zoomctl" style="position:absolute;top:10px;right:10px;z-index:3"><button>+</button><button>−</button></div>
+
+        <div class="map-legend">
+          <b style="font:600 11px var(--f-body)">Idoneidad biofísica</b>
+          <div class="row"><i style="background:var(--geo-alta)"></i>Alta · ≥ 70</div>
+          <div class="row"><i style="background:var(--geo-media)"></i>Moderada · 45–70</div>
+          <div class="row"><i style="background:var(--geo-noapta)"></i>No apta · &lt; 45</div>
+          <div class="row"><i style="background:var(--geo-excl)"></i>Exclusión legal (PNN, páramo)</div>
+        </div>
+        <div class="map-scale"><span>0&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;25 km</span><span class="bar"></span></div>
+        <div class="marker sel" style="left:14.0%;top:44.6%"><span class="lbl">78 %</span></div>
+      </div>
+
+      <div class="hint info" style="margin-top:10px;display:flex;gap:8px;align-items:center;font-size:13px">
+        <svg class="icon" viewBox="0 0 24 24" style="flex:none"><circle cx="12" cy="12" r="9"/><path d="M12 16v-5M12 8h.01"/></svg>
+        Haz clic en cualquier punto del mapa para ver su % de viabilidad. Este mapa no muestra las capas de entrada, solo el resultado.
+      </div>
+
+      <div class="card geo-stats" style="margin-top:14px">
+        <div class="bars">
+          <div class="brow"><span>Alta aptitud</span><span class="track"><span class="fill" style="width:52.6%;background:var(--geo-alta)"></span></span><span class="mono">898 k ha</span></div>
+          <div class="brow"><span>Moderada</span><span class="track"><span class="fill" style="width:0.4%;background:var(--geo-media)"></span></span><span class="mono">3 450 ha</span></div>
+          <div class="brow"><span>No apta</span><span class="track"><span class="fill" style="width:0.2%;background:var(--geo-noapta)"></span></span><span class="mono">1 988 ha</span></div>
+          <div class="brow"><span>Exclusión legal</span><span class="track"><span class="fill" style="width:47.1%;background:var(--geo-excl)"></span></span><span class="mono">804 k ha</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card geo-panel point-card">
+      <header><h3 class="eyebrow">Punto consultado</h3></header>
+      <div class="big">78&nbsp;%</div>
+      <span class="cls-pill" style="background:color-mix(in srgb, var(--geo-alta) 20%, transparent);color:var(--geo-alta)"><i style="width:8px;height:8px;border-radius:99px;background:var(--geo-alta);display:inline-block"></i>Alta aptitud</span>
+      <div class="point-coords">10.7703, -74.0241<br>cerca de Palmor</div>
+      <div class="disclaimer">Índice de idoneidad 0–100, no una probabilidad. El desglose por criterio y los valores crudos solo los ve el dueño del proyecto.</div>
+
+      <div style="margin-top:6px">
+        <span class="lbl">Ir a coordenadas</span>
+        <div style="display:flex;gap:6px">
+          <input type="text" placeholder="lat, lon" style="font-size:12.5px">
+          <button class="btn sm">Ir</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:20px;text-align:center;display:grid;gap:10px;justify-items:center;padding:28px">
+    <h3 style="font-size:17px">¿Quieres hacer tu propio mapa de aptitud?</h3>
+    <p class="muted" style="max-width:60ch;font-size:13.5px">Crea una cuenta gratuita, carga tus propias capas o usa un paquete del catálogo, y arma tu panel de expertos AHP.</p>
+    <a class="btn primary" href="#">Crear cuenta</a>
+  </div>
+</div>
+</body>
+</html>
