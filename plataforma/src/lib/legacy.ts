@@ -62,6 +62,8 @@ export type Imported = {
   judgments: { legacyId: string; sheet: string; pair_key: string; value: number }[];
   method: Method;
   decisionMatrix: DecisionMatrix;
+  /** Solo al importar un Excel del taller (courseExcel.ts): lo que se rellenó por defecto o se redondeó. */
+  warnings?: string[];
 };
 
 export function isLegacy(x: unknown): x is LegacyState {

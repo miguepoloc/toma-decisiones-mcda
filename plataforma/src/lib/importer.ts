@@ -1,8 +1,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { fromLegacy, isLegacy, type Imported } from './legacy.ts';
+import { parseCourseWorkbook } from './courseExcel.ts';
 import { friendlyError } from './errors.ts';
 
-/** Lee un respaldo de la herramienta HTML: .json o el .xlsx descargado (hoja oculta _datos). */
+/** Lee un respaldo de la herramienta HTML (.json o el .xlsx descargado, con la hoja oculta _datos) o un Excel
+ * del taller de AHP (`Ejercicio.xlsx`/plantillas y sus entregas, sin _datos: ver courseExcel.ts). */
 export async function parseLegacyFile(file: File): Promise<Imported | null> {
   try {
     let state: unknown = null;
@@ -10,7 +12,10 @@ export async function parseLegacyFile(file: File): Promise<Imported | null> {
       const XLSX = (await import('xlsx-js-style')).default as any;
       const wb = XLSX.read(await file.arrayBuffer(), { type: 'array' });
       const ws = wb.Sheets['_datos'];
-      if (!ws) return null;
+      if (!ws) {
+        const c = parseCourseWorkbook(wb);
+        return c ? { ...c.imp, warnings: c.warnings } : null;
+      }
       let t = '';
       for (let r = 1; ws['A' + r]; r++) t += ws['A' + r].v;
       state = JSON.parse(t);

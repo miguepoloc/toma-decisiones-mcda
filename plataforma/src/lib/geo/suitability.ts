@@ -78,3 +78,27 @@ export function hectaresByClass(cls: Uint8Array, haPerPixel: number): Record<num
   for (let i = 0; i < cls.length; i++) out[cls[i]] = (out[cls[i]] ?? 0) + haPerPixel;
   return out;
 }
+
+/** Hectáreas por clase respetando la máscara: `cls` vale 0 tanto para "exclusión legal" como para
+ * "fuera del área", así que se separan con `mask`. `evaluable` = alta + moderada + no apta (la base
+ * de los porcentajes, como el 62.36 % / 30.88 % / 6.76 % del artículo de la boya). */
+export function areaStats(cls: Uint8Array, pct: Uint8Array, mask: Uint8Array, haPerPixel: number) {
+  let alta = 0, media = 0, noapta = 0, excl = 0;
+  for (let i = 0; i < cls.length; i++) {
+    if (mask[i] === MASK_NODATA) continue;
+    if (mask[i] === MASK_EXCLUDED) { excl++; continue; }
+    if (pct[i] === 255) continue;
+    if (cls[i] === CLASS_ALTA) alta++;
+    else if (cls[i] === CLASS_MODERADA) media++;
+    else noapta++;
+  }
+  const evaluable = alta + media + noapta;
+  const ha = (n: number) => n * haPerPixel;
+  const pc = (n: number) => (evaluable ? (100 * n) / evaluable : 0);
+  return {
+    alta: { ha: ha(alta), pct: pc(alta) }, media: { ha: ha(media), pct: pc(media) },
+    noapta: { ha: ha(noapta), pct: pc(noapta) }, excl: { ha: ha(excl), pct: 0 },
+    evaluableHa: ha(evaluable), totalHa: ha(evaluable + excl),
+  };
+}
+export type AreaStats = ReturnType<typeof areaStats>;

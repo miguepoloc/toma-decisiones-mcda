@@ -97,12 +97,16 @@ diseño antes de tocar código) y la extensión Fuzzy (el temario la trata como 
 método, no un método aparte). Detalle completo en `plataforma/README.md` § "Visión: plataforma multicriterio
 completa".
 
-**Geovisor AHP + SIG (Sesión 5, 25 sep 2026):** primera entrega real (no maqueta) de `kind:'spatial'` — un
-proyecto donde las alternativas son píxeles de un territorio en vez de filas de una tabla, resuelto con el caso
-guiado de `07_ahp_sig_cacao_snsm.ipynb` (aptitud cacaotera, Sierra Nevada de Santa Marta). Pesos reales del panel
-de expertos, datos reales del caché del notebook, matemática verificada contra él. Falta cargar capas propias,
-exportar GeoTIFF y publicar — ver `plataforma/README.md` § "Geovisor" y `plataforma/docs/PLAN_geovisor_ahp_sig.md`
-(el plan completo, con las maquetas que le precedieron).
+**Geovisor AHP + SIG (Sesión 5, 25 sep 2026):** `kind:'spatial'` — un proyecto donde las alternativas son celdas
+de un territorio en vez de filas de una tabla. Nace en blanco (con «Punto de partida» opcional: caso cacao SNSM con
+datos del notebook `07_ahp_sig_cacao_snsm.ipynb`, o plantilla de la boya de la tesis del docente —
+Polo-Castañeda et al. 2021, `03_Bibliografia_general/combinaciones/`). Mapa web real (Leaflet, mapa base mundial),
+carga de capas propias (GeoTIFF, GeoJSON, shapefile .zip, KML; vector → distancia/dentro-fuera/atributo; papel
+criterio, exclusión o área de estudio), reglas de idoneidad editables (por rangos, trapecio…), pesos reales del
+panel de expertos, consulta de punto y exportación (GeoTIFF + QML, PNG, KMZ, CSV, Excel, zip). Requiere la migración
+`20240101000011_geo_storage.sql`. Falta vista pública, cuota admin y tutorial — ver `plataforma/README.md` §
+"Geovisor" y `plataforma/docs/PLAN_geovisor_ahp_sig.md`. Trampa: `npm run build` con `npm run dev` activo pisa
+`.next`; reiniciar el dev server.
 
 ### Artefactos publicados en claude.ai (privados, del propietario de la sesión)
 Priorizador de criterios (`Tu8BSq5BvgYRwjdxcd9k3o`), MCDA para ASR con datos de Harold (`9dKxsYtKh7P1m27RUnEYSr`) y plantilla en blanco (`KULzPjwGLgGk562R2fQtgy`). El estado de cada uno vive en el `localStorage` de su propio origen; no se comparte entre ellos.

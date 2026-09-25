@@ -16,7 +16,8 @@ export type FnSpec =
   | { type: 'trapezoid'; a: number; b: number; c: number; d: number }
   | { type: 'up'; a: number; b: number }
   | { type: 'down'; a: number; b: number }
-  | { type: 'classes'; map: Record<string, number> };
+  | { type: 'classes'; map: Record<string, number> }
+  | { type: 'steps'; breaks: number[]; scores: number[] };
 
 export type VetoSpec = { op: '<' | '>' | '<=' | '>='; value: number };
 
@@ -52,8 +53,19 @@ export function classes(x: number, map: Record<string, number>): number {
   return map[String(Math.round(x))] ?? 0;
 }
 
+/** Reclasificación por rangos (Tabla VI del artículo AHP-SIG de la boya: >150 m → 1, 70–150 m → 0.5,
+ * <70 m → 0). `breaks` ascendentes; `scores.length === breaks.length + 1`: x < breaks[0] → scores[0],
+ * breaks[i-1] <= x < breaks[i] → scores[i], x >= último → scores[último]. */
+export function steps(x: number, breaks: number[], scores: number[]): number {
+  if (Number.isNaN(x)) return NaN;
+  let i = 0;
+  while (i < breaks.length && x >= breaks[i]) i++;
+  return scores[i] ?? 0;
+}
+
 export function suitability(x: number, fn: FnSpec): number {
   switch (fn.type) {
+    case 'steps': return steps(x, fn.breaks, fn.scores);
     case 'trapezoid': return trapezoid(x, fn.a, fn.b, fn.c, fn.d);
     case 'up': return up(x, fn.a, fn.b);
     case 'down': return down(x, fn.a, fn.b);
@@ -101,3 +113,26 @@ export const SNSM_CACAO_RULES: Record<string, { fn: FnSpec; veto?: VetoSpec; lab
     why: 'Reconstruida por regresión contra el mapa del notebook (idoneidad_pendiente no está definida en membership.py): idoneidad 1 hasta 12°, rampa lineal a 0 en 45° (veto por remoción en masa).',
   },
 };
+
+/** Texto corto de una regla, para tablas, Excel y tooltips. */
+export function describeFn(fn: FnSpec): string {
+  const n = (v: number) => (Number.isInteger(v) ? String(v) : String(Math.round(v * 100) / 100));
+  switch (fn.type) {
+    case 'trapezoid': return `Trapecio ${n(fn.a)} / ${n(fn.b)} / ${n(fn.c)} / ${n(fn.d)}`;
+    case 'up': return `Más es mejor: 0 hasta ${n(fn.a)}, 1 desde ${n(fn.b)}`;
+    case 'down': return `Menos es mejor: 1 hasta ${n(fn.a)}, 0 desde ${n(fn.b)}`;
+    case 'classes': return 'Por clases: ' + Object.entries(fn.map).map(([k, v]) => `${k}→${n(v)}`).join(', ');
+    case 'steps': {
+      const parts = fn.scores.map((s, i) => {
+        const lo = i === 0 ? null : fn.breaks[i - 1], hi = i < fn.breaks.length ? fn.breaks[i] : null;
+        const rng = lo === null ? `< ${n(hi as number)}` : hi === null ? `≥ ${n(lo)}` : `${n(lo)}–${n(hi)}`;
+        return `${rng} → ${n(s)}`;
+      });
+      return 'Rangos: ' + parts.join(' · ');
+    }
+  }
+}
+
+export function describeVeto(v: VetoSpec | undefined): string {
+  return v ? `Veto si valor ${v.op} ${v.value}` : '—';
+}

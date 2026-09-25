@@ -3,7 +3,7 @@
 // — tolerancia de medio píxel (250 m ≈ 0.0022° en esta latitud), porque el punto real no cae
 // exacto en el centro del píxel.
 import { readFileSync } from 'node:fs';
-import { lonLatToPixel, pixelToLonLat, type Transform } from '../src/lib/geo/crs.ts';
+import { crsDef, lonLatToPixel, pixelToLonLat, projector, registerCrs, utmCrsFor, type Transform } from '../src/lib/geo/crs.ts';
 
 let fallos = 0;
 const ok = (cond: boolean, msg: string) => { console.log((cond ? 'OK   ' : 'FALLA') + ' ' + msg); if (!cond) fallos++; };
@@ -38,8 +38,25 @@ for (const [nombre, p] of Object.entries(PUNTOS)) {
 
 {
   let lanzo = false;
-  try { pixelToLonLat(0, 0, t, 'EPSG:3116'); } catch { lanzo = true; }
+  try { pixelToLonLat(0, 0, t, 'EPSG:99999'); } catch { lanzo = true; }
   ok(lanzo, 'CRS sin definición: lanza en vez de devolver basura');
+}
+
+// CRS generales: UTM norte/sur, Bogotá (3116), cadena proj4 cruda y registro en caliente.
+ok(crsDef('EPSG:32618')?.includes('+zone=18') === true && !crsDef('EPSG:32618')!.includes('+south'), 'UTM 18N');
+ok(crsDef('EPSG:32721')?.includes('+zone=21 +south') === true, 'UTM 21S');
+ok(crsDef('EPSG:99999') === null, 'EPSG desconocido -> null');
+ok(crsDef('+proj=longlat +datum=WGS84') === '+proj=longlat +datum=WGS84', 'cadena proj4 cruda pasa tal cual');
+registerCrs('EPSG:99999', '+proj=utm +zone=18 +datum=WGS84 +units=m +no_defs');
+ok(crsDef('EPSG:99999') !== null, 'registerCrs');
+ok(utmCrsFor(-74.1, 11.2) === 'EPSG:32618' && utmCrsFor(-3.7, 40.4) === 'EPSG:32630' && utmCrsFor(151.2, -33.9) === 'EPSG:32756', 'zona UTM por lon/lat');
+{
+  // ida y vuelta lon/lat <-> UTM <-> Bogotá a < 1 m (Santa Marta)
+  const [x, y] = projector('EPSG:4326', 'EPSG:32618')(-74.2, 11.25);
+  const [lon, lat] = projector('EPSG:32618', 'EPSG:4326')(x, y);
+  ok(cerca(lon, -74.2, 1e-8) && cerca(lat, 11.25, 1e-8), 'ida y vuelta UTM');
+  const [xb, yb] = projector('EPSG:32618', 'EPSG:3116')(x, y);
+  ok(xb > 900000 && xb < 1100000 && yb > 1600000 && yb < 1800000, `UTM 18N -> Bogotá plausible (${xb.toFixed(0)}, ${yb.toFixed(0)})`);
 }
 
 console.log(fallos ? `\n${fallos} prueba(s) fallaron` : '\nTodas las pruebas pasaron');

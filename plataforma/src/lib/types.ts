@@ -59,16 +59,35 @@ export type GeoFnSpec =
   | { type: 'trapezoid'; a: number; b: number; c: number; d: number }
   | { type: 'up'; a: number; b: number }
   | { type: 'down'; a: number; b: number }
-  | { type: 'classes'; map: Record<string, number> };
+  | { type: 'classes'; map: Record<string, number> }
+  | { type: 'steps'; breaks: number[]; scores: number[] };
 export type GeoVetoSpec = { op: '<' | '>' | '<=' | '>='; value: number };
 
-/** Configuración de un proyecto `kind:'spatial'`. `packId` referencia un paquete del catálogo
- * (`public/geo-packs/<packId>/manifest.json`, generado por `scripts/geo/export_pack.py` — la v1 no
- * soporta cargar capas propias, ver el plan § "Qué falta"). `rules` mapea el `id` de cada criterio
- * de `ProjectRow.criteria` a la capa del paquete que lo alimenta (`layerKey`) y su función de
- * idoneidad; un criterio sin regla (`rules[id]` ausente) no participa del cálculo todavía. */
+/** Grilla de análisis del proyecto: CRS métrico (UTM de la zona, o el del paquete del catálogo),
+ * tamaño y afín GDAL [a,b,c,d,e,f]. Ver `src/lib/geo/grid.ts`. */
+export type GeoGrid = {
+  crs: string; width: number; height: number; resM: number; haPerPixel: number;
+  transform: [number, number, number, number, number, number];
+};
+
+/** Capa propia ya alineada a la grilla, guardada como Float32 + gzip en Storage (`geo-layers`).
+ * `role`: 'criterion' alimenta una regla; 'exclusion' (valor > 0 = excluido, p. ej. concesiones);
+ * 'area' (valor > 0 = dentro del estudio, p. ej. la isóbata de 200 m). `origin` cuenta cómo se
+ * derivó del archivo original (para mostrarlo en la UI, no se recalcula). */
+export type GeoLayerMeta = {
+  label: string; unit: string; role: 'criterion' | 'exclusion' | 'area';
+  origin: string; source: string; min: number; max: number; path: string; bytes: number;
+};
+
+/** Configuración de un proyecto `kind:'spatial'`. Dos orígenes de datos: `packId` (paquete de
+ * catálogo en `public/geo-packs/<id>`, solo lectura, generado por `scripts/geo/export_pack.py`) o
+ * `grid` + `layers` (capas propias del estudiante). `rules` mapea el `id` de cada criterio de
+ * `ProjectRow.criteria` a la capa que lo alimenta (`layerKey`) y su función de idoneidad; un
+ * criterio sin regla no participa del cálculo. */
 export type GeoConfig = {
-  packId: string;
+  packId?: string;
+  grid?: GeoGrid;
+  layers?: Record<string, GeoLayerMeta>;
   rules: Record<string, { layerKey: string; fn: GeoFnSpec; veto?: GeoVetoSpec }>;
   classes: { alta: number; media: number };
 };

@@ -7,24 +7,31 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types --no-warnings scripts/check-ahp.ts && node --experimental-strip-types --no-warnings scripts/check-topsis.ts && node --experimental-strip-types --no-warnings scripts/check-vikor.ts && node --experimental-strip-types --no-warnings scripts/check-promethee.ts && node --experimental-strip-types --no-warnings scripts/check-electre.ts && node --experimental-strip-types --no-warnings scripts/check-saw.ts && node --experimental-strip-types --no-warnings scripts/check-weights.ts && node --experimental-strip-types --no-warnings scripts/check-fuzzy-topsis.ts && node --experimental-strip-types --no-warnings scripts/check-targets.ts && node --experimental-strip-types --no-warnings scripts/check-geo-membership.ts && node --experimental-strip-types --no-warnings scripts/check-geo-suitability.ts && node --experimental-strip-types --no-warnings scripts/check-geo-crs.ts",
-    "test:excel": "node --experimental-strip-types --no-warnings scripts/check-excel.ts && node --experimental-strip-types --no-warnings scripts/check-excel-topsis.ts && node --experimental-strip-types --no-warnings scripts/check-excel-vikor.ts && node --experimental-strip-types --no-warnings scripts/check-excel-promethee.ts && node --experimental-strip-types --no-warnings scripts/check-excel-electre.ts && node --experimental-strip-types --no-warnings scripts/check-excel-saw.ts && node --experimental-strip-types --no-warnings scripts/check-excel-fuzzy-topsis.ts && node --experimental-strip-types --no-warnings scripts/check-excel-colors.ts",
+    "test": "node --experimental-strip-types --no-warnings scripts/check-ahp.ts && node --experimental-strip-types --no-warnings scripts/check-topsis.ts && node --experimental-strip-types --no-warnings scripts/check-vikor.ts && node --experimental-strip-types --no-warnings scripts/check-promethee.ts && node --experimental-strip-types --no-warnings scripts/check-electre.ts && node --experimental-strip-types --no-warnings scripts/check-saw.ts && node --experimental-strip-types --no-warnings scripts/check-weights.ts && node --experimental-strip-types --no-warnings scripts/check-fuzzy-topsis.ts && node --experimental-strip-types --no-warnings scripts/check-targets.ts && node --experimental-strip-types --no-warnings scripts/check-geo-membership.ts && node --experimental-strip-types --no-warnings scripts/check-geo-suitability.ts && node --experimental-strip-types --no-warnings scripts/check-geo-crs.ts && node --experimental-strip-types --no-warnings scripts/check-geo-raster.ts && node --experimental-strip-types --no-warnings scripts/check-geo-export.ts",
+    "test:excel": "node --experimental-strip-types --no-warnings scripts/check-excel.ts && node --experimental-strip-types --no-warnings scripts/check-excel-topsis.ts && node --experimental-strip-types --no-warnings scripts/check-excel-vikor.ts && node --experimental-strip-types --no-warnings scripts/check-excel-promethee.ts && node --experimental-strip-types --no-warnings scripts/check-excel-electre.ts && node --experimental-strip-types --no-warnings scripts/check-excel-saw.ts && node --experimental-strip-types --no-warnings scripts/check-excel-fuzzy-topsis.ts && node --experimental-strip-types --no-warnings scripts/check-excel-colors.ts && node --experimental-strip-types --no-warnings scripts/check-course-excel.ts",
     "test:excel:recalc": "node --experimental-strip-types --no-warnings scripts/check-excel-recalc.ts",
     "test:rls": "node --env-file=.env.local --experimental-strip-types --no-warnings scripts/check-rls.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.6.1",
     "@supabase/supabase-js": "^2.50.0",
+    "@tmcw/togeojson": "^7.1.2",
+    "fflate": "^0.8.3",
+    "geotiff": "^3.0.5",
+    "leaflet": "^1.9.4",
     "next": "^15.3.0",
     "proj4": "^2.22.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "shpjs": "^6.2.0",
     "xlsx-js-style": "^1.2.0"
   },
   "devDependencies": {
+    "@types/leaflet": "^1.9.22",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "@types/shpjs": "^3.4.7",
     "typescript": "^5.6.0"
   }
 }

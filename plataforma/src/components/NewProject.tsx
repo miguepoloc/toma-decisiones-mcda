@@ -7,8 +7,9 @@ import { friendlyError } from '@/lib/errors';
 import { createFromImport, parseLegacyFile } from '@/lib/importer';
 import { blankPrio } from '@/lib/prio';
 import { uid } from '@/lib/types';
+import { Icon, ICONS } from '@/components/GeoBits';
 import { blankMatrix, setCell, setType } from '@/lib/topsis';
-import { SNSM_CACAO_RULES } from '@/lib/geo/membership';
+import { buildExample, EXAMPLE_IDS, type ExampleId } from '@/lib/geo/examples';
 import type { GeoConfig, Kind } from '@/lib/types';
 import type { MethodKey } from '@/components/ScientificMethodModal';
 
@@ -40,14 +41,6 @@ const IOT_PALMOR_ALTERNATIVES = ['LoRaWAN', 'GSM/GPRS', 'Sigfox', 'Zigbee'];
 // (más es mejor). Mismo dataset que scripts/check-topsis.ts y los demás check-*.ts de la plataforma.
 const IOT_PALMOR_MATRIX = [[10, 8, 2, 5], [10.5, 0.5, 3, 2], [40, 2, 5, 2], [0.07, 1.5, 2, 4]];
 
-// Caso guiado del "Mapa de aptitud (SIG)": zonificación de aptitud cacaotera en la Sierra Nevada de
-// Santa Marta (Sesión 5, 07_ahp_sig_cacao_snsm.ipynb). Un criterio por capa del paquete
-// `snsm-cacao-v1` (scripts/geo/export_pack.py) — las reglas de idoneidad son las mismas
-// SNSM_CACAO_RULES que verifica scripts/check-geo-membership.ts, no se reinventan aquí.
-const SNSM_CACAO_TITLE = 'Aptitud cacaotera — Sierra Nevada de Santa Marta (ejemplo del curso)';
-const SNSM_CACAO_OBJECTIVE = 'Zonificar dónde es biofísicamente apto cultivar cacao en la Sierra Nevada de Santa Marta, combinando clima, suelo y relieve con los pesos de un panel de expertos.';
-const SNSM_CACAO_PACK_ID = 'snsm-cacao-v1';
-
 function NewProjectForm({ userId }: { userId: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -57,10 +50,14 @@ function NewProjectForm({ userId }: { userId: string }) {
   const [title, setTitle] = useState('');
   const [objective, setObjective] = useState('');
   const [kind, setKind] = useState<Kind>('decision');
+  const [start, setStart] = useState<ExampleId | 'blank'>('blank');
   const [method, setMethod] = useState<MethodKey>(validMethod);
   const [useIotCase, setUseIotCase] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
+  // Importado de un Excel del taller con avisos (redondeos, objetivo no detectado): se muestran antes de abrirlo.
+  const [over, setOver] = useState(false);
+  const [imported, setImported] = useState<{ id: string; warnings: string[] } | null>(null);
   const file = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -106,28 +103,25 @@ function NewProjectForm({ userId }: { userId: string }) {
     else router.push(`/projects/${data.id}`);
   }
 
-  // "Mapa de aptitud (SIG)": v1 solo ofrece el caso guiado (paquete snsm-cacao-v1) — cargar tus
-  // propias capas y definir tu propia área llega en una entrega siguiente (ver el plan). El
-  // proyecto usa method:'saw' únicamente para que el panel de expertos reutilice, sin cambios, el
-  // mecanismo ya existente de pesar criterios por pares (JudgmentEditor solo muestra la hoja
-  // 'crit' cuando method !== 'ahp').
+  // "Mapa de aptitud (SIG)": por defecto nace en blanco, como un proyecto de decisión (3 criterios
+  // genéricos que el estudiante renombra y sube sus propios mapas en el Geovisor). Los ejemplos
+  // (cacao SNSM con datos, plantilla de la boya de la tesis) son opcionales. El proyecto usa
+  // method:'saw' únicamente para que el panel de expertos reutilice, sin cambios, el mecanismo ya
+  // existente de pesar criterios por pares (JudgmentEditor solo muestra la hoja 'crit' cuando
+  // method !== 'ahp').
   async function createSpatial() {
-    const finalTitle = title.trim() || SNSM_CACAO_TITLE;
+    const ex = start === 'blank' ? null : buildExample(start);
+    const finalTitle = title.trim() || ex?.title || '';
+    if (!finalTitle) return;
     setBusy(true);
     setMsg('');
-    const criteria: { id: string; name: string; hint: string; src: null }[] = [];
-    const rules: GeoConfig['rules'] = {};
-    for (const [layerKey, r] of Object.entries(SNSM_CACAO_RULES)) {
-      const id = uid('k');
-      criteria.push({ id, name: r.label, hint: r.why, src: null });
-      rules[id] = { layerKey, fn: r.fn, veto: r.veto };
-    }
-    const geo: GeoConfig = { packId: SNSM_CACAO_PACK_ID, rules, classes: { alta: 0.70, media: 0.45 } };
+    const criteria = ex ? ex.criteria : [1, 2, 3].map((i) => ({ id: uid('k'), name: 'Criterio ' + i, hint: '', src: null }));
+    const geo: GeoConfig = ex ? ex.geo : { rules: {}, classes: { alta: 0.70, media: 0.45 } };
     const { data, error } = await createClient().from('projects').insert({
       owner_id: userId,
       kind: 'spatial',
       title: finalTitle,
-      objective: objective.trim() || SNSM_CACAO_OBJECTIVE,
+      objective: objective.trim() || ex?.objective || '',
       method: 'saw',
       criteria,
       alternatives: [],
@@ -140,18 +134,30 @@ function NewProjectForm({ userId }: { userId: string }) {
     else router.push(`/projects/${data.id}`);
   }
 
+  function dropFiles(files: FileList | null | undefined) {
+    const f = files?.[0];
+    if (!f || busy) return;
+    if (!/\.(xlsx|json)$/i.test(f.name)) {
+      setMsg('Ese tipo de archivo no se puede importar: sube un .xlsx o un .json.');
+      return;
+    }
+    void importFile(f);
+  }
+
   async function importFile(f: File) {
     setBusy(true);
+    setImported(null);
     setMsg('');
     const imp = await parseLegacyFile(f);
     if (!imp) {
       setBusy(false);
-      setMsg('Ese archivo no es un respaldo de la herramienta HTML (.json o el .xlsx que ella descarga).');
+      setMsg('No reconozco ese archivo: sube un respaldo de la herramienta HTML (.json o su .xlsx) o el Excel del taller de AHP (hojas Criterios, una por criterio y Síntesis).');
       return;
     }
     const r = await createFromImport(createClient(), userId, imp, f.name.replace(/\.[^.]+$/, '') || 'Proyecto importado');
     setBusy(false);
-    if (r.id) router.push(`/projects/${r.id}`);
+    if (r.id && !r.error && imp.warnings?.length) setImported({ id: r.id, warnings: imp.warnings });
+    else if (r.id) router.push(`/projects/${r.id}`);
     else setMsg(r.error ?? 'No se pudo importar');
   }
 
@@ -167,8 +173,8 @@ function NewProjectForm({ userId }: { userId: string }) {
           </div>
           {kind === 'spatial' && (
             <p className="muted" style={{ fontSize: 12.5, marginTop: 6 }}>
-              Las alternativas son píxeles de un territorio, no filas de una tabla — pesas criterios como en AHP, pero el
-              ranking sale de un mapa. Por ahora solo con el paquete guiado de abajo; cargar tus propias capas llega en una entrega siguiente.
+              Las alternativas son celdas de un territorio, no filas de una tabla: pesas los criterios con tus expertos como en AHP,
+              subes tus propios mapas (GeoTIFF, GeoJSON, shapefile…) y el ranking sale de un mapa que puedes exportar.
             </p>
           )}
         </div>
@@ -177,10 +183,10 @@ function NewProjectForm({ userId }: { userId: string }) {
           <input
             id="pt"
             type="text"
-            required
+            required={kind === 'decision' || start === 'blank'}
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder={kind === 'spatial' ? SNSM_CACAO_TITLE : 'Ej.: Estrategia de adaptación ASR'}
+            placeholder={kind === 'spatial' ? 'Ej.: Zonas aptas para una boya de monitoreo' : 'Ej.: Estrategia de adaptación ASR'}
           />
         </div>
         <div>
@@ -189,7 +195,7 @@ function NewProjectForm({ userId }: { userId: string }) {
             id="po"
             value={objective}
             onChange={(e) => setObjective(e.target.value)}
-            placeholder={kind === 'spatial' ? SNSM_CACAO_OBJECTIVE : 'Describe el propósito u objetivo central de la evaluación...'}
+            placeholder={kind === 'spatial' ? 'Qué quieres ubicar o zonificar, y con qué criterios...' : 'Describe el propósito u objetivo central de la evaluación...'}
           />
         </div>
         {kind === 'decision' && (
@@ -240,10 +246,15 @@ function NewProjectForm({ userId }: { userId: string }) {
           </>
         )}
         {kind === 'spatial' && (
-          <div className="hint" style={{ fontSize: 13 }}>
-            Paquete: <b>Aptitud cacaotera — Sierra Nevada de Santa Marta</b> (WorldClim, SoilGrids, Copernicus DEM, RUNAP,
-            250 m/píxel — mismo caso de la Sesión 5). Precarga 4 criterios con sus funciones de idoneidad
-            (FEDECACAO 2015); tú agregas el panel de expertos para pesarlos.
+          <div>
+            <label className="lbl" htmlFor="ps">Punto de partida</label>
+            <select id="ps" value={start} onChange={(e) => setStart(e.target.value as ExampleId | 'blank')} style={{ width: '100%' }}>
+              <option value="blank">En blanco — yo defino criterios y subo mis mapas</option>
+              {EXAMPLE_IDS.map((id) => <option key={id} value={id}>{buildExample(id).label}</option>)}
+            </select>
+            <p className="muted" style={{ fontSize: 12.5, marginTop: 6 }}>
+              {start === 'blank' ? 'Empiezas con 3 criterios genéricos y un mapa mundial vacío. Después subes tus capas en el Geovisor.' : buildExample(start).blurb}
+            </p>
           </div>
         )}
         <div className="acts">
@@ -252,29 +263,47 @@ function NewProjectForm({ userId }: { userId: string }) {
           </button>
         </div>
       </form>
-      <div className="card form">
-        <h3>Importar de la herramienta HTML</h3>
+      {/* Toda la tarjeta acepta el soltado: si el archivo cae fuera de la zona, el navegador lo descargaría/abriría. */}
+      <div
+        className="card form"
+        onDragOver={(e) => { e.preventDefault(); setOver(true); }}
+        onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOver(false); }}
+        onDrop={(e) => { e.preventDefault(); setOver(false); dropFiles(e.dataTransfer.files); }}
+      >
+        <h3>Importar un archivo</h3>
         <p className="muted" style={{ fontSize: 14 }}>
-          Trae tu trabajo previo: sube el respaldo <b>.json</b> o el <b>.xlsx</b> que descargaste de MCDA_ASR_Harold.html. Se crean el proyecto, los expertos y todos los juicios.
+          Trae tu trabajo previo: sube el respaldo <b>.json</b> o el <b>.xlsx</b> que descargaste de la herramienta HTML, o el <b>Excel del taller de AHP</b> (Ejercicio.xlsx o las plantillas, ya diligenciadas). Se crean el proyecto, los expertos y todos los juicios.
         </p>
-        <input
-          ref={file}
-          type="file"
-          accept=".xlsx,.json,application/json"
-          hidden
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) void importFile(f);
-            e.target.value = '';
-          }}
-        />
-        <div className="acts">
-          <button className="btn" type="button" disabled={busy} onClick={() => file.current?.click()}>
-            Elegir archivo…
-          </button>
-        </div>
+        <label className={'gv-drop' + (over ? ' over' : '')} style={{ opacity: busy ? 0.6 : 1 }}>
+          <Icon d={ICONS.upload} size={22} />
+          <b>{busy ? 'Importando…' : 'Arrastra aquí tu archivo'}</b>
+          <span>o haz clic para elegirlo</span>
+          <em>.xlsx · .json</em>
+          <input
+            ref={file}
+            type="file"
+            accept=".xlsx,.json,application/json"
+            disabled={busy}
+            onChange={(e) => {
+              dropFiles(e.target.files);
+              e.target.value = '';
+            }}
+          />
+        </label>
       </div>
       {msg && <p className="err" role="alert">{msg}</p>}
+      {imported && (
+        <div className="card form" role="status">
+          <h3>Proyecto importado</h3>
+          <p className="muted" style={{ fontSize: 14 }}>Revisa estos avisos antes de seguir:</p>
+          <ul style={{ fontSize: 14, paddingLeft: 18 }}>
+            {imported.warnings.map((w) => <li key={w}>{w}</li>)}
+          </ul>
+          <div className="acts">
+            <button className="btn primary" type="button" onClick={() => router.push(`/projects/${imported.id}`)}>Abrir el proyecto</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

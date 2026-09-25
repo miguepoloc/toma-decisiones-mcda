@@ -1,6 +1,6 @@
 # Plan: Geovisor AHP + SIG en la plataforma
 
-Estado: **plan, sin implementar** (24 sep 2026). Se construye **después del curso** (decisión del docente: no hay presión de S5 del 2 oct). Origen: el notebook `07_ahp_sig_cacao_snsm.ipynb` y la pregunta "¿puede el estudiante crear, por ejemplo, la zona viable para una finca de paneles solares y tener un geovisor que exporte GeoTIFF o PNG?".
+Estado (25 sep 2026): **fases 1-3 y exportación hechas** — mapa web Leaflet, capas propias (GeoTIFF/GeoJSON/shapefile/KML), reglas por rangos, consulta de punto y exportación GeoTIFF/QML/PNG/KMZ/CSV/Excel/zip (ver `README.md` § Geovisor). **Pendiente**: publicar (`/p/<token>`), cuota/admin y catálogo editables, tutorial. Diferencias respecto a lo planeado: las capas se guardan alineadas a la grilla como Float32+gzip en Storage (no COG originales), sin tablas `project_layers`/`geo_packs` todavía (todo vive en `projects.geo`). Plan original (24 sep 2026): Se construye **después del curso** (decisión del docente: no hay presión de S5 del 2 oct). Origen: el notebook `07_ahp_sig_cacao_snsm.ipynb` y la pregunta "¿puede el estudiante crear, por ejemplo, la zona viable para una finca de paneles solares y tener un geovisor que exporte GeoTIFF o PNG?".
 
 ---
 

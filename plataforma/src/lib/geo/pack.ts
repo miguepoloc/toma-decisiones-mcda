@@ -4,12 +4,13 @@
  * `scripts/geo/export_pack.py` a partir de `data/ahp_sig_snsm/cache/` (ver ese script y
  * `plataforma/docs/PLAN_geovisor_ahp_sig.md`). */
 import { dequantizeLayer } from './quant.ts';
+import type { GeoGrid } from '../types.ts';
 
 export type GeoManifest = {
   id: string;
   title: string;
   attribution: string;
-  grid: { crs: string; width: number; height: number; resM: number; haPerPixel: number; transform: [number, number, number, number, number, number] };
+  grid: GeoGrid;
   layers: Record<string, { min: number; max: number; path: string; bytes: number; label: string; unit: string }>;
   mask: { path: string; legend: Record<string, string> };
   base: string;

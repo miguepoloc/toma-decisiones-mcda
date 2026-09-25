@@ -12,6 +12,7 @@ import JudgmentEditor from './JudgmentEditor';
 import PrioritizationEditor from './PrioritizationEditor';
 import DecisionMatrixEditor from './DecisionMatrixEditor';
 import GeoVisor from './GeoVisor';
+import { buildExample, EXAMPLE_IDS, type ExampleId } from '@/lib/geo/examples';
 import Results, { accentStyleFor } from './Results';
 import ScientificMethodModal, { type MethodKey } from './ScientificMethodModal';
 
@@ -72,6 +73,10 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
   const prio = useMemo(() => normalizePrio(project.prioritization), [project.prioritization]);
   const idx = useMemo(() => indexJudgments(judgments), [judgments]);
   const dm = useMemo(() => normalizeMatrix(project.decision_matrix), [project.decision_matrix]);
+  const geoCfg = useMemo<GeoConfig>(() => {
+    const g = project.geo as Partial<GeoConfig>;
+    return { ...g, rules: g.rules ?? {}, classes: g.classes ?? { alta: 0.70, media: 0.45 } };
+  }, [project.geo]);
 
   const flush = useCallback(async () => {
     const p = pending.current;
@@ -112,6 +117,14 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
   async function removeAlternative(id: string) {
     await dropJudgments((j) => j.sheet.startsWith('alt:') && hasId(j, id));
     patch({ alternatives: project.alternatives.filter((a) => a.id !== id) }, true);
+  }
+  // Reemplaza criterios y configuración del mapa por un ejemplo. Los juicios de los criterios
+  // anteriores dejan de contar (ya no existen esos ids) — por eso solo se ofrece sin datos propios.
+  async function applyExample(id: ExampleId) {
+    const ex = buildExample(id);
+    await dropJudgments(() => true);
+    patch({ criteria: ex.criteria, geo: ex.geo, ...(project.objective.trim() ? {} : { objective: ex.objective }) }, true);
+    setTab('Geovisor');
   }
   const twoClick = (key: string, fn: () => void | Promise<void>) => {
     if (pendDel !== key) { setPendDel(key); setTimeout(() => setPendDel((p) => (p === key ? null : p)), 4000); return; }
@@ -379,7 +392,18 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
             {project.kind === 'spatial' ? (
               <div className="fgrp">
                 <label className="lbl">Alternativas</label>
-                <p className="muted" style={{ fontSize: 13 }}>En un mapa de aptitud, las alternativas son los píxeles del territorio — no hay una lista que editar aquí. El mapa vive en la pestaña «Geovisor».</p>
+                <p className="muted" style={{ fontSize: 13 }}>En un mapa de aptitud, las alternativas son las celdas del territorio — no hay una lista que editar aquí. Tus mapas se suben y se ven en la pestaña «Geovisor».</p>
+                {!geoCfg.packId && !geoCfg.grid && (
+                  <div className="gv-examples">
+                    <label className="lbl">¿Prefieres partir de un ejemplo?</label>
+                    {EXAMPLE_IDS.map((id) => { const ex = buildExample(id); return (
+                      <div className="gv-ex-row" key={id}>
+                        <div><b>{ex.label}</b><p>{ex.blurb}</p></div>
+                        <button type="button" className={'btn sm' + (pendDel === 'ex' + id ? ' danger' : '')} onClick={() => twoClick('ex' + id, () => applyExample(id))}>{pendDel === 'ex' + id ? '¿Seguro? Reemplaza tus criterios' : 'Cargar ejemplo'}</button>
+                      </div>
+                    ); })}
+                  </div>
+                )}
               </div>
             ) : (
               <div className="fgrp">
@@ -460,19 +484,21 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
       )}
 
       {tab === 'Geovisor' && project.kind === 'spatial' && (
-        (project.geo as GeoConfig).packId ? (
-          <div className="gv-wrap">
-            <GeoVisor
-              criteria={project.criteria}
-              experts={experts}
-              idx={idx}
-              geo={project.geo as GeoConfig}
-              onPatchClasses={(classes) => patch({ geo: { ...(project.geo as GeoConfig), classes } }, true)}
-            />
-          </div>
-        ) : (
-          <div className="banner"><span>Este proyecto espacial todavía no tiene un paquete de capas configurado.</span></div>
-        )
+        <div className="gv-wrap">
+          <GeoVisor
+            projectId={project.id}
+            ownerId={project.owner_id}
+            title={project.title}
+            objective={project.objective}
+            criteria={project.criteria}
+            experts={experts}
+            idx={idx}
+            geo={geoCfg}
+            supabase={supabase}
+            onChangeGeo={(g, immediate) => patch({ geo: g }, immediate)}
+            onApplyExample={applyExample}
+          />
+        </div>
       )}
 
       {tab === 'Matriz de decisión' && (
@@ -536,7 +562,7 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
           <div className="card form">
             <h3>Resultados públicos</h3>
             {project.kind === 'spatial' ? (
-              <p className="muted" style={{ maxWidth: '70ch' }}>Los mapas de aptitud todavía no tienen vista pública (llega en una entrega siguiente, junto con la carga de capas propias). Por ahora este proyecto es privado sin importar este control.</p>
+              <p className="muted" style={{ maxWidth: '70ch' }}>Los mapas de aptitud todavía no tienen vista pública (llega en una entrega siguiente). Por ahora este proyecto es privado; lo que sí puedes hacer es exportar el mapa desde la pestaña «Geovisor → Exportar».</p>
             ) : (
               <>
                 <p className="muted" style={{ maxWidth: '70ch' }}>Por defecto, nadie más que tú ve tu proyecto. Si activas el enlace público, cualquier persona con el enlace podrá ver los resultados (ranking, pesos y consistencia). No verá nombres de expertos, ni sus enlaces, ni la priorización de criterios.</p>
@@ -556,7 +582,7 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
             <h3>Exportar</h3>
             {project.kind === 'spatial' ? (
               <>
-                <p className="muted">El mapa se exporta como PNG desde la pestaña «Geovisor» (botón «Descargar PNG»). GeoTIFF y el Excel del mapa llegan en una entrega siguiente.</p>
+                <p className="muted">El mapa se exporta desde «Geovisor → Exportar»: GeoTIFF (con estilo para QGIS), PNG, KMZ para Google Earth, CSV, Excel de resumen y un paquete .zip con todo. Aquí abajo, el Excel de la priorización de criterios.</p>
                 <div className="acts">
                   <button className="btn" type="button" onClick={exportPrioExcel}>Descargar Excel de priorización</button>
                 </div>
