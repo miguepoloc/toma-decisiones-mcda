@@ -67,10 +67,26 @@ export function aggMatrix(items: Item[], maps: JMap[]): number[][] {
   return A;
 }
 
+/**
+ * Cómo se obtienen los pesos de una matriz de comparación:
+ * - `mean`: promedio de las columnas normalizadas (el procedimiento a mano del curso, del Excel y del notebook 01;
+ *   coincide con `pyDecision.ahp_method(wd='m')`). Es exacto solo si la matriz es consistente.
+ * - `eigenvector`: eigenvector principal de Saaty (lo que usan AHP-OS y el artículo de la boya, 2021).
+ */
+export type WeightMethod = 'mean' | 'eigenvector';
+/** Método por defecto: el del curso, para que la app coincida con el Excel y el notebook que ven los estudiantes. */
+export const DEFAULT_WEIGHT_METHOD: WeightMethod = 'mean';
+
 export type Analysis = {
   n: number;
   N: number[][];
+  /** Pesos según el método elegido (`wMean` o `wEigen`). */
   w: number[];
+  /** Promedio de columnas normalizadas. */
+  wMean: number[];
+  /** Eigenvector principal (iteración de potencias hasta converger). */
+  wEigen: number[];
+  method: WeightMethod;
   lam: number;
   ci: number;
   ri: number;
@@ -79,26 +95,40 @@ export type Analysis = {
   ok: boolean;
 };
 
-export function analyze(A: number[][]): Analysis {
+/** Eigenvector principal de una matriz positiva por iteración de potencias, normalizado a suma 1. */
+export function principalEigenvector(A: number[][], tol = 1e-14, maxIter = 10000): number[] {
   const n = A.length;
-  if (n < 2) return { n, N: A, w: n ? [1] : [], lam: n, ci: 0, ri: 0, cr: 0, diff: 0, ok: true };
+  let p: number[] = Array(n).fill(1 / n);
+  for (let k = 0; k < maxIter; k++) {
+    const q = A.map((r) => r.reduce((a, x, j) => a + x * p[j], 0));
+    const s = q.reduce((a, b) => a + b, 0);
+    const next = q.map((x) => x / s);
+    const d = Math.max(...next.map((x, i) => Math.abs(x - p[i])));
+    p = next;
+    if (d < tol) break;
+  }
+  return p;
+}
+
+export function analyze(A: number[][], method: WeightMethod = DEFAULT_WEIGHT_METHOD): Analysis {
+  const n = A.length;
+  if (n < 2) {
+    const w = n ? [1] : [];
+    return { n, N: A, w, wMean: w, wEigen: w, method, lam: n, ci: 0, ri: 0, cr: 0, diff: 0, ok: true };
+  }
   const cs = Array(n).fill(0) as number[];
   A.forEach((r) => r.forEach((x, j) => (cs[j] += x)));
   const N = A.map((r) => r.map((x, j) => x / cs[j]));
-  const w = N.map((r) => r.reduce((a, b) => a + b, 0) / n);
+  const wMean = N.map((r) => r.reduce((a, b) => a + b, 0) / n);
+  const wEigen = principalEigenvector(A);
+  const w = method === 'eigenvector' ? wEigen : wMean;
   const Aw = A.map((r) => r.reduce((a, x, j) => a + x * w[j], 0));
   const lam = Aw.reduce((a, x, i) => a + x / w[i], 0) / n;
   const ci = (lam - n) / (n - 1);
   const ri = RI[n] !== undefined ? RI[n] : 1.49;
   const cr = ri > 0 ? Math.max(0, ci / ri) : 0;
-  let p: number[] = Array(n).fill(1 / n);
-  for (let k = 0; k < 60; k++) {
-    const q = A.map((r) => r.reduce((a, x, j) => a + x * p[j], 0));
-    const s = q.reduce((a, b) => a + b, 0);
-    p = q.map((x) => x / s);
-  }
-  const diff = Math.max(...p.map((x, i) => Math.abs(x - w[i])));
-  return { n, N, w, lam, ci: Math.max(0, ci), ri, cr, diff, ok: cr < 0.1 };
+  const diff = Math.max(...wEigen.map((x, i) => Math.abs(x - wMean[i])));
+  return { n, N, w, wMean, wEigen, method, lam, ci: Math.max(0, ci), ri, cr, diff, ok: cr < 0.1 };
 }
 
 export const fmt = (a: number) => {
@@ -128,12 +158,12 @@ export function answeredCount(items: Item[], m: JMap) {
 
 export type SheetResult = { items: Item[]; agg: Analysis; per: Analysis[]; answered: number[]; maps: JMap[] };
 
-export function sheetResult(sheet: string, items: Item[], expertIds: string[], idx: JIndex): SheetResult {
+export function sheetResult(sheet: string, items: Item[], expertIds: string[], idx: JIndex, method: WeightMethod = DEFAULT_WEIGHT_METHOD): SheetResult {
   const maps = expertIds.map((e) => idx[e]?.[sheet] ?? {});
   return {
     items,
-    agg: analyze(aggMatrix(items, maps)),
-    per: maps.map((m) => analyze(expertMatrix(items, m))),
+    agg: analyze(aggMatrix(items, maps), method),
+    per: maps.map((m) => analyze(expertMatrix(items, m), method)),
     answered: maps.map((m) => answeredCount(items, m)),
     maps,
   };
@@ -146,9 +176,9 @@ export type Synth = {
   tie: boolean;
 };
 
-export function synthesis(criteria: Criterion[], alts: Alternative[], expertIds: string[], idx: JIndex): Synth {
-  const wr = sheetResult(CRIT_SHEET, criteria, expertIds, idx).agg.w;
-  const loc = criteria.map((c) => sheetResult(altSheet(c.id), alts, expertIds, idx).agg.w);
+export function synthesis(criteria: Criterion[], alts: Alternative[], expertIds: string[], idx: JIndex, method: WeightMethod = DEFAULT_WEIGHT_METHOD): Synth {
+  const wr = sheetResult(CRIT_SHEET, criteria, expertIds, idx, method).agg.w;
+  const loc = criteria.map((c) => sheetResult(altSheet(c.id), alts, expertIds, idx, method).agg.w);
   const rows = alts.map((a, i) => {
     const contrib = wr.map((w, c) => w * (loc[c]?.[i] ?? 0));
     return { name: a.name, loc: loc.map((l) => l[i] ?? 0), contrib, g: contrib.reduce((x, y) => x + y, 0), rank: 0 };

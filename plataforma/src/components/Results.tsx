@@ -3,7 +3,8 @@
 import { useMemo, useState, type CSSProperties } from 'react';
 import type { Alternative, Criterion, DecisionMatrix, JudgmentRow, Method, WeightingMethod } from '@/lib/types';
 import {
-  CRIT_SHEET, altSheet, aggMatrix, fmt, getV, indexJudgments, pairsOf, phrase, sheetItems, sheetResult, synthesis,
+  CRIT_SHEET, DEFAULT_WEIGHT_METHOD, altSheet, aggMatrix, fmt, getV, indexJudgments, pairsOf, phrase, sheetItems, sheetResult, synthesis,
+  type WeightMethod,
 } from '@/lib/ahp';
 import { getCell, getKind, getTarget, missingTargets, normalizeMatrix, resolveTargets, targetDistance, topsisSynthesis } from '@/lib/topsis';
 import { vikorSynthesis, vikorV } from '@/lib/vikor';
@@ -15,6 +16,7 @@ import { fuzzyTopsisSynthesis } from '@/lib/fuzzy_topsis';
 import { criticWeights, entropyWeights } from '@/lib/weights';
 import SensitivitySimulator from './SensitivitySimulator';
 import ExecutiveReportModal from './ExecutiveReportModal';
+import GroupDiagnostics from './GroupDiagnostics';
 import type { MethodKey } from './ScientificMethodModal';
 
 export type ExpertLite = { id: string; label: string };
@@ -152,10 +154,12 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [sheet, setSheet] = useState(CRIT_SHEET);
   const [view, setView] = useState('agg');
+  // Cómo se obtienen los pesos AHP. Vista local: no se guarda ni cambia el Excel exportado (que usa el promedio de columnas del curso).
+  const [wm, setWm] = useState<WeightMethod>(DEFAULT_WEIGHT_METHOD);
 
   const used = withData.filter((id) => !excluded.has(id));
   // Pesos de AHP (siempre calculados para la pestaña de detalle por hoja)
-  const ahpWeights = useMemo(() => sheetResult(CRIT_SHEET, criteria, used, idx).agg.w, [criteria, used, idx]);
+  const ahpWeights = useMemo(() => sheetResult(CRIT_SHEET, criteria, used, idx, wm).agg.w, [criteria, used, idx, wm]);
   // Pesos efectivos para los métodos de ranking: CRITIC, Entropía o AHP según weighting_method
   // v de VIKOR y c*/d* de ELECTRE: el dueño los guarda en decision_matrix (onChangeV/onChangeCStar/
   // onChangeDStar); en la vista pública cada selector solo cambia una copia local, sin tocar el proyecto.
@@ -193,7 +197,7 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
   const elecSyn = useMemo(() => electreSynthesis(criteria, alternatives, dm, critWeights, cEff, dEff), [criteria, alternatives, dm, critWeights, cEff, dEff]);
   const sawSyn  = useMemo(() => sawSynthesis(criteria, alternatives, dm, critWeights), [criteria, alternatives, dm, critWeights]);
   const fuzzyTopSyn = useMemo(() => fuzzyTopsisSynthesis(criteria, alternatives, dm, critWeights), [criteria, alternatives, dm, critWeights]);
-  const syn = useMemo(() => synthesis(criteria, alternatives, used, idx), [criteria, alternatives, used, idx]);
+  const syn = useMemo(() => synthesis(criteria, alternatives, used, idx, wm), [criteria, alternatives, used, idx, wm]);
   // dmFilled: para fuzzy_topsis se verifica que haya etiquetas lingüísticas; para el resto, valores numéricos.
   const dmFilled = method === 'fuzzy_topsis'
     ? alternatives.some((a) => criteria.some((c) => typeof dm.values[a.id]?.[c.id] === 'string'))
@@ -235,14 +239,14 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
     ? [{ key: CRIT_SHEET, label: 'Criterios' }, ...criteria.map((c) => ({ key: altSheet(c.id), label: c.name }))]
     : [{ key: CRIT_SHEET, label: 'Criterios' }];
   const items = sheetItems(sheet, criteria, alternatives);
-  const r = useMemo(() => sheetResult(sheet, items, used, idx), [sheet, items, used, idx]);
-  const bad = sheets.filter((s) => !sheetResult(s.key, sheetItems(s.key, criteria, alternatives), used, idx).agg.ok).map((s) => s.label);
+  const r = useMemo(() => sheetResult(sheet, items, used, idx, wm), [sheet, items, used, idx, wm]);
+  const bad = sheets.filter((s) => !sheetResult(s.key, sheetItems(s.key, criteria, alternatives), used, idx, wm).agg.ok).map((s) => s.label);
   const colv = (i: number) => (i < 5 ? `var(--s${i + 1})` : 'var(--other)');
   const wmax = Math.max(...r.agg.w, 0.0001) * 1.12;
 
   const viewExpert = view !== 'agg' ? experts.find((e) => e.id === view) : undefined;
   const vm = viewExpert ? (idx[viewExpert.id]?.[sheet] ?? {}) : {};
-  const vr = viewExpert ? sheetResult(sheet, items, [viewExpert.id], idx) : null;
+  const vr = viewExpert ? sheetResult(sheet, items, [viewExpert.id], idx, wm) : null;
 
   const blocked = mode === 'single' ? (method !== 'ahp' ? !dmFilled : !withData.length) : decidableViews.length === 0;
   if (blocked) {
@@ -659,6 +663,20 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
 
       {mode === 'single' && (
         <>
+          {(method === 'ahp' || weightingMethod === 'ahp') && (
+            <div className="card">
+              <label className="lbl" htmlFor="wm">Cálculo de los pesos AHP</label>
+              <select id="wm" value={wm} onChange={(e) => setWm(e.target.value as WeightMethod)}>
+                <option value="mean">Promedio de columnas normalizadas (procedimiento del curso y del Excel)</option>
+                <option value="eigenvector">Eigenvector principal de Saaty (AHP-OS, artículos)</option>
+              </select>
+              <p className="hint" style={{ marginTop: 8 }}>
+                Son iguales si la matriz es consistente; con juicios algo inconsistentes el promedio de columnas es una aproximación y puede
+                diferir en centésimas. El Excel exportado sigue usando el promedio de columnas.
+                {wm === 'mean' && r.agg.diff > 0.005 && <> En la hoja que estás viendo la diferencia máxima entre ambos es {r.agg.diff.toFixed(4)}.</>}
+              </p>
+            </div>
+          )}
           {/* Simulador de Sensibilidad What-If */}
           <SensitivitySimulator
             criteria={criteria}
@@ -704,6 +722,7 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
               <div><b>{r.agg.lam.toFixed(4)}</b><small>λ max</small></div><div><b>{r.agg.ci.toFixed(4)}</b><small>CI</small></div>
               <div><b>{r.agg.ri}</b><small>RI (n={r.agg.n})</small></div><div><b>{r.agg.cr.toFixed(4)}</b><small>CR</small></div>
             </div>
+            <GroupDiagnostics items={items} result={r} method={wm} />
             <details><summary>Ver procedimiento</summary>
               <h4>Matriz agregada (media geométrica)</h4><Table names={items.map((x) => x.name)} M={aggMatrix(items, r.maps)} f={fmt} />
               <h4>Matriz normalizada</h4><Table names={items.map((x) => x.name)} M={r.agg.N} f={(x) => x.toFixed(4)} />
