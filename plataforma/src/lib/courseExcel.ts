@@ -115,9 +115,27 @@ function synthNames(ws: Ws | undefined): { crit: string[]; alt: string[] } {
   return out;
 }
 
-/** De varias fuentes del mismo nombre (encabezado, etiqueta de fila, Síntesis) el más descriptivo: los
- * estudiantes renombraron unas y otras no (p. ej. «PC-1» arriba y «PC-1 Lote baldío» en la Síntesis). */
-const best = (...c: (string | undefined)[]) => c.reduce<string>((a, x) => ((x ?? '').length > a.length ? (x as string) : a), '');
+/** Nombre sin renombrar que dejó la plantilla («Criterio 3», «Alternativa 1»). */
+const isPlaceholder = (s: string) => /^(criterio|alternativa|opcion|opción)\s*\d+$/i.test(s.trim());
+
+/** De varias fuentes del mismo nombre (encabezado, etiqueta de fila, Síntesis, hoja) el más descriptivo: los
+ * estudiantes renombraron unas y otras no (p. ej. «PC-1» arriba y «PC-1 Lote baldío» en la Síntesis). Un nombre
+ * de plantilla sin renombrar solo vale si no hay otro: «Criterio 3» no debe ganarle a «Educación» por más largo. */
+function best(...c: (string | undefined)[]): string {
+  const longest = (xs: string[]) => xs.reduce((a, x) => (x.length > a.length ? x : a), '');
+  const all = c.map((x) => (x ?? '').trim()).filter(Boolean);
+  return longest(all.filter((x) => !isPlaceholder(x))) || longest(all);
+}
+
+/** Encabezado y etiquetas de fila de la matriz agregada que hay arriba de la hoja (filas 2 y 3+): es donde
+ * el estudiante suele escribir primero los nombres. */
+function topNames(ws: Ws | undefined): { head: string[]; rows: string[] } {
+  const out = { head: [] as string[], rows: [] as string[] };
+  if (!ws) return out;
+  for (let c = 1; text(ws, 1, c); c++) out.head.push(text(ws, 1, c));
+  for (let r = 2; r < 2 + out.head.length; r++) out.rows.push(text(ws, r, 0));
+  return out;
+}
 
 /** Reconstruye un proyecto AHP desde un Excel del taller. `null` si no tiene esa estructura. */
 export function parseCourseWorkbook(wb: Wb): { imp: Imported; warnings: string[] } | null {
@@ -132,7 +150,8 @@ export function parseCourseWorkbook(wb: Wb): { imp: Imported; warnings: string[]
 
   const warnings: string[] = [];
   const syn = synthNames(wb.Sheets[names[si]]);
-  const critNames = critBlocks[0].names.map((h, i) => best(h, critBlocks[0].rowLabels[i], syn.crit[i]));
+  const top = topNames(critWs);
+  const critNames = critBlocks[0].names.map((h, i) => best(h, critBlocks[0].rowLabels[i], top.head[i], top.rows[i], syn.crit[i]));
   const criteria = critNames.map((name, i) => ({ id: 'k' + (i + 1), name, hint: '', src: null }));
 
   // Hojas de alternativas: entre Criterios y Síntesis. Primero por nombre, lo que sobre por orden.
@@ -151,7 +170,8 @@ export function parseCourseWorkbook(wb: Wb): { imp: Imported; warnings: string[]
   }
 
   const firstAlt = blocksOf(wb.Sheets[altSheets[0]])[0];
-  const alternatives = firstAlt.names.map((h, i) => ({ id: 'a' + (i + 1), name: best(h, firstAlt.rowLabels[i], syn.alt[i]) }));
+  const topAlt = topNames(wb.Sheets[altSheets[0]]);
+  const alternatives = firstAlt.names.map((h, i) => ({ id: 'a' + (i + 1), name: best(h, firstAlt.rowLabels[i], topAlt.head[i], topAlt.rows[i], syn.alt[i]) }));
 
   const perSheet: { sheet: 'crit' | string; blocks: Block[]; ids: string[] }[] = [
     { sheet: 'crit', blocks: critBlocks, ids: criteria.map((c) => c.id) },

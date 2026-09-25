@@ -63,6 +63,19 @@ const idx = indexJudgments(imp.judgments.map((j) => ({ expert_id: j.legacyId, sh
 const res = sheetResult('crit', imp.criteria, ['e1'], idx).agg;
 ok(Math.abs(res.w.reduce((a, b) => a + b, 0) - 1) < 1e-9 && Number.isFinite(res.cr), 'los juicios importados alimentan el cálculo AHP (pesos suman 1)');
 
+// Nombres de plantilla sin renombrar en los bloques de experto («Criterio 3» pesa más letras que «Educación»):
+// debe ganar el nombre real de la matriz agregada, no el de plantilla por más largo.
+{
+  const items = ['Acceso', 'Obras', 'Educación'];
+  const mk = (head: string[]) => {
+    const w = XLSX.utils.aoa_to_sheet([['AHP, Criterios'], [null, ...items], ...items.map((n) => [n]), [], ['Experto 1'], [null, ...head], ...head.map((h, i) => [h, ...head.map((_, j) => (i === j ? 1 : j > i ? 2 : null))])]);
+    return w;
+  };
+  const w2: any = { SheetNames: ['Criterios', 'Acceso', 'Síntesis'], Sheets: { Criterios: mk(['Criterio 1', 'Criterio 2', 'Criterio 3']), Acceso: sheet('AHP, Acceso', ['Alternativa 1', 'Alternativa 2'], [{ label: 'Experto 1', up: [[3]] }]), 'Síntesis': XLSX.utils.aoa_to_sheet([['x']]) } };
+  const got = parseCourseWorkbook(w2)?.imp.criteria.map((c) => c.name).join('|');
+  ok(got === items.join('|'), 'nombre real de la matriz agregada gana a «Criterio N» de plantilla: ' + got);
+}
+
 ok(parseCourseWorkbook({ SheetNames: ['Hoja1'], Sheets: { Hoja1: XLSX.utils.aoa_to_sheet([['x']]) } }) === null, 'un libro sin hoja Criterios no se reconoce');
 if (fallos) { console.error(`\n${fallos} comprobación(es) fallaron`); process.exit(1); }
 console.log('\nTodo bien.');
