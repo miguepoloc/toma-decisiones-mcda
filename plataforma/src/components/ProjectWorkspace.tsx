@@ -68,6 +68,8 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [pendDel, setPendDel] = useState<string | null>(null);
   const [nuevo, setNuevo] = useState({ name: '', role: '' });
+  // Edición en línea de nombre/perfil de un experto ya creado.
+  const [editData, setEditData] = useState<{ id: string; name: string; role: string } | null>(null);
   const [msg, setMsg] = useState('');
 
   const prio = useMemo(() => normalizePrio(project.prioritization), [project.prioritization]);
@@ -162,6 +164,13 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
     setExperts((prev) => prev.map((e) => (e.id === id ? { ...e, ...p } : e)));
     const { error } = await supabase.from('experts').update(p).eq('id', id);
     if (error) setMsg(friendlyError(error, 'No se pudo actualizar el experto.'));
+  }
+  async function saveExpertData() {
+    if (!editData) return;
+    const name = editData.name.trim();
+    if (!name) { setMsg('El experto necesita un nombre.'); return; }
+    await updateExpert(editData.id, { name, role_desc: editData.role.trim() });
+    setEditData(null);
   }
   async function removeExpert(id: string) {
     await supabase.from('experts').delete().eq('id', id);
@@ -451,10 +460,21 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
                   return (
                     <div className="card form" key={e.id}>
                       <div className="acts" style={{ justifyContent: 'space-between' }}>
-                        <div>
-                          <b>{e.name}</b> {e.role_desc && <span className="muted">· {e.role_desc}</span>}
-                          <div className="savest">{n} juicios · {e.filled_by === 'owner' ? 'llenado por ti' : 'llenado por el experto'}</div>
-                        </div>
+                        {editData?.id === e.id ? (
+                          <form className="two eq" style={{ flex: 1, marginRight: 12 }} onSubmit={(ev) => { ev.preventDefault(); void saveExpertData(); }}>
+                            <div><label className="lbl" htmlFor={'edn' + e.id}>Nombre</label><input id={'edn' + e.id} type="text" autoFocus maxLength={200} value={editData.name} onChange={(ev) => setEditData({ ...editData, name: ev.target.value })} /></div>
+                            <div><label className="lbl" htmlFor={'edr' + e.id}>Rol o perfil</label><input id={'edr' + e.id} type="text" maxLength={300} value={editData.role} onChange={(ev) => setEditData({ ...editData, role: ev.target.value })} /></div>
+                            <div className="acts">
+                              <button type="submit" className="btn sm primary">Guardar</button>
+                              <button type="button" className="btn sm" onClick={() => setEditData(null)}>Cancelar</button>
+                            </div>
+                          </form>
+                        ) : (
+                          <div>
+                            <b>{e.name}</b> {e.role_desc && <span className="muted">· {e.role_desc}</span>}
+                            <div className="savest">{n} juicios · {e.filled_by === 'owner' ? 'llenado por ti' : 'llenado por el experto'}</div>
+                          </div>
+                        )}
                         <span className={'pill ' + (e.status === 'submitted' ? '' : e.status === 'in_progress' ? 'warn' : 'neutral')}>
                           {e.status === 'submitted' ? 'Enviado' : e.status === 'in_progress' ? 'En curso' : 'Pendiente'}
                         </span>
@@ -462,6 +482,8 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
                       <div className="linkbox"><input type="text" readOnly value={link} aria-label={`Enlace de ${e.name}`} onFocus={(ev) => ev.target.select()} /><button type="button" className="btn sm" onClick={() => copy(link)}>Copiar enlace</button></div>
                       <div className="acts">
                         <button type="button" className="btn sm primary" onClick={() => setEditing(e.id)}>Llenar yo por él/ella</button>
+                        <button type="button" className="btn sm" onClick={() => setEditData({ id: e.id, name: e.name, role: e.role_desc })}>Editar datos</button>
+                        <button type="button" className={'btn sm' + (pendDel === 'l' + e.id ? ' danger' : '')} onClick={() => twoClick('l' + e.id, () => updateExpert(e.id, { invite_token: hexToken() }))}>{pendDel === 'l' + e.id ? '¿Seguro? El enlace anterior deja de funcionar' : 'Enlace nuevo'}</button>
                         {e.status === 'submitted' && <button type="button" className="btn sm" onClick={() => updateExpert(e.id, { status: 'in_progress', submitted_at: null })}>Reabrir para que edite</button>}
                         <button type="button" className={'btn sm' + (pendDel === 'e' + e.id ? ' danger' : '')} onClick={() => twoClick('e' + e.id, () => removeExpert(e.id))}>{pendDel === 'e' + e.id ? '¿Seguro? Borra sus respuestas' : 'Quitar'}</button>
                       </div>
