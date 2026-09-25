@@ -78,6 +78,21 @@ export function W() {
 
 export const qs = (n: string) => "'" + n.replace(/'/g, "''") + "'!";
 
+/** Pasos de iteración de potencias que lleva la hoja (basta de sobra para matrices con CR < 0.1). */
+const ITER = 40;
+
+/** v0 = pesos iguales; v_{k+1} = A·v_k / Σ(A·v_k). Devuelve v0..v_K: lo mismo que calculan las fórmulas de la hoja. */
+function powerIterates(A: number[][], K: number): number[][] {
+  const n = A.length;
+  const out: number[][] = [Array(n).fill(1 / n)];
+  for (let k = 0; k < K; k++) {
+    const q = A.map((r) => r.reduce((a, x, j) => a + x * out[k][j], 0));
+    const t = q.reduce((a, b) => a + b, 0);
+    out.push(q.map((x) => x / t));
+  }
+  return out;
+}
+
 /** Hoja de juicios por pares AHP: usada siempre para «Criterios» (deriva los pesos, sea cual sea el
  * método elegido para comparar alternativas) y, cuando el método es AHP, una vez por cada criterio
  * (comparación de alternativas). No es "el método AHP" en el sentido de excel-*-sheet.ts, es
@@ -86,8 +101,11 @@ export function ahpSheet(items: Item[], maps: JMap[], exNames: string[], title: 
   const n = items.length, names = items.map((x) => x.name), { put, fin } = W(), E = maps.length;
   const A = aggMatrix(items, maps), an = analyze(A), EM = maps.map((m) => expertMatrix(items, m));
   const rSum = 3 + n, rNH = 5 + n, rN0 = 6 + n, rVH = 7 + 2 * n, rA0 = 8 + 2 * n, rLam = 8 + 3 * n, rCI = 9 + 3 * n,
-    rRI = 10 + 3 * n, rCR = 11 + 3 * n, rOK = 12 + 3 * n, rInd = 14 + 3 * n, vc = n + 1;
+    rRI = 10 + 3 * n, rCR = 11 + 3 * n, rOK = 12 + 3 * n, vc = n + 1;
+  // Iteración de potencias (eigenvector de Saaty): una fila de encabezado, la fila inicial (pesos iguales) y K iteraciones.
+  const rItH = 14 + 3 * n, rIt0 = rItH + 1, rItLast = rIt0 + ITER, rInd = rItLast + 2;
   const t0 = (b: number) => rInd + 2 + b * (n + 3), m0 = (b: number) => t0(b) + 2, last = colL(n);
+  const iters = powerIterates(A, ITER);
   put(1, 0, title, { s: stl.title });
   put(1, 1, note, { s: stl.note });
   for (let j = 0; j < n; j++) put(2, 1 + j, names[j], { s: stl.hdr });
@@ -103,11 +121,13 @@ export function ahpSheet(items: Item[], maps: JMap[], exNames: string[], title: 
   put(rSum, 0, 'Suma', { s: stl.b });
   for (let j = 0; j < n; j++) put(rSum, 1 + j, A.reduce((a, r) => a + r[j], 0), { f: `SUM(${colL(1 + j)}3:${colL(1 + j)}${2 + n})`, s: stl.b, z: '0.000' });
   put(rNH, 0, 'Normalizada', { s: stl.b });
-  put(rNH, vc, 'Vector prioridad', { s: stl.b });
+  put(rNH, vc, 'Vector prioridad (eigenvector de Saaty)', { s: stl.b });
+  put(rNH, vc + 1, 'Promedio de columnas (atajo del curso)', { s: stl.b });
   for (let i = 0; i < n; i++) {
     put(rN0 + i, 0, names[i]);
     for (let j = 0; j < n; j++) put(rN0 + i, 1 + j, an.N[i]?.[j] ?? 0, { f: `${colL(1 + j)}${3 + i}/${colL(1 + j)}$${rSum}`, z: '0.0000' });
-    put(rN0 + i, vc, an.w[i], { f: `AVERAGE(B${rN0 + i}:${last}${rN0 + i})`, s: stl.key, z: '0.0000' });
+    put(rN0 + i, vc, iters[ITER][i], { f: `${colL(1 + i)}${rItLast}`, s: stl.key, z: '0.0000' });
+    put(rN0 + i, vc + 1, an.wMean[i], { f: `AVERAGE(B${rN0 + i}:${last}${rN0 + i})`, z: '0.0000' });
   }
   put(rVH, 0, 'Verificación de consistencia', { s: stl.b12 });
   const Aw = A.map((r) => r.reduce((a, x, j) => a + x * an.w[j], 0));
@@ -124,6 +144,19 @@ export function ahpSheet(items: Item[], maps: JMap[], exNames: string[], title: 
   put(rCR, 0, 'CR = CI / RI', { s: stl.b }); put(rCR, 1, an.cr, { f: `IFERROR(B${rCI}/B${rRI},0)`, s: stl.key, z: '0.0000' });
   put(rOK, 0, '¿Consistente? (CR < 0.10)', { s: stl.b });
   put(rOK, 1, an.ok ? 'Sí, consistente' : 'No, revisar juicios', { f: `IF(B${rCR}<0.1,"Sí, consistente","No, revisar juicios")`, s: stl.b });
+  put(rItH, 0, `Eigenvector de Saaty por iteración de potencias (${ITER} pasos): v ← A·v / Σ(A·v), desde pesos iguales`, { s: stl.b12 });
+  for (let k = 0; k <= ITER; k++) {
+    const r = rIt0 + k;
+    put(r, 0, k === 0 ? 'v0 (pesos iguales)' : 'v' + k);
+    for (let i = 0; i < n; i++) {
+      const o: PutOpts = { z: '0.0000' };
+      if (k > 0) {
+        const prev = `$B${r - 1}:$${last}${r - 1}`;
+        o.f = `SUMPRODUCT($B$${3 + i}:$${last}$${3 + i},${prev})/SUMPRODUCT($B$${rSum}:$${last}$${rSum},${prev})`;
+      }
+      put(r, 1 + i, iters[k][i], o);
+    }
+  }
   put(rInd, 0, 'Juicios individuales de los ' + E + ' expertos (entrada de GEOMEAN() de arriba)', { s: stl.b12 });
   for (let b = 0; b < E; b++) {
     put(t0(b), 0, `Experto ${b + 1}: ${exNames[b]}`, { s: stl.sub });
@@ -138,7 +171,7 @@ export function ahpSheet(items: Item[], maps: JMap[], exNames: string[], title: 
       }
     }
   }
-  const colsW = [34, ...Array.from({ length: Math.max(n, 4) + 1 }, () => 17)];
+  const colsW = [34, ...Array.from({ length: Math.max(n, 4) + 2 }, () => 17)];
   return { ws: fin(colsW, [{ hpt: 30 }], [{ s: { r: 0, c: 1 }, e: { r: 0, c: Math.max(n, 4) } }]), rN0, vc, w: an.w };
 }
 

@@ -83,7 +83,7 @@ Estado hoy: repo público, MIT, 40 commits, primer commit 18 sep 2026, sin relea
 | R7 | Documentación en inglés: README, tutorial corto, descripción de la arquitectura y de cada método con su referencia | Público internacional | 2-3 días |
 | R8 | ~~**Monte Carlo de pesos**~~ **Hecho (25 sep 2026)**: `src/lib/ahpGroup.ts` + panel en Resultados; probado contra los casos de validación de Goepel (2018) | Cierra la brecha con AHP-OS | — |
 | R9 | ~~**Índice de consenso de grupo**~~ **Hecho (25 sep 2026)**: S* de Goepel (2018, ec. 11-21), entropía de Shannon α/β | Idem | — |
-| R11 | ~~Eigenvector exacto~~ **Hecho como opción** (25 sep 2026, ver §5.2.1); falta decidir si es el predeterminado (Excel + plantilla HTML) | Pesos idénticos al artículo de 2021 y a AHP-OS | 1-2 días si se hace predeterminado |
+| R11 | ~~Eigenvector exacto~~ **Hecho y predeterminado** (25 sep 2026, ver §5.2.1), Excel incluido; queda la plantilla HTML heredada sin sincronizar | Pesos idénticos al artículo de 2021 y a AHP-OS | — |
 | R10 | Declarar límites explícitos: jerarquía plana, sin ANP, distancia euclidiana (no por red vial), etc. | Los revisores castigan más lo oculto que lo declarado | 0.5 día |
 
 No hacer: subcriterios multinivel (semanas de trabajo y toca las tres copias de la matemática, ver CLAUDE.md); ANP; nuevas
@@ -118,12 +118,11 @@ no sirve como referencia.)
 1. **Eigenvector exacto (resuelto, con una salvedad).** Con la matriz de la Tabla IV del artículo (triángulo superior + recíprocos exactos), el
    eigenvector principal da [0.5482, 0.1425, 0.2018, 0.1075] y CR ≈ 0.0646 (publicado: 0.5482 / 0.1423 / 0.2020 / 0.1075, CR 0.0652; la
    diferencia de 2×10⁻⁴ viene del redondeo de la tabla). El promedio de columnas normalizadas da [0.5355, 0.1476, 0.2063, 0.1107] (0.013 de diferencia en
-   el peso principal). **`analyze()` ahora admite ambos métodos** (`'mean'` | `'eigenvector'`, `ahp.ts`), con prueba
-   `scripts/check-ahp-eigen.ts`, y `Results` tiene un selector (vista local; no cambia el Excel exportado). **El predeterminado sigue siendo `'mean'`** porque
-   la sesión 2 del curso enseña explícitamente ese procedimiento y el notebook 01 lo valida contra `pyDecision.ahp_method(wd='m')`; cambiar el
-   predeterminado en mitad del semestre haría que la app no coincida con el Excel y el notebook de los estudiantes. Para el artículo basta con
-   reportar eigenvector. **Decisión pendiente:** si se quiere que el eigenvector sea el predeterminado, es una constante (`DEFAULT_WEIGHT_METHOD`), pero
-   además hay que cambiar las fórmulas del Excel exportado y la plantilla HTML (las otras dos copias de la matemática), y los materiales del curso.
+   el peso principal). **`analyze()` admite ambos métodos** (`'mean'` | `'eigenvector'`, `ahp.ts`) y **desde el 25 sep 2026 el predeterminado es el eigenvector** (decisión del docente, que
+   hará la aclaración a los estudiantes: la sesión 2 y el notebook 01 enseñan el promedio de columnas, validado contra `pyDecision wd='m'`). `Results` tiene un selector para
+   ver el promedio del curso. El Excel exportado calcula el eigenvector con iteración de potencias en fórmulas vivas y muestra el promedio al lado; `test:excel:recalc`
+   (LibreOffice) confirma que las fórmulas recalculadas coinciden. Pruebas: `check-ahp.ts` (ambos métodos), `check-ahp-eigen.ts`. **No sincronizado:** la plantilla HTML
+   heredada (`prototipos/fuente/mcda_template.html`) y los HTML generados conservan el promedio de columnas.
 2. **Los porcentajes del artículo (62.36 / 30.88 / 6.76 %) no se reproducen con los archivos disponibles.** Lo que sí existe:
    - `Final/Resultado.shp` (polígonos con `DN` 1/2/3) equivale a redondear `Final.tif` con cortes 1.5 y 2.5: **82.89 % / 14.03 % / 3.07 %** (7 018.0 / 1 188.1 /
      260.2 km²; total 8 466.3 km², idéntico al del ráster).

@@ -75,7 +75,7 @@ export function aggMatrix(items: Item[], maps: JMap[]): number[][] {
  */
 export type WeightMethod = 'mean' | 'eigenvector';
 /** Método por defecto: el del curso, para que la app coincida con el Excel y el notebook que ven los estudiantes. */
-export const DEFAULT_WEIGHT_METHOD: WeightMethod = 'mean';
+export const DEFAULT_WEIGHT_METHOD: WeightMethod = 'eigenvector';
 
 export type Analysis = {
   n: number;

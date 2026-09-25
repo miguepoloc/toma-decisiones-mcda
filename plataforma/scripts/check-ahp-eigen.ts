@@ -26,7 +26,7 @@ const published = [0.5482, 0.1423, 0.2020, 0.1075];
 {
   const m = analyze(T4, 'mean');
   const e = analyze(T4, 'eigenvector');
-  ok(m.method === 'mean' && analyze(T4).method === 'mean', 'el método por defecto es el del curso (promedio de columnas)');
+  ok(m.method === 'mean' && analyze(T4).method === 'eigenvector', 'el método por defecto es el eigenvector; el promedio de columnas (curso) se pide explícitamente');
   ok(cerca(m.w[0], 0.5355, 5e-4) && Math.abs(m.w[0] - e.w[0]) > 0.01, `promedio de columnas = ${m.w[0].toFixed(4)}: difiere ${(e.w[0] - m.w[0]).toFixed(4)} del eigenvector en el peso principal`);
   ok(m.wEigen.every((x, i) => cerca(x, e.wEigen[i], 1e-12)) && e.wMean.every((x, i) => cerca(x, m.wMean[i], 1e-12)), 'ambos vectores se exponen siempre (wMean, wEigen)');
 }

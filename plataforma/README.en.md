@@ -16,13 +16,13 @@ Vercel. The primary documentation is in Spanish ([README.md](README.md)); this f
 - **AHP + GIS geoviewer.** Alternatives are cells of a territory. Load your own layers (GeoTIFF, GeoJSON, zipped shapefile, KML, GPX),
   edit suitability rules, weight them with an expert panel, query any point, and export GeoTIFF (+ QGIS style), PNG, KMZ, CSV, Excel.
   Source files are read in the browser and never uploaded whole.
-- **Excel export with live formulas** and cached values; the workbook can be re-imported.
+- **Excel export with live formulas** and cached values (the AHP eigenvector is computed by power iteration in cell formulas, next to the course's column-average shortcut); the workbook can be re-imported.
 - **Method wizard** (`/metodo`) that helps pick a method with three questions.
 
 ## How the maths is verified
 
-The same computations exist in three places (TypeScript library, an HTML tool, and the formulas of the exported workbook) and must
-agree. `npm test` checks every method against exact reference values taken from the course notebooks (built on
+The same computations live in the TypeScript library and in the formulas of the exported workbook and must agree (a legacy HTML
+prototype under `prototipos/` keeps the course's column-average AHP and is not kept in sync). `npm test` checks every method against exact reference values taken from the course notebooks (built on
 [`pyDecision`](https://github.com/Valdecy/pyDecision)); `npm run test:excel` round-trips the workbooks; a LibreOffice headless
 recalculation test checks that the Excel formulas evaluate on their own.
 

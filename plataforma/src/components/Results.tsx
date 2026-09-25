@@ -154,7 +154,7 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [sheet, setSheet] = useState(CRIT_SHEET);
   const [view, setView] = useState('agg');
-  // Cómo se obtienen los pesos AHP. Vista local: no se guarda ni cambia el Excel exportado (que usa el promedio de columnas del curso).
+  // Cómo se obtienen los pesos AHP. Vista local: no se guarda. El Excel exportado siempre calcula el eigenvector y muestra el promedio de columnas al lado.
   const [wm, setWm] = useState<WeightMethod>(DEFAULT_WEIGHT_METHOD);
 
   const used = withData.filter((id) => !excluded.has(id));
@@ -667,13 +667,14 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
             <div className="card">
               <label className="lbl" htmlFor="wm">Cálculo de los pesos AHP</label>
               <select id="wm" value={wm} onChange={(e) => setWm(e.target.value as WeightMethod)}>
-                <option value="mean">Promedio de columnas normalizadas (procedimiento del curso y del Excel)</option>
-                <option value="eigenvector">Eigenvector principal de Saaty (AHP-OS, artículos)</option>
+                <option value="eigenvector">Eigenvector principal de Saaty (predeterminado; el de AHP-OS y los artículos)</option>
+                <option value="mean">Promedio de columnas normalizadas (procedimiento a mano del curso)</option>
               </select>
               <p className="hint" style={{ marginTop: 8 }}>
                 Son iguales si la matriz es consistente; con juicios algo inconsistentes el promedio de columnas es una aproximación y puede
-                diferir en centésimas. El Excel exportado sigue usando el promedio de columnas.
-                {wm === 'mean' && r.agg.diff > 0.005 && <> En la hoja que estás viendo la diferencia máxima entre ambos es {r.agg.diff.toFixed(4)}.</>}
+                diferir en centésimas. El Excel exportado calcula el eigenvector con fórmulas vivas (iteración de potencias) y muestra el promedio de
+                columnas al lado para compararlos.
+                {r.agg.diff > 0.0005 && <> En la hoja que estás viendo la diferencia máxima entre ambos es {r.agg.diff.toFixed(4)}.</>}
               </p>
             </div>
           )}

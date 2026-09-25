@@ -33,11 +33,19 @@ const cerca = (a: number, b: number, tol = 5e-4) => Math.abs(a - b) <= tol;
     crit.forEach((c, ci) => mk(alt, (i) => as[ci][i], e, altSheet(c.id)));
   }
   const idx = indexJudgments(rows), ids = ['e0', 'e1', 'e2'];
+  // Promedio de columnas (procedimiento a mano del curso, Excel y notebook 01): valores de la herramienta HTML / el Excel del ejercicio.
+  const rm = sheetResult(CRIT_SHEET, crit, ids, idx, 'mean');
+  ok(cerca(rm.agg.cr, 0.0086, 1e-4), `[promedio] CR de criterios = ${rm.agg.cr.toFixed(4)} (esperado 0.0086)`);
+  ['0.3204', '0.2378', '0.1170', '0.1875', '0.1373'].forEach((w, i) => ok(cerca(rm.agg.w[i], Number(w), 1e-4), `[promedio] peso criterio ${i + 1} = ${rm.agg.w[i].toFixed(4)} (esperado ${w})`));
+  const sm = synthesis(crit, alt, ids, idx, 'mean');
+  ok(alt[sm.order[0]].name === 'SSL' && cerca(sm.rows[2].g, 0.349, 1e-3), `[promedio] ganador = ${alt[sm.order[0]].name} con ${sm.rows[sm.order[0]].g.toFixed(4)} (esperado SSL 0.3490)`);
+  // Eigenvector de Saaty (predeterminado de la plataforma): valores de numpy.linalg.eig sobre las mismas matrices agregadas.
   const rc = sheetResult(CRIT_SHEET, crit, ids, idx);
-  ok(cerca(rc.agg.cr, 0.0086, 1e-4), `CR de criterios = ${rc.agg.cr.toFixed(4)} (esperado 0.0086)`);
-  ['0.3204', '0.2378', '0.1170', '0.1875', '0.1373'].forEach((w, i) => ok(cerca(rc.agg.w[i], Number(w), 1e-4), `peso criterio ${i + 1} = ${rc.agg.w[i].toFixed(4)} (esperado ${w})`));
+  ok(rc.agg.method === 'eigenvector', 'el método predeterminado es el eigenvector');
+  ok(cerca(rc.agg.cr, 0.0086, 1e-4), `[eigenvector] CR de criterios = ${rc.agg.cr.toFixed(4)} (esperado 0.0086)`);
+  ['0.3207', '0.2381', '0.1166', '0.1872', '0.1374'].forEach((w, i) => ok(cerca(rc.agg.w[i], Number(w), 1e-4), `[eigenvector] peso criterio ${i + 1} = ${rc.agg.w[i].toFixed(4)} (numpy ${w})`));
   const s = synthesis(crit, alt, ids, idx);
-  ok(alt[s.order[0]].name === 'SSL' && cerca(s.rows[2].g, 0.349, 1e-3), `ganador = ${alt[s.order[0]].name} con ${s.rows[s.order[0]].g.toFixed(4)} (esperado SSL 0.3490)`);
+  ok(alt[s.order[0]].name === 'SSL' && cerca(s.rows[2].g, 0.3497, 1e-4), `[eigenvector] ganador = ${alt[s.order[0]].name} con ${s.rows[s.order[0]].g.toFixed(4)} (numpy SSL 0.3497)`);
   ok(cerca(s.rows.reduce((a, r) => a + r.g, 0), 1, 1e-9), 'las prioridades globales suman 1');
 }
 // 4) Sin expertos: no debe fallar (NaN)
