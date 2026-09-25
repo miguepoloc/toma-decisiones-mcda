@@ -43,7 +43,7 @@ export default function GeoPublishPanel(p: Props) {
   return (
     <section className="gv-sec">
       <header><h4>Vista pública</h4><span className={'gv-badge ' + (p.isPublic ? 'ok' : 'warn')}>{p.isPublic ? 'público' : 'privado'}</span></header>
-      <p className="gv-hint">Cualquiera con el enlace ve <b>solo el resultado</b>: el mapa, las clases, los pesos y, al hacer clic, el % de idoneidad de un punto. No ve tus capas de entrada, tus expertos ni tus juicios.</p>
+      <p className="gv-hint">Cualquiera con el enlace ve <b>el resultado y su AHP</b>: el mapa, las clases, los pesos de los criterios con su análisis (matriz de comparaciones, consistencia, consenso, incertidumbre y la consistencia y los pesos de cada experto <b>sin nombre</b>) y, al hacer clic, el % de idoneidad de un punto. No ve tus capas de entrada ni los nombres de tus expertos.</p>
       <label className="gv-check">
         <input type="checkbox" checked={p.isPublic} onChange={(e) => p.onTogglePublic(e.target.checked)} /> Hacer público con enlace
       </label>

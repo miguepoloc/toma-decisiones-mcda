@@ -19,6 +19,7 @@ import { findParcels } from '@/lib/geo/patches';
 import { describeFn, describeVeto, suitability, vetoed } from '@/lib/geo/membership';
 import { downloadLayer, getQuota, type Quota } from '@/lib/geo/store';
 import { CAT_PREFIX, getCatalogRow, loadCatalogLayer } from '@/lib/geo/catalog';
+import { ahpSummary } from '@/lib/geo/ahpSummary';
 import { encodePlanes, type PublishedMeta } from '@/lib/geo/publish';
 import type { Example } from '@/lib/geo/examples';
 import GeoPublishPanel from './GeoPublishPanel';
@@ -392,6 +393,7 @@ export default function GeoVisor(props: Props) {
       thresholds, classes: { alta: stats.alta.ha, media: stats.media.ha, noapta: stats.noapta.ha, excl: stats.excl.ha },
       pct: { alta: stats.alta.pct, media: stats.media.pct, noapta: stats.noapta.pct }, evaluableHa: stats.evaluableHa,
       attribution: data.attribution, sig: resultSig,
+      ahp: ahpSummary(criteria, weightResult) ?? undefined,
     };
     return { b64, meta };
   }

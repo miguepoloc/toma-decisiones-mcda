@@ -1,8 +1,8 @@
 'use client';
 
-/** Vista pública (solo lectura) de un mapa de aptitud publicado: el mapa, las clases, los pesos y,
- * al hacer clic, el % de idoneidad del punto. Recibe únicamente el resultado publicado (dos planos
- * Uint8 + metadatos): nunca las capas de entrada ni los expertos. */
+/** Vista pública (solo lectura) de un mapa de aptitud publicado: el mapa, las clases, los pesos, el análisis AHP de los criterios
+ * (si se publicó) y, al hacer clic, el % de idoneidad del punto. Recibe únicamente el resultado publicado (dos planos Uint8 +
+ * metadatos): nunca las capas de entrada ni los nombres de los expertos. */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { lonLatToPixel, pixelToLonLat } from '@/lib/geo/crs';
 import { toUrl } from '@/lib/geo/canvas';
@@ -13,6 +13,7 @@ import { CLASS_ALTA, CLASS_EXCLUDED, CLASS_MODERADA, CLASS_NO_APTA, MASK_EXCLUDE
 import GeoMap, { type BasemapKey, type GeoMapHandle, type MapMarker, type RasterOverlay } from './GeoMap';
 import { BasemapChips, ResultLegend, StyleChips } from './GeoHud';
 import { Icon, ICONS } from './GeoBits';
+import PublicAhp from './PublicAhp';
 
 export type PublicGeo = { status: 'ok'; title: string; objective: string; grid_b64: string; meta: PublishedMeta; updated_at: string };
 
@@ -71,6 +72,7 @@ export default function PublicGeoView({ data }: { data: PublicGeo }) {
                 </div>
               ))}
             </section>
+            {meta.ahp && <PublicAhp ahp={meta.ahp} />}
             <section className="gv-sec">
               <header><h4>Superficie por clase</h4></header>
               <div className="gv-stats" style={{ display: 'block' }}>

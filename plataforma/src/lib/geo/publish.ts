@@ -4,6 +4,7 @@
 import { MASK_EXCLUDED, MASK_NODATA, MASK_VALID } from './suitability.ts';
 import type { Bounds } from './grid.ts';
 import type { GeoGrid } from '../types.ts';
+import type { AhpSummary } from './ahpSummary.ts';
 
 /** Códigos del plano de clase publicado. */
 export const CODE_EXCLUDED = 0;
@@ -22,6 +23,8 @@ export type PublishedMeta = {
   pct: { alta: number; media: number; noapta: number };                       // % del área evaluada
   evaluableHa: number;
   attribution?: string;
+  /** AHP de los criterios (matriz, λmax, CR, consenso, incertidumbre, expertos sin nombre). Ausente en publicaciones anteriores. */
+  ahp?: AhpSummary;
   /** Firma de lo que produjo este mapa (pesos, reglas, umbrales, capas): para avisar si quedó desactualizado. */
   sig?: string;
 };
