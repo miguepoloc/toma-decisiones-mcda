@@ -22,6 +22,28 @@ export const LINGUISTIC_ALT: Record<string, TFN> = {
 export const LINGUISTIC_LABELS = ['VP', 'P', 'F', 'G', 'VG'] as const;
 export type LinguisticLabel = (typeof LINGUISTIC_LABELS)[number];
 
+/** Valor nítido de una etiqueta lingüística: el centroide de su TFN, (l + m + u) / 3. Es la desdifusificación más simple y la que
+ * se usa para poder aplicar métodos que necesitan números (p. ej. pesos CRITIC o de entropía) a una matriz lingüística
+ * (ul Amin et al., 2022: CRITIC difuso y luego desdifusificación). */
+export function defuzzify(label: LinguisticLabel): number {
+  const [l, m, u] = LINGUISTIC_ALT[label];
+  return (l + m + u) / 3;
+}
+
+/** Copia de la matriz con cada etiqueta lingüística reemplazada por su valor nítido (centroide). Las celdas vacías cuentan como
+ * «Regular» (F), igual que en fuzzyTopsisSynthesis; las numéricas se dejan tal cual. Solo para calcular pesos objetivos. */
+export function defuzzifyMatrix(dm: DecisionMatrix, criteria: Criterion[], alternatives: Alternative[]): DecisionMatrix {
+  const values: DecisionMatrix['values'] = {};
+  for (const a of alternatives) {
+    values[a.id] = {};
+    for (const c of criteria) {
+      const v = dm.values[a.id]?.[c.id];
+      values[a.id][c.id] = typeof v === 'number' ? v : defuzzify(getLabel(dm, a.id, c.id));
+    }
+  }
+  return { ...dm, values };
+}
+
 // ---- Aritmética difusa triangular ----
 
 /** Suma de dos TFN. */

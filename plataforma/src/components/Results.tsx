@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useMemo, useState, type CSSProperties } from 'react';
+import { useMemo, useState, type CSSProperties } from 'react';
 import ElectreGraph from './ElectreGraph';
 import MethodCharts, { type MethodChartData } from './MethodCharts';
 import type { Alternative, Criterion, DecisionMatrix, JudgmentRow, Method, WeightingMethod } from '@/lib/types';
@@ -14,7 +14,7 @@ import VikorPanel from './VikorPanel';
 import { promethee, prometheeSynthesis } from '@/lib/promethee';
 import { electreCStar, electreDStar, electreSynthesis } from '@/lib/electre';
 import { saw, sawSynthesis } from '@/lib/saw';
-import { fuzzyTopsisSynthesis } from '@/lib/fuzzy_topsis';
+import { defuzzifyMatrix, fuzzyTopsisSynthesis } from '@/lib/fuzzy_topsis';
 import { criticWeights, entropyWeights } from '@/lib/weights';
 import SensitivitySimulator from './SensitivitySimulator';
 import ExecutiveReportModal, { type ReportAhpInfo, type ReportSheetCr } from './ExecutiveReportModal';
@@ -188,8 +188,10 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
   const changeDStar = (d: number) => (onChangeDStar ? onChangeDStar(d) : setDLocal(d));
   const critWeights = useMemo(() => {
     if (method === 'ahp') return ahpWeights;
-    if (weightingMethod === 'critic') return criticWeights(criteria, alternatives, dm);
-    if (weightingMethod === 'entropy') return entropyWeights(criteria, alternatives, dm);
+    // CRITIC y Entropía necesitan números: en Fuzzy TOPSIS las etiquetas se desdifusifican (centroide) antes de calcularlos.
+    const dmNum = method === 'fuzzy_topsis' ? defuzzifyMatrix(dm, criteria, alternatives) : dm;
+    if (weightingMethod === 'critic') return criticWeights(criteria, alternatives, dmNum);
+    if (weightingMethod === 'entropy') return entropyWeights(criteria, alternatives, dmNum);
     return ahpWeights; // 'ahp' (default)
   }, [method, weightingMethod, ahpWeights, criteria, alternatives, dm]);
 
@@ -658,18 +660,14 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
                     <tr>
                       <th></th>
                       {compareViews.map((m) => (
-                        <Fragment key={m.key}>
-                          <th className="n">
-                            <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: 99, background: m.color, marginRight: 5 }} />{m.label}
-                          </th>
-                          {m.key === 'promethee' && (
-                            <th className="n">
-                              <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: 99, background: 'var(--m-electre)', marginRight: 5 }} />ELECTRE
-                              <span className="muted" style={{ display: 'block', fontSize: 11, fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>no ordena: supera / es superada</span>
-                            </th>
-                          )}
-                        </Fragment>
+                        <th key={m.key} className="n">
+                          <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: 99, background: m.color, marginRight: 5 }} />{m.label}
+                        </th>
                       ))}
+                      {/* ELECTRE no ordena: va al final, con su propia lectura (ver la nota bajo la tabla) */}
+                      <th className="n" title="ELECTRE no da posiciones: muestra a cuántas alternativas supera cada una (↑) y por cuántas es superada (↓)">
+                        <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: 99, background: 'var(--m-electre)', marginRight: 5 }} />ELECTRE
+                      </th>
                       <th className="n">Consenso</th>
                     </tr>
                   </thead>
@@ -686,26 +684,18 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
                             const isFirst = !m.tie && !m.soft && row?.rank === 1;
                             const inSoft = !m.tie && !!m.soft?.includes(a.name);
                             return (
-                              <Fragment key={m.key}>
-                                <td className="n">
-                                  {m.tie || !row
-                                    ? <span className="muted mono">—</span>
-                                    : <span className="mono" style={{ fontWeight: isFirst ? 700 : 500, color: isFirst ? 'var(--pass)' : 'var(--ink)' }} title={inSoft ? 'Conjunto de compromiso de VIKOR: no hay ganador único' : undefined}>#{row.rank}{inSoft ? ' ◆' : ''}</span>}
-                                </td>
-                                {m.key === 'promethee' && (
-                                  <td className="n">
-                                    {electreCompare.hasData ? (
-                                      <span style={{ display: 'grid', gap: 1, justifyItems: 'end', fontSize: 12.5, lineHeight: 1.35 }}>
-                                        <span>Supera a <b className="mono">{electreCompare.out[ai]}</b></span>
-                                        <span className="muted">Superada por <b className="mono" style={{ color: 'var(--ink)' }}>{electreCompare.inn[ai]}</b></span>
-                                        {elecFirst && <span style={{ color: 'var(--pass)', fontWeight: 700 }}>✓ nadie la supera</span>}
-                                      </span>
-                                    ) : <span className="muted mono">—</span>}
-                                  </td>
-                                )}
-                              </Fragment>
+                              <td key={m.key} className="n">
+                                {m.tie || !row
+                                  ? <span className="muted mono">—</span>
+                                  : <span className="mono" style={{ fontWeight: isFirst ? 700 : 500, color: isFirst ? 'var(--pass)' : 'var(--ink)' }} title={inSoft ? 'Conjunto de compromiso de VIKOR: no hay ganador único' : undefined}>#{row.rank}{inSoft ? ' ◆' : ''}</span>}
+                              </td>
                             );
                           })}
+                          <td className="n">
+                            {electreCompare.hasData
+                              ? <span className="mono" style={{ fontWeight: elecFirst ? 700 : 500, color: elecFirst ? 'var(--pass)' : 'var(--ink)' }} title={`Supera a ${electreCompare.out[ai]} y es superada por ${electreCompare.inn[ai]}${elecFirst ? ' — única alternativa que nadie supera' : ''}`}>{elecFirst ? '✓ ' : ''}{electreCompare.out[ai]}↑ {electreCompare.inn[ai]}↓</span>
+                              : <span className="muted mono">—</span>}
+                          </td>
                           <td className="n muted" style={{ fontSize: 12.5 }}><b className="mono" style={{ color: 'var(--ink)' }}>{firsts}/{totalMethods}</b> en 1er lugar</td>
                         </tr>
                       );
@@ -715,7 +705,7 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
               </div>
               {electreCompare.hasData && (
                 <p className="muted" style={{ fontSize: 12.5, margin: '8px 0 0' }}>
-                  <b style={{ color: 'var(--ink)' }}>ELECTRE no da posiciones (#1, #2…)</b>, da relaciones entre pares: «Supera a 2» = es mejor que otras 2 alternativas con c* = {cEff.toFixed(2)}, d* = {dEff.toFixed(2)}. Suma al consenso solo si una única alternativa no es superada por ninguna{electreCompare.winner ? '' : '; con estos umbrales no ocurre'}. El detalle está más abajo.
+                  <b style={{ color: 'var(--ink)' }}>ELECTRE no da posiciones (#1, #2…)</b>, da relaciones entre pares: <b className="mono" style={{ color: 'var(--ink)' }}>2↑ 0↓</b> = supera a 2 alternativas y es superada por 0 (c* = {cEff.toFixed(2)}, d* = {dEff.toFixed(2)}); ✓ = nadie la supera. Suma al consenso solo si una única alternativa no es superada por ninguna{electreCompare.winner ? '' : '; con estos umbrales no ocurre'}. El detalle está más abajo.
                 </p>
               )}
               {compareViews.find((m) => m.key === 'vikor')?.soft && (

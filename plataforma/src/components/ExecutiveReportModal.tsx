@@ -482,9 +482,9 @@ export default function ExecutiveReportModal({
             <p style={NOTE_P}>{OBJECTIVE_WEIGHTS[weightingMethod].text}</p>
           )}
           {isFuzzy && !weightsFromJudgments && (
-            // CRITIC y Entropía leen valores numéricos; las etiquetas lingüísticas no lo son y la plataforma las cuenta como 0 en ese cálculo.
-            <p style={{ ...NOTE_P, color: '#B45309' }}>
-              <b>Advertencia:</b> la ponderación objetiva necesita valores numéricos y la matriz de Fuzzy TOPSIS es lingüística (etiquetas), así que estos pesos no reflejan las evaluaciones. Usa pesos por AHP con este método.
+            // CRITIC y Entropía necesitan números: Results.tsx desdifusifica las etiquetas (centroide de su TFN) antes de calcularlos.
+            <p style={NOTE_P}>
+              Como la matriz de Fuzzy TOPSIS es lingüística, estos pesos se calcularon sobre el valor nítido (centroide) de cada etiqueta, siguiendo el esquema de ul Amin et al. (2022). El método original de Chen (2000) usa pesos lingüísticos dados por los decisores; los pesos por AHP son la alternativa más cercana a ese planteamiento.
             </p>
           )}
           {ahp && weightsFromJudgments && ahp.criteriaSheet.perExpert.some((e) => !e.ok) && (
@@ -758,6 +758,9 @@ export default function ExecutiveReportModal({
             <div style={{ fontSize: 11, fontFamily: 'monospace', color: '#0F172A', background: '#F8FAFC', padding: '8px 12px', borderRadius: 4, border: '1px solid #E2E8F0', marginTop: 6 }}>
               <strong>Cita de la ponderación ({weightingMethod === 'ahp' ? 'AHP' : weightingMethod === 'critic' ? 'CRITIC' : 'Entropía'}):</strong>{' '}
               {weightingMethod === 'ahp' ? METHOD_SPECS.ahp.citationApa : OBJECTIVE_WEIGHTS[weightingMethod].apa}
+              {isFuzzy && weightingMethod !== 'ahp' && (
+                <> ul Amin, F., Qian-Li, D., Grzybowska, K., Ahmed, Z., &amp; Bo-Rui, Y. (2022). A novel fuzzy-based VIKOR–CRITIC soft computing method for evaluation of sustainable supply chain risk management. Sustainability, 14(5), 2827. https://doi.org/10.3390/su14052827</>
+              )}
             </div>
           )}
         </div>
