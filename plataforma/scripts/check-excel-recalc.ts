@@ -21,7 +21,9 @@ import { sawSynthesis } from '../src/lib/saw.ts';
 import { fuzzyTopsisSynthesis } from '../src/lib/fuzzy_topsis.ts';
 import { vikorSynthesis } from '../src/lib/vikor.ts';
 import { electreSynthesis } from '../src/lib/electre.ts';
-import type { DecisionMatrix as DM } from '../src/lib/types.ts';
+import { criticWeights, entropyWeights } from '../src/lib/weights.ts';
+import { defuzzifyMatrix } from '../src/lib/fuzzy_topsis.ts';
+import type { DecisionMatrix as DM, Method } from '../src/lib/types.ts';
 
 let fallos = 0;
 const ok = (cond: boolean, msg: string) => { console.log((cond ? 'OK   ' : 'FALLA') + ' ' + msg); if (!cond) fallos++; };
@@ -267,6 +269,45 @@ for (const caso of ['iot', 'viaje', 'solar'] as const) {
   // default (ver check-excel-electre.ts, verificado en JS puro arriba: da 7) — si esto fallara, sería
   // señal de que las fórmulas ignoraron las celdas editables y siguen usando el umbral incrustado de antes.
   ok(exp.relations.length > 2, `ELECTRE con c*=0.30/d*=0.90 da más relaciones que el default 0.65/0.30 (da ${exp.relations.length})`);
+}
+
+// ---- Pesos objetivos CRITIC / Entropía (hoja Criterios con fórmulas vivas) ----
+// Numérico (con un criterio de costo, uno OBJETIVO, uno constante —σ = 0, correlación indefinida— y un costo con 0 para
+// la rama 1/x→0 de la entropía) y Fuzzy (etiquetas + celda vacía = F). Se arruinan TODAS las fórmulas de Criterios, Matriz
+// de decisión y de la hoja del método, LibreOffice recalcula y se compara contra weights.ts (lo que usa la app), tanto en
+// la columna de pesos como en la fila «Peso» de la hoja del método (que la lee por Criterios!B<fila>).
+{
+  const cs = ['Costo', 'Alcance', 'Constante', 'Voltaje', 'Latencia'].map((name, i) => ({ id: 'k' + i, name, hint: '' }));
+  const as = ['A', 'B', 'C', 'D'].map((name, i) => ({ id: 'a' + i, name }));
+  const data = [[100, 8, 5, 108, 0], [250, 3, 5, 112, 20], [180, 9, 5, 120, 35], [90, 5, 5, 127, 12]];
+  const numDm: DM = { values: {}, types: { k0: 'min', k1: 'max', k2: 'max', k3: 'target', k4: 'min' }, targets: { k3: { value: 110, tol: 2 } } };
+  as.forEach((a, i) => { numDm.values[a.id] = {}; cs.forEach((c, j) => { numDm.values[a.id][c.id] = data[i][j]; }); });
+  const labels = [['G', 'VG', 'F', 'P', 'VP'], ['F', 'G', 'F', 'G', 'P'], ['VG', 'P', 'F', 'VG', 'VG'], ['P', 'F', undefined, 'F', 'G']];
+  const fzDm: DM = { values: {}, types: { k0: 'max', k1: 'max', k2: 'min', k3: 'max', k4: 'max' } };
+  as.forEach((a, i) => { fzDm.values[a.id] = {}; cs.forEach((c, j) => { const l = labels[i][j]; if (l) fzDm.values[a.id][c.id] = l; }); });
+  for (const method of ['topsis', 'fuzzy_topsis'] as Method[]) {
+    for (const weighting of ['critic', 'entropy'] as const) {
+      const dm = method === 'fuzzy_topsis' ? fzDm : numDm, tag = `${method}/${weighting}`, sheetName = method === 'fuzzy_topsis' ? 'Fuzzy TOPSIS' : 'TOPSIS';
+      const study = { title: 'Pesos objetivos', objective: 'Elegir', criteria: cs, alternatives: as, experts: [], idx: {}, prio: normalizePrio(blankPrio()), method, decisionMatrix: dm, weighting };
+      const wb = buildWorkbook(XLSX, study);
+      const nCorrupted = corruptCachedValues(wb, 'Criterios') + corruptCachedValues(wb, 'Matriz de decisión') + corruptCachedValues(wb, sheetName);
+      const corruptPath = path.join(tmpdir(), `plataforma_recalc_w_${method}_${weighting}.xlsx`);
+      writeFileSync(corruptPath, XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' }));
+      console.log(`Pesos ${tag}: ${nCorrupted} celdas con fórmula arruinadas a propósito, recalculando en LibreOffice…`);
+      const recalced = recalcViaLibreOffice(soffice, corruptPath, path.join(tmpdir(), `plataforma_recalc_out_w_${method}_${weighting}`));
+      const wbRe = XLSX.read(readFileSync(recalced), { type: 'buffer' });
+      const eff = resolveTargets(cs, as, dm);
+      const num = method === 'fuzzy_topsis' ? defuzzifyMatrix(eff, cs, as) : eff;
+      const exp = weighting === 'critic' ? criticWeights(cs, as, num) : entropyWeights(cs, as, num);
+      const wsC = wbRe.Sheets['Criterios'];
+      cs.forEach((c, j) => ok(!!wsC['B' + (4 + j)] && cerca(wsC['B' + (4 + j)].v, exp[j], 1e-6), `[LibreOffice recalculó] ${tag} peso(${c.name}) = ${wsC['B' + (4 + j)]?.v?.toFixed?.(6)} (esperado ${exp[j].toFixed(6)})`));
+      ok(cerca(wsC['B' + (4 + cs.length)]?.v, 1, 1e-9) && wsC['B' + (5 + cs.length)]?.v === 'Sí, suma 1', `[LibreOffice recalculó] ${tag} suma de pesos = ${wsC['B' + (4 + cs.length)]?.v}, comprobación "${wsC['B' + (5 + cs.length)]?.v}"`);
+      // La hoja del método lee los pesos por Criterios!B<fila>: TOPSIS los pone en la fila 3 (B..); Fuzzy en cada 3ª columna de su fila de pesos.
+      const wsM = wbRe.Sheets[sheetName];
+      const rowW = method === 'fuzzy_topsis' ? 2 + 5 + 1 : 3;
+      cs.forEach((c, j) => { const cell = wsM[colL(method === 'fuzzy_topsis' ? 1 + 3 * j : 1 + j) + rowW]; ok(!!cell && cerca(cell.v, exp[j], 1e-6), `[LibreOffice recalculó] ${sheetName}: peso leído de Criterios(${c.name}) = ${cell?.v?.toFixed?.(6)}`); });
+    }
+  }
 }
 
 if (existsSync(profileDir)) rmSync(profileDir, { recursive: true, force: true });

@@ -45,6 +45,7 @@ export async function createFromImport(
       prioritization: imp.prio,
       method: imp.method,
       decision_matrix: imp.decisionMatrix,
+      ...(imp.weighting ? { weighting_method: imp.weighting } : {}),
     })
     .select('id')
     .single();

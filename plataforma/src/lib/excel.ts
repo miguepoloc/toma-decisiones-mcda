@@ -17,6 +17,7 @@ import { prometheeSheet } from './excel-promethee-sheet.ts';
 import { electreSheet } from './excel-electre-sheet.ts';
 import { sawSheet } from './excel-saw-sheet.ts';
 import { fuzzyTopsisSheet } from './excel-fuzzy-topsis-sheet.ts';
+import { OBJECTIVE_WEIGHT_INFO, objectiveWeightsSheet } from './excel-weights-sheet.ts';
 
 export { colL } from './excel-core.ts';
 
@@ -53,42 +54,60 @@ export function buildWorkbook(XLSX: any, study: Study) {
   const MATRIX_SHEET_NAME: Partial<Record<Method, string>> = { topsis: 'TOPSIS', vikor: 'VIKOR', promethee: 'PROMETHEE', electre: 'ELECTRE', saw: 'SAW', fuzzy_topsis: 'Fuzzy TOPSIS' };
   const isMatrixMethod = S.method in MATRIX_SHEET_NAME;
 
+  // Pesos objetivos (CRITIC/Entropía): solo tienen sentido en los métodos de matriz; en AHP siempre son juicios por pares.
+  const objW = isMatrixMethod && (S.weighting === 'critic' || S.weighting === 'entropy') ? S.weighting : null;
   { // Notas
     const { put, fin } = W();
     const ord = (isMatrixMethod ? ['Notas', 'Criterios', 'Matriz de decisión', MATRIX_SHEET_NAME[S.method]] : ['Notas', 'Criterios', ...S.criteria.map((c) => c.name), 'Síntesis']).join(' → ');
+    const ow = objW ? OBJECTIVE_WEIGHT_INFO[objW] : null;
+    const critTxt = objW
+      ? `la hoja Criterios calcula los pesos de forma objetiva con ${ow!.name} (${ow!.cite}) a partir de la matriz de decisión, sin juicios por pares`
+      : 'la hoja Criterios pesa los criterios con juicios por pares, igual que en AHP';
     const usoTxt = isMatrixMethod
-      ? `Cómo usarlo: la hoja Criterios pesa los criterios con juicios por pares, igual que en AHP. «Matriz de decisión» trae el valor real de cada alternativa por criterio y si es beneficio o costo. «${MATRIX_SHEET_NAME[S.method]}» ranquea las alternativas con esos pesos y esos datos (ver su propia nota, arriba de cada hoja, para el detalle del método). Las celdas con SUMPRODUCT, SUMSQ, RANK, etc. son fórmulas vivas: si cambias un juicio o un valor, todo se recalcula.`
+      ? `Cómo usarlo: ${critTxt}. «Matriz de decisión» trae el valor real de cada alternativa por criterio y si es beneficio o costo. «${MATRIX_SHEET_NAME[S.method]}» ranquea las alternativas con esos pesos y esos datos (ver su propia nota, arriba de cada hoja, para el detalle del método). Las celdas con SUMPRODUCT, SUMSQ, RANK, etc. son fórmulas vivas: si cambias ${objW ? 'un valor de la matriz' : 'un juicio o un valor'}, todo se recalcula.`
       : 'Cómo usarlo: la hoja Criterios es una matriz de juicios por pares que pesa los criterios; le sigue una matriz de comparación de las alternativas por cada criterio, y la Síntesis combina peso × prioridad local en el resultado final. Las celdas con GEOMEAN, SUM, AVERAGE, SUMPRODUCT y RANK son fórmulas vivas: si cambias un juicio individual, todo se recalcula.';
-    const lines: [string, any][] = [
-      [S.title || 'Estudio MCDA', stl.title],
-      ['', null],
-      ['Objetivo de decisión: ' + S.objective, stl.wrap],
-      [`Cada juicio de la hoja Criterios es la media geométrica de un panel de ${S.experts.length} experto(s) (${ex.join('; ')}), no la opinión de una sola persona (Forman & Peniwati, 1998); ver juicios individuales debajo de la verificación de consistencia.`, stl.wrap],
-      ['Orden de hojas: ' + ord, stl.wrap],
-      [usoTxt, stl.wrap],
-      ['¿Qué es GEOMEAN()? Es la media geométrica (la raíz n-ésima del producto de n números), la función de Excel que se usa para combinar el mismo juicio de varios expertos en un solo número. No es el promedio normal (aritmético); es la forma correcta de agregar juicios de razón en AHP.', stl.wrap],
-      ['Revise siempre la fila «¿Consistente? (CR < 0.10)» de la hoja Criterios antes de dar los juicios por buenos.', stl.wrap],
-      ['La priorización de criterios previa (Sesión 1: lluvia de ideas, tamizaje, independencia, panel de importancia, resultado final) está en un Excel aparte — descárgala desde la pestaña Compartir si la necesitas.', stl.wrap],
-      ['', null],
-      ['Exportado desde la plataforma MCDA el ' + new Date().toLocaleString() + '. La hoja oculta «_datos» guarda el estado completo (incluida la priorización) para volver a cargarlo en la plataforma o en la herramienta HTML.', stl.note],
+    // [texto, estilo, alto de fila]. Con pesos objetivos no hay panel de expertos ni GEOMEAN ni consistencia CR que explicar.
+    const lines: [string, any, any][] = [
+      [S.title || 'Estudio MCDA', stl.title, { hpt: 22 }],
+      ['', null, {}],
+      ['Objetivo de decisión: ' + S.objective, stl.wrap, { hpt: 32 }],
+      objW
+        ? [`Los pesos de los criterios se calculan de forma objetiva con ${ow!.name} (${ow!.cite}) directamente desde la matriz de decisión: en este libro no intervienen juicios de expertos ni comparaciones por pares (la hoja Criterios muestra el cálculo, con fórmulas vivas).`, stl.wrap, { hpt: 48 }]
+        : [`Cada juicio de la hoja Criterios es la media geométrica de un panel de ${S.experts.length} experto(s) (${ex.join('; ')}), no la opinión de una sola persona (Forman & Peniwati, 1998); ver juicios individuales debajo de la verificación de consistencia.`, stl.wrap, { hpt: 48 }],
+      ['Orden de hojas: ' + ord, stl.wrap, { hpt: 32 }],
+      [usoTxt, stl.wrap, { hpt: 66 }],
+      ...(objW ? [] : [
+        ['¿Qué es GEOMEAN()? Es la media geométrica (la raíz n-ésima del producto de n números), la función de Excel que se usa para combinar el mismo juicio de varios expertos en un solo número. No es el promedio normal (aritmético); es la forma correcta de agregar juicios de razón en AHP.', stl.wrap, { hpt: 48 }] as [string, any, any],
+        ['Revise siempre la fila «¿Consistente? (CR < 0.10)» de la hoja Criterios antes de dar los juicios por buenos.', stl.wrap, { hpt: 20 }] as [string, any, any],
+      ]),
+      ['La priorización de criterios previa (Sesión 1: lluvia de ideas, tamizaje, independencia, panel de importancia, resultado final) está en un Excel aparte — descárgala desde la pestaña Compartir si la necesitas.', stl.wrap, { hpt: 32 }],
+      ['', null, {}],
+      ['Exportado desde la plataforma MCDA el ' + new Date().toLocaleString() + '. La hoja oculta «_datos» guarda el estado completo (incluida la priorización) para volver a cargarlo en la plataforma o en la herramienta HTML.', stl.note, { hpt: 20 }],
     ];
     lines.forEach(([t, s], i) => put(i + 1, 0, t, { s }));
-    add('Notas', fin([100], [{ hpt: 22 }, {}, { hpt: 32 }, { hpt: 48 }, { hpt: 32 }, { hpt: 66 }, { hpt: 48 }, { hpt: 20 }, { hpt: 32 }, {}, { hpt: 20 }]));
+    add('Notas', fin([100], lines.map((l) => l[2])));
   }
-  // El peso de los criterios siempre sale de la hoja Criterios (juicios por pares), sea cual sea
-  // el método elegido para comparar las alternativas — ver CLAUDE.md § "Visión multicriterio".
-  const critInfo = ahpSheet(S.criteria, mapsFor(CRIT_SHEET), ex, 'AHP, Criterios', 'Media geométrica de los expertos (Forman & Peniwati, 1998); ver juicios individuales más abajo. Objetivo: ' + S.objective);
-  add('Criterios', critInfo.ws);
-  if (isMatrixMethod) {
-    const isFuzzy = S.method === 'fuzzy_topsis';
-    const matInfo = matrixSheet(S.criteria, S.alternatives, S.decisionMatrix, 'Matriz de decisión',
+  // Los pesos de los criterios salen de la hoja Criterios, sea cual sea el método elegido para comparar las alternativas
+  // (ver CLAUDE.md § "Visión multicriterio"): juicios por pares (AHP, por defecto) o, en los métodos de matriz con pesos
+  // objetivos, CRITIC/Entropía calculados desde la propia matriz. En ese caso la hoja lleva el mismo nombre y forma
+  // ({ ws, w, vc, rN0 }) para que las hojas de método no se enteren, pero la matriz hay que armarla ANTES para conocer sus celdas.
+  const isFuzzy = S.method === 'fuzzy_topsis';
+  const matInfo = isMatrixMethod
+    ? matrixSheet(S.criteria, S.alternatives, S.decisionMatrix, 'Matriz de decisión',
       isFuzzy
         ? 'Evaluaciones lingüísticas por alternativa y criterio (VP=Muy mala, P=Mala, F=Regular, G=Buena, VG=Muy buena). "Tipo" indica si más es mejor (Beneficio) o menos es mejor (Costo).'
-        : 'Valores reales por alternativa y criterio, tal como los cargaste en la plataforma. "Tipo" indica si más es mejor (Beneficio), menos es mejor (Costo) o si lo mejor es un valor específico (Objetivo, con su tolerancia).');
+        : 'Valores reales por alternativa y criterio, tal como los cargaste en la plataforma. "Tipo" indica si más es mejor (Beneficio), menos es mejor (Costo) o si lo mejor es un valor específico (Objetivo, con su tolerancia).',
+      isFuzzy)
+    : null;
+  // Las hojas de cada método leen el bloque EFECTIVO de la matriz (criterios Objetivo ya convertidos en su
+  // distancia al objetivo, como costo), ver matrixSheet(): por eso reciben la matriz resuelta, no la cruda.
+  const dmEff = resolveTargets(S.criteria, S.alternatives, S.decisionMatrix);
+  const critInfo = objW && matInfo
+    ? objectiveWeightsSheet(objW, isFuzzy, S.criteria, S.alternatives, dmEff, matInfo, 'Matriz de decisión')
+    : ahpSheet(S.criteria, mapsFor(CRIT_SHEET), ex, 'AHP, Criterios', 'Media geométrica de los expertos (Forman & Peniwati, 1998); ver juicios individuales más abajo. Objetivo: ' + S.objective);
+  add('Criterios', critInfo.ws);
+  if (isMatrixMethod && matInfo) {
     add('Matriz de decisión', matInfo.ws);
-    // Las hojas de cada método leen el bloque EFECTIVO de la matriz (criterios Objetivo ya convertidos en su
-    // distancia al objetivo, como costo), ver matrixSheet(): por eso reciben la matriz resuelta, no la cruda.
-    const dmEff = resolveTargets(S.criteria, S.alternatives, S.decisionMatrix);
     const args = [S.criteria, S.alternatives, dmEff, critInfo.w, matInfo, 'Matriz de decisión', critInfo] as const;
     let sheet: ReturnType<typeof W>['ws'];
     if (S.method === 'fuzzy_topsis') {

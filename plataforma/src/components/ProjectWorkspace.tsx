@@ -275,7 +275,7 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
   const studyExport = () => ({
     title: project.title, objective: project.objective, criteria: project.criteria, alternatives: project.alternatives,
     experts: experts.map((e) => ({ id: e.id, name: e.name, role_desc: e.role_desc })), idx, prio: prio as PrioState,
-    method: project.method, decisionMatrix: dm,
+    method: project.method, decisionMatrix: dm, weighting: project.weighting_method,
   });
   const fileBase = () => `MCDA_${project.title.replace(/[^\w-]+/g, '_').slice(0, 40)}_${new Date().toISOString().slice(0, 10)}`;
   async function exportExcel() {

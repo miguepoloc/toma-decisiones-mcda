@@ -184,10 +184,12 @@ export function ahpSheet(items: Item[], maps: JMap[], exNames: string[], title: 
  * distancia al objetivo = MAX(0, |valor − objetivo| − tolerancia) con fórmulas vivas y cuentan como Costo. Las
  * hojas de cada método leen SIEMPRE ese bloque (rType/rData0 apuntan a él), así que no saben que existe el tipo
  * objetivo. Sin criterios objetivo el bloque efectivo es el mismo crudo, como siempre. */
-export function matrixSheet(criteria: Criterion[], alternatives: Alternative[], dm: DecisionMatrix, title: string, note: string) {
+export function matrixSheet(criteria: Criterion[], alternatives: Alternative[], dm: DecisionMatrix, title: string, note: string, fuzzy = false) {
   const m = criteria.length, n = alternatives.length, { put, fin } = W();
   const rHead = 3, rTypeRaw = 4, rDataRaw0 = 5;
   const hasTarget = criteria.some((c) => getKind(dm, c.id) === 'target');
+  // En Fuzzy una celda vacía queda vacía (no 0): la hoja de pesos objetivos la lee como «F» (Regular), igual que la app.
+  const label = (altId: string, critId: string) => { const v = dm.values[altId]?.[critId]; return !fuzzy ? null : typeof v === 'string' ? v : v == null ? '' : null; };
   put(1, 0, title, { s: stl.title });
   put(1, 1, note, { s: stl.note });
   put(rHead, 0, 'Alternativa', { s: stl.hdrL });
@@ -198,7 +200,8 @@ export function matrixSheet(criteria: Criterion[], alternatives: Alternative[], 
   alternatives.forEach((a, i) => {
     const r = rDataRaw0 + i;
     put(r, 0, a.name, { s: stl.hdrL });
-    criteria.forEach((c, j) => put(r, 1 + j, getCell(dm, a.id, c.id) ?? 0, { s: stl.c, z: '0.0000' }));
+    // En Fuzzy TOPSIS la celda es una etiqueta (VP…VG): se muestra como texto en vez de 0 (getCell solo devuelve números).
+    criteria.forEach((c, j) => put(r, 1 + j, label(a.id, c.id) ?? getCell(dm, a.id, c.id) ?? 0, { s: stl.c, z: '0.0000' }));
   });
   let rType = rTypeRaw, rData0 = rDataRaw0;
   if (hasTarget) {
@@ -218,8 +221,10 @@ export function matrixSheet(criteria: Criterion[], alternatives: Alternative[], 
       const r = rEffData0 + i, raw = rDataRaw0 + i;
       put(r, 0, a.name, { s: stl.hdrL });
       criteria.forEach((c, j) => {
-        const L = colL(1 + j), x = getCell(dm, a.id, c.id) ?? 0, t = getTarget(dm, c.id);
-        if (getKind(dm, c.id) === 'target') {
+        const L = colL(1 + j), x = getCell(dm, a.id, c.id) ?? 0, t = getTarget(dm, c.id), lbl = label(a.id, c.id);
+        // etiqueta lingüística: se copia tal cual (no hay distancia que calcular); vacía se deja vacía (copiarla daría 0)
+        if (lbl != null) put(r, 1 + j, lbl, lbl === '' ? { s: stl.c } : { f: `${L}${raw}`, s: stl.c });
+        else if (getKind(dm, c.id) === 'target') {
           if (t) put(r, 1 + j, targetDistance(x, t.value, t.tol), { f: `MAX(0,ABS(${L}${raw}-${L}$${rTarget})-${L}$${rTol})`, s: stl.c, z: '0.0000' });
           else put(r, 1 + j, 0, { s: stl.c, z: '0.0000' }); // sin objetivo válido: neutro, igual que resolveTargets()
         } else put(r, 1 + j, x, { f: `${L}${raw}`, s: stl.c, z: '0.0000' });

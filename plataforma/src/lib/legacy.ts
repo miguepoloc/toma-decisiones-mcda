@@ -3,7 +3,7 @@
 // de la plataforma, opcional en el formato v2, para que exportar/reimportar un proyecto TOPSIS (y a
 // futuro VIKOR/PROMETHEE/ELECTRE) no pierda la matriz de decisión. Un .json/.xlsx viejo de la
 // herramienta HTML (sin esos campos) sigue siendo válido: cae a method='ahp' con matriz vacía.
-import type { Alternative, Criterion, DecisionMatrix, Method } from './types.ts';
+import type { Alternative, Criterion, DecisionMatrix, Method, WeightingMethod } from './types.ts';
 import type { JIndex, JMap } from './ahp.ts';
 import { blankMatrix, normalizeMatrix } from './topsis.ts';
 import { blankPrio, normalizePrio, type PrioState } from './prio.ts';
@@ -18,6 +18,9 @@ export type Study = {
   prio: PrioState;
   method: Method;
   decisionMatrix: DecisionMatrix;
+  /** Cómo se pesan los criterios en los métodos de matriz: 'ahp' (juicios por pares, por defecto) o pesos objetivos
+   * 'critic'/'entropy'. Solo lo lee el Excel (excel.ts) para elegir la hoja Criterios; vacío = 'ahp'. */
+  weighting?: WeightingMethod;
 };
 
 type LegacyState = {
@@ -34,6 +37,8 @@ type LegacyState = {
   exId?: string;
   method?: Method;
   dm?: DecisionMatrix;
+  /** Agregado de la plataforma, opcional como `method`/`dm`: la herramienta HTML lo ignora. */
+  wm?: WeightingMethod;
 };
 
 export function toLegacy(s: Study): LegacyState {
@@ -50,6 +55,7 @@ export function toLegacy(s: Study): LegacyState {
     experts: s.experts.map((e) => ({ id: e.id, name: e.role_desc || e.name })),
     J, demo: false, view: 'A1', nid: 100, exId: s.experts[0]?.id ?? 'e0',
     method: s.method, dm: s.decisionMatrix,
+    ...(s.weighting && s.weighting !== 'ahp' ? { wm: s.weighting } : {}),
   };
 }
 
@@ -62,6 +68,8 @@ export type Imported = {
   judgments: { legacyId: string; sheet: string; pair_key: string; value: number }[];
   method: Method;
   decisionMatrix: DecisionMatrix;
+  /** Ponderación de criterios del respaldo; ausente (respaldos viejos, Excel del taller) = AHP. */
+  weighting?: WeightingMethod;
   /** Solo al importar un Excel del taller (courseExcel.ts): lo que se rellenó por defecto o se redondeó. */
   warnings?: string[];
 };
@@ -93,5 +101,6 @@ export function fromLegacy(s: LegacyState): Imported {
     judgments,
     method: s.method && METHODS.includes(s.method) ? s.method : 'ahp',
     decisionMatrix: s.dm ? normalizeMatrix(s.dm) : blankMatrix(),
+    ...(s.wm === 'critic' || s.wm === 'entropy' ? { weighting: s.wm } : {}),
   };
 }
