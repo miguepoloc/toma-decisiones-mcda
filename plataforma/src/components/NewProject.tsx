@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useRef, useState, useEffect, useMemo, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
@@ -11,7 +12,9 @@ import { Icon, ICONS } from '@/components/GeoBits';
 import { blankMatrix, setCell, setType } from '@/lib/topsis';
 import { useExamples } from '@/lib/geo/useExamples';
 import { seedExampleExpert } from '@/lib/geo/exampleExpert';
-import type { GeoConfig, Kind } from '@/lib/types';
+import type { GeoConfig, Kind, WeightingMethod } from '@/lib/types';
+import { METHOD_GUIDE, WEIGHTING_GUIDE, WEIGHTING_ORDER, isMethod, isWeighting } from '@/lib/methodGuide';
+import { WEIGHTING_REFS } from '@/lib/references';
 import type { MethodKey } from '@/components/ScientificMethodModal';
 
 const METHOD_LABELS: Record<MethodKey, string> = {
@@ -50,8 +53,11 @@ const IOT_PALMOR_MATRIX = [[10, 8, 2, 5], [10.5, 0.5, 3, 2], [40, 2, 5, 2], [0.0
 function NewProjectForm({ userId }: { userId: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  // /metodo manda al usuario aquí con ?new_method=…&new_weighting=… según lo que respondió en el asistente.
   const rawMethod = searchParams.get('new_method');
-  const validMethod = rawMethod && rawMethod in METHOD_LABELS ? (rawMethod as MethodKey) : 'ahp';
+  const rawWeighting = searchParams.get('new_weighting');
+  const validMethod: MethodKey = isMethod(rawMethod) ? rawMethod : 'ahp';
+  const validWeighting: WeightingMethod = isWeighting(rawWeighting) ? rawWeighting : 'ahp';
 
   const [title, setTitle] = useState('');
   const [objective, setObjective] = useState('');
@@ -60,19 +66,28 @@ function NewProjectForm({ userId }: { userId: string }) {
   const examples = useExamples(sb);
   const [start, setStart] = useState<string>('blank');
   const [method, setMethod] = useState<MethodKey>(validMethod);
+  const [weighting, setWeighting] = useState<WeightingMethod>(validMethod === 'ahp' ? 'ahp' : validWeighting);
   const [useIotCase, setUseIotCase] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
+  const [impMsg, setImpMsg] = useState('');
   // Importado de un Excel del taller con avisos (redondeos, objetivo no detectado): se muestran antes de abrirlo.
   const [over, setOver] = useState(false);
   const [imported, setImported] = useState<{ id: string; warnings: string[] } | null>(null);
   const file = useRef<HTMLInputElement>(null);
+  const titleRef = useRef<HTMLInputElement>(null);
+  const fromGuide = isMethod(rawMethod);
 
   useEffect(() => {
-    if (rawMethod && rawMethod in METHOD_LABELS) {
-      setMethod(rawMethod as MethodKey);
+    if (isMethod(rawMethod)) {
+      setMethod(rawMethod);
+      setWeighting(rawMethod === 'ahp' || !isWeighting(rawWeighting) ? 'ahp' : rawWeighting);
+      // Llega desde el asistente con el método ya elegido: lo siguiente que falta es el título.
+      // Solo con puntero fino: en el móvil, enfocar el campo abriría el teclado sin que la persona lo pidiera.
+      if (window.matchMedia('(pointer:fine)').matches) titleRef.current?.focus({ preventScroll: true });
+      document.getElementById('nuevo')?.scrollIntoView({ block: 'start' });
     }
-  }, [rawMethod]);
+  }, [rawMethod, rawWeighting]);
 
   async function create(e: React.FormEvent) {
     e.preventDefault();
@@ -101,6 +116,8 @@ function NewProjectForm({ userId }: { userId: string }) {
       title: finalTitle,
       objective: objective.trim() || (useIotCase ? IOT_PALMOR_OBJECTIVE : ''),
       method,
+      // AHP siempre pesa por pares; el método de ponderación solo es una elección en los demás.
+      weighting_method: method === 'ahp' ? 'ahp' : weighting,
       criteria,
       alternatives,
       decision_matrix: decisionMatrix,
@@ -147,7 +164,7 @@ function NewProjectForm({ userId }: { userId: string }) {
     const f = files?.[0];
     if (!f || busy) return;
     if (!/\.(xlsx|json)$/i.test(f.name)) {
-      setMsg('Ese tipo de archivo no se puede importar: sube un .xlsx o un .json.');
+      setImpMsg('Ese tipo de archivo no se puede importar: sube un .xlsx o un .json.');
       return;
     }
     void importFile(f);
@@ -156,24 +173,24 @@ function NewProjectForm({ userId }: { userId: string }) {
   async function importFile(f: File) {
     setBusy(true);
     setImported(null);
-    setMsg('');
+    setImpMsg('');
     const imp = await parseLegacyFile(f);
     if (!imp) {
       setBusy(false);
-      setMsg('No reconozco ese archivo: sube un respaldo de la herramienta HTML (.json o su .xlsx) o el Excel del taller de AHP (hojas Criterios, una por criterio y Síntesis).');
+      setImpMsg('No reconozco ese archivo: sube un respaldo de la herramienta HTML (.json o su .xlsx) o el Excel del taller de AHP (hojas Criterios, una por criterio y Síntesis).');
       return;
     }
     const r = await createFromImport(createClient(), userId, imp, f.name.replace(/\.[^.]+$/, '') || 'Proyecto importado');
     setBusy(false);
     if (r.id && !r.error && imp.warnings?.length) setImported({ id: r.id, warnings: imp.warnings });
     else if (r.id) router.push(`/projects/${r.id}`);
-    else setMsg(r.error ?? 'No se pudo importar');
+    else setImpMsg(r.error ?? 'No se pudo importar');
   }
 
   return (
-    <div className="newproj">
+    <div className="newproj" id="nuevo">
       <form className="card form" onSubmit={create}>
-        <h3>Nuevo proyecto</h3>
+        <h2 style={{ fontSize: 18 }}>Nuevo proyecto</h2>
         <fieldset className="kind-pick">
           <legend className="lbl">¿Qué vas a hacer?</legend>
           <div className="kind-cards">
@@ -191,6 +208,7 @@ function NewProjectForm({ userId }: { userId: string }) {
           <label className="lbl" htmlFor="pt">Título{(kind === 'decision' || start === 'blank') && <span className="req" aria-hidden="true"> *</span>}</label>
           <input
             id="pt"
+            ref={titleRef}
             type="text"
             required={kind === 'decision' || start === 'blank'}
             value={title}
@@ -210,33 +228,46 @@ function NewProjectForm({ userId }: { userId: string }) {
         {kind === 'decision' && (
           <>
             <div>
-              <label className="lbl" htmlFor="pm">Método multicriterio inicial</label>
+              <label className="lbl" htmlFor="pm">Método para comparar las alternativas</label>
               <select
                 id="pm"
                 value={method}
-                onChange={(e) => setMethod(e.target.value as MethodKey)}
+                onChange={(e) => { const m = e.target.value as MethodKey; setMethod(m); if (m === 'ahp') setWeighting('ahp'); }}
                 style={{ width: '100%' }}
+                aria-describedby="pm-help"
               >
                 {Object.entries(METHOD_LABELS).map(([k, label]) => (
                   <option key={k} value={k}>{label}</option>
                 ))}
               </select>
-              {rawMethod && rawMethod in METHOD_LABELS && (
-                <div
-                  style={{
-                    marginTop: 6,
-                    fontSize: 12,
-                    fontFamily: 'var(--f-mono)',
-                    color: '#00E5FF',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                  }}
-                >
-                  <span>✓</span> Preseleccionado según tu test metodológico ({rawMethod.toUpperCase()})
-                </div>
-              )}
+              <div id="pm-help" className="mhelp" data-method={method}>
+                <p><b>Úsalo cuando:</b> {METHOD_GUIDE[method].when}</p>
+                <p><b>Necesita:</b> {METHOD_GUIDE[method].input}</p>
+                <p className="muted">
+                  {fromGuide && <span className="preset">Preseleccionado desde la guía «¿Qué método uso?». </span>}
+                  ¿Dudas? <Link href="/metodo" target="_blank" rel="noreferrer">Abre la guía<span className="sr-only"> (en otra pestaña)</span></Link>. Puedes cambiar el método después.
+                </p>
+              </div>
             </div>
+            {method !== 'ahp' && (
+              <fieldset className="wpick">
+                <legend className="lbl">Cómo pesar los criterios</legend>
+                <div className="wpick-grid">
+                  {WEIGHTING_ORDER.map((k) => (
+                    <label key={k} className={'wpick-card' + (weighting === k ? ' on' : '')}>
+                      <input type="radio" name="weighting" value={k} checked={weighting === k} onChange={() => setWeighting(k)} />
+                      <b>{WEIGHTING_GUIDE[k].label}</b>
+                      <span>{WEIGHTING_GUIDE[k].short}</span>
+                    </label>
+                  ))}
+                </div>
+                <p className="muted wpick-note" aria-live="polite">
+                  {weighting === 'ahp'
+                    ? 'Tus expertos comparan los criterios de a pares (pestaña Expertos).'
+                    : `${WEIGHTING_REFS[weighting].label}: los pesos se calculan solos desde la matriz de decisión, sin expertos. Miden cuánto se diferencian tus alternativas, no qué tan importante es cada criterio para ti.`}
+                </p>
+              </fieldset>
+            )}
             <label className={'check-card' + (useIotCase ? ' on' : '')}>
               <input type="checkbox" checked={useIotCase} onChange={(e) => setUseIotCase(e.target.checked)} />
               <span className="check-box" aria-hidden="true"><Icon d={ICONS.check} size={13} /></span>
@@ -262,10 +293,14 @@ function NewProjectForm({ userId }: { userId: string }) {
             </p>
           </div>
         )}
+        {msg && <p className="err" role="alert">{msg}</p>}
         <div className="acts">
           <button className="btn primary" type="submit" disabled={busy}>
-            {busy ? 'Creando...' : 'Crear proyecto'}
+            {busy ? 'Creando…' : 'Crear proyecto'}
           </button>
+          <span className="muted mhint">
+            {kind === 'spatial' || !useIotCase ? 'Nace en blanco: después renombras los criterios y agregas los tuyos.' : 'Nace con el caso de ejemplo cargado; todo se puede editar.'}
+          </span>
         </div>
       </form>
       {/* Toda la tarjeta acepta el soltado: si el archivo cae fuera de la zona, el navegador lo descargaría/abriría. */}
@@ -275,9 +310,9 @@ function NewProjectForm({ userId }: { userId: string }) {
         onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOver(false); }}
         onDrop={(e) => { e.preventDefault(); setOver(false); dropFiles(e.dataTransfer.files); }}
       >
-        <h3>Importar un archivo</h3>
+        <h3>¿Ya tienes un archivo? Impórtalo</h3>
         <p className="muted" style={{ fontSize: 14 }}>
-          Trae tu trabajo previo: sube el respaldo <b>.json</b> o el <b>.xlsx</b> que descargaste de la herramienta HTML, o el <b>Excel del taller de AHP</b> (Ejercicio.xlsx o las plantillas, ya diligenciadas). Se crean el proyecto, los expertos y todos los juicios.
+          Trae tu trabajo previo: el respaldo <b>.json</b> o el <b>.xlsx</b> de la herramienta HTML del curso, o el <b>Excel del taller de AHP</b> (Ejercicio.xlsx o las plantillas, ya diligenciadas). Se crean el proyecto, los expertos y todos los juicios.
         </p>
         <label className={'gv-drop' + (over ? ' over' : '')} style={{ opacity: busy ? 0.6 : 1 }}>
           <Icon d={ICONS.upload} size={22} />
@@ -295,8 +330,8 @@ function NewProjectForm({ userId }: { userId: string }) {
             }}
           />
         </label>
+        {impMsg && <p className="err" role="alert">{impMsg}</p>}
       </div>
-      {msg && <p className="err" role="alert">{msg}</p>}
       {imported && (
         <div className="card form" role="status">
           <h3>Proyecto importado</h3>
@@ -315,7 +350,7 @@ function NewProjectForm({ userId }: { userId: string }) {
 
 export default function NewProject({ userId }: { userId: string }) {
   return (
-    <Suspense fallback={<div className="card muted">Cargando formulario...</div>}>
+    <Suspense fallback={<div className="card muted">Cargando formulario…</div>}>
       <NewProjectForm userId={userId} />
     </Suspense>
   );

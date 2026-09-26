@@ -43,20 +43,13 @@ export default function Topbar({
   const pathname = usePathname();
 
   return (
-    <div className="topbar">
+    <header className="topbar">
       <Link className="brand" href={href} title={title}>
         <Logo size={26} />
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, lineHeight: 1.2 }}>
+          <div className="brand-row">
             <span>Plataforma MCDA</span>
-            <span
-              style={{
-                fontSize: 10, fontFamily: 'var(--f-mono)', padding: '1px 5px', borderRadius: 4,
-                background: 'rgba(255,255,255,0.1)', color: 'var(--muted)',
-              }}
-            >
-              {badge}
-            </span>
+            <span className="brand-badge">{badge}</span>
           </div>
           <span className="brand-sub">{subtitle}</span>
         </div>
@@ -88,6 +81,6 @@ export default function Topbar({
           ))}
         </div>
       </div>
-    </div>
+    </header>
   );
 }

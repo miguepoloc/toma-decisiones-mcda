@@ -854,3 +854,329 @@ th[aria-sort="ascending"] .thsort,th[aria-sort="descending"] .thsort{color:var(-
   .ureason{white-space:normal;max-width:none}
   .row-susp{box-shadow:none;border-color:var(--warn-text)!important}
 }
+
+/* ==========================================================================================================================
+   Informe ejecutivo («Dictamen», ExecutiveReportModal): impresión / PDF en A4.
+   El modal se monta con un portal en <body> (.rpt-portal), así que al imprimir basta ocultar TODO lo demás con display:none (sin
+   hojas en blanco ni recorte al alto de la ventana) y convertir el modal fijo en un documento normal que fluye por páginas.
+   ========================================================================================================================== */
+@page {
+  size: A4;
+  margin: 18mm 14mm 20mm;
+  /* Numeración y pie en el margen (Chrome/Edge; Firefox y Safari los ignoran y el documento se ve igual, sin numerar).
+     El título del proyecto va en @top-left, inyectado por el componente. */
+  @top-left { font: 8.5pt/1.2 -apple-system, "Segoe UI", Roboto, sans-serif; color: #475569; }
+  @bottom-left { content: "Dictamen Ejecutivo MCDA · Universidad del Magdalena"; font: 8.5pt/1.2 -apple-system, "Segoe UI", Roboto, sans-serif; color: #475569; }
+  @bottom-right { content: "Página " counter(page) " de " counter(pages); font: 8.5pt/1.2 -apple-system, "Segoe UI", Roboto, sans-serif; color: #475569; }
+}
+@media print {
+  html, body { height: auto !important; overflow: visible !important; margin: 0 !important; padding: 0 !important; background: #fff !important;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body > *:not(.rpt-portal) { display: none !important; }
+  .rpt-portal .modal-overlay { position: static !important; inset: auto !important; display: block !important; padding: 0 !important;
+    background: transparent !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+  #executive-report-container { display: block !important; position: static !important; width: auto !important; max-width: none !important;
+    max-height: none !important; overflow: visible !important; padding: 0 !important; margin: 0 !important; border-radius: 0 !important;
+    box-shadow: none !important; background: #fff !important; font-size: 10.5pt; line-height: 1.4; }
+  /* con display:block ya no rige el gap de la rejilla de pantalla: el aire entre bloques se pone aquí */
+  #executive-report-container > * + * { margin-top: 14pt !important; }
+  #executive-report-container > .no-print + * { margin-top: 0 !important; }
+  #executive-report-container .no-print { display: none !important; }
+  #executive-report-container .rpt-scroll { overflow: visible !important; }
+  #executive-report-container a { color: inherit; text-decoration: none; }
+  /* sin títulos huérfanos al pie de una hoja: el título se queda pegado a lo que lo sigue */
+  #executive-report-container .rpt-h, #executive-report-container h1, #executive-report-container h3 { break-after: avoid; page-break-after: avoid; }
+  /* bloques que no se parten: tablas cortas (rpt-keep), cuadros, figuras, firmas; las tablas largas parten entre filas y repiten el encabezado */
+  #executive-report-container .rpt-keep, #executive-report-container .rpt-box, #executive-report-container .rpt-fig,
+  #executive-report-container figure, #executive-report-container .rpt-sign { break-inside: avoid; page-break-inside: avoid; }
+  #executive-report-container .rpt-table tr { break-inside: avoid; page-break-inside: avoid; }
+  #executive-report-container .rpt-table thead { display: table-header-group; }
+  #executive-report-container .rpt-foot { break-inside: avoid; page-break-inside: avoid; }
+  /* los gráficos son SVG: que no se salgan del ancho de la hoja, y que Chrome/Safari no omitan rellenos y tramas (ahorro de tinta) */
+  #executive-report-container svg { max-width: 100%; height: auto; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  #executive-report-container .rpt-box, #executive-report-container thead tr, #executive-report-container tr { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+
+/* ---- geovisor: accesibilidad y responsive (revisión GIS/MCDA del 25 sep 2026) ----
+   Los tonos de acento/aviso del geovisor (lima #84CC16, ámbar #F59E0B) son fondos y bordes muy legibles, pero como TEXTO
+   o línea sobre blanco quedan bajo 3:1. Aquí se definen variantes «tinta» para texto y trazos (≥ 4.5:1 en claro) y se
+   vuelve al tono vivo en oscuro, donde sí contrasta. */
+.gv-wrap{--gv-accent-strong:#4D7C0F;--gv-warn-ink:#92400E;--gv-focus:#1D4ED8;--gv-ok-bg:#166534;--gv-ok-fg:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .gv-wrap{--gv-accent-strong:#84CC16;--gv-warn-ink:#FBBF24;--gv-focus:#A3E635;--gv-ok-bg:#34D399;--gv-ok-fg:#0B0F17}}
+:root[data-theme="dark"] .gv-wrap{--gv-accent-strong:#84CC16;--gv-warn-ink:#FBBF24;--gv-focus:#A3E635;--gv-ok-bg:#34D399;--gv-ok-fg:#0B0F17}
+.gv-wrap :focus-visible{outline:2px solid var(--gv-focus);outline-offset:2px}
+.gv-leaflet:focus-visible{outline:3px solid var(--geo-accent);outline-offset:-3px}
+.gv-drop:has(input:focus-visible){outline:2px solid var(--gv-focus);outline-offset:2px;border-color:var(--accent)}
+.gv-hint.warn,.gv-explore-banner,.gv-explore-banner button,.gv-cr.bad,.gv-badge.warn,.gv-layer .del.ask,.gv-quota.over b,.gv-point .r.veto,.gv-point .r.veto .pc{color:var(--gv-warn-ink)}
+.gv-point .big,.gv-layer.on .eye{color:var(--gv-accent-strong)}
+.gv-prev path{stroke:var(--gv-accent-strong)}
+.gv-wbar .fill{background:var(--gv-accent-strong)}
+.gv-howto li.done>i{background:var(--gv-ok-bg);border-color:var(--gv-ok-bg);color:var(--gv-ok-fg)}
+.gv-point .cls-pill{border:1.5px solid transparent;color:var(--ink)}
+.gv-pre{white-space:pre-line}
+.gv-sub-warn{color:var(--gv-warn-ink)}
+/* Leyendas: el resultado y, encima, la de la capa visible arriba (con unidades y significado de cada color). */
+.gv-legends{position:absolute;z-index:1000;right:10px;bottom:28px;display:grid;gap:8px;justify-items:end;max-width:min(270px,calc(100% - 20px))}
+.gv-legends .gv-legend{position:static;display:grid;width:100%}
+.gv-legend .sub{font-size:10.5px;color:var(--muted);line-height:1.35}
+.gv-legend .ends{gap:8px}
+.gv-legend .row{align-items:flex-start;line-height:1.3}
+.gv-legend .row i{margin-top:2px}
+@media(max-width:700px){
+  .gv-legends{left:10px;right:10px;bottom:34px;max-width:none;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+  .gv-legends .gv-legend{padding:6px 9px;min-width:0;font-size:10.5px}
+  .gv-legends .gv-legend .sub{display:none}
+  /* con la ficha del punto abierta ocupa el borde inferior: la leyenda vuelve al cerrarla */
+  .gv-legends:has(~ .gv-point){display:none}
+}
+/* Pantallas táctiles: objetivos de al menos 44 px y campos de 16 px (iOS no hace zoom al enfocarlos). */
+@media (pointer:coarse){
+  .gv-tabs button,.gv-chips button,.gv-fit,.gv-wrap .btn.sm,.gv-layer .eye,.gv-layer .del,.gv-point .x,.gv-parcel,.gv-explore-banner button,.gv-tour-card .btn{min-height:44px;min-width:44px}
+  .gv-layer .eye,.gv-layer .del{width:44px;height:44px}
+  .gv-leaflet .leaflet-control-zoom a{width:44px;height:44px;line-height:44px;font-size:22px}
+  .gv-wrap select,.gv-wrap input[type=text],.gv-wrap input[type=number]{min-height:44px;font-size:16px}
+  .gv-step input,.gv-nums input,.gv-bbox input{min-height:44px!important;font-size:16px!important}
+  .gv-wrap input[type=range]{min-height:32px}
+  .gv-check input,.gv-modes input{width:20px;height:20px}
+  .gv-check,.gv-modes label{min-height:32px;align-items:center}
+}
+@media (prefers-reduced-motion:reduce){
+  .gv-tour-hole,.gv-drop{transition:none}
+  .gv-wrap .btn:hover,.gv-wrap .btn:active{transform:none}
+}
+/* El recorrido se pinta en un portal fuera de .gv-wrap: hereda de aquí lo que ese contenedor define. */
+.gv-tour{--accent:var(--geo-accent);--accent-soft:var(--geo-accent-soft);--accent-ink:#0B0F17;--gv-focus:#1D4ED8}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .gv-tour{--gv-focus:#A3E635}}
+:root[data-theme="dark"] .gv-tour{--gv-focus:#A3E635}
+.gv-tour :focus-visible{outline:2px solid var(--gv-focus);outline-offset:2px}
+
+/* =====================================================================================================
+   SUPERFICIES DE ENTRADA (portada, /metodo, /login, /tutorial, 404, panel, «Nuevo proyecto», barra superior)
+   Sección añadida al final para no reescribir reglas ajenas. Todo lo de aquí va con tokens (sin blancos
+   fijos) para verse bien en claro y en oscuro.
+   ===================================================================================================== */
+
+/* ---- tokens nuevos ---- */
+/* Colores de familia de método (portada y guía). Claro: tonos oscurecidos para que el borde/punto se vea sobre blanco. */
+:root{
+  --fam-pares:#7C3AED;--fam-dist:#0D9488;--fam-out:#DB2777;--fam-saw:#EA580C;--fam-fuzzy:#0891B2;
+  /* Versión de --m-* apta para TEXTO sobre fondo claro (los --m-* originales, p. ej. el cian, no llegan a 3:1 sobre blanco). */
+  --mt-ahp:#6D28D9;--mt-topsis:#0E7490;--mt-vikor:#047857;--mt-promethee:#BE123C;--mt-electre:#B45309;--mt-saw:#C2410C;--mt-fuzzy:#0F766E;
+  /* Ámbar y verde como TEXTO: --warn/--pass sirven de borde y relleno pero sobre blanco dan ~2:1. */
+  --warn-t:#B45309;--pass-t:#047857;--warn-ink:#FFFFFF;
+  /* El azul de acento y el gris de apoyo del modo claro quedaban en 4.1:1 y 4.4:1 (< 4.5:1 exigido para texto). */
+  --pb:#0369A1;--muted:#5A6A80;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --fam-pares:#A78BFA;--fam-dist:#2DD4BF;--fam-out:#F472B6;--fam-saw:#FB923C;--fam-fuzzy:#22D3EE;
+  --mt-ahp:#A78BFA;--mt-topsis:#00E5FF;--mt-vikor:#34D399;--mt-promethee:#FB7185;--mt-electre:#FBBF24;--mt-saw:#FB923C;--mt-fuzzy:#2DD4BF;
+  --warn-t:var(--warn);--pass-t:var(--pass);--warn-ink:#1A1200;}}
+:root[data-theme="dark"]{
+  --fam-pares:#A78BFA;--fam-dist:#2DD4BF;--fam-out:#F472B6;--fam-saw:#FB923C;--fam-fuzzy:#22D3EE;
+  --mt-ahp:#A78BFA;--mt-topsis:#00E5FF;--mt-vikor:#34D399;--mt-promethee:#FB7185;--mt-electre:#FBBF24;--mt-saw:#FB923C;--mt-fuzzy:#2DD4BF;
+  --warn-t:var(--warn);--pass-t:var(--pass);--warn-ink:#1A1200;}
+
+/* Color de cada método por atributo: --m-color (relleno/borde) y --mt-color (texto). */
+[data-method="ahp"]{--m-color:var(--m-ahp);--mt-color:var(--mt-ahp)}
+[data-method="topsis"]{--m-color:var(--m-topsis);--mt-color:var(--mt-topsis)}
+[data-method="vikor"]{--m-color:var(--m-vikor);--mt-color:var(--mt-vikor)}
+[data-method="promethee"]{--m-color:var(--m-promethee);--mt-color:var(--mt-promethee)}
+[data-method="electre"]{--m-color:var(--m-electre);--mt-color:var(--mt-electre)}
+[data-method="saw"]{--m-color:var(--m-saw);--mt-color:var(--mt-saw)}
+[data-method="fuzzy_topsis"]{--m-color:var(--m-fuzzy);--mt-color:var(--mt-fuzzy)}
+
+/* ---- texto de estado con contraste suficiente en claro ---- */
+.err,.req,.banner b,.pill.warn,.tag,.attn b,.btn.danger,.modal .warn-icon,.umenu-item.danger{color:var(--warn-t)}
+.ok,.pill:not(.warn):not(.neutral){color:var(--pass-t)}
+.btn.danger:not(:disabled):hover{background:var(--warn-t);border-color:var(--warn-t);color:var(--warn-ink)}
+.pill.warn,.pill:not(.neutral){white-space:nowrap}
+
+/* ---- botones y enlaces ---- */
+a.btn,a.btn:hover{text-decoration:none}
+.btn.primary{box-shadow:0 0 14px color-mix(in srgb,var(--accent) 30%,transparent)}
+.btn.primary:hover{box-shadow:0 0 20px color-mix(in srgb,var(--accent) 50%,transparent)}
+.btn.sm{min-height:36px}
+input[type=text]:focus,input[type=number]:focus,input[type=password]:focus,input[type=email]:focus,input[type=search]:focus,select:focus,textarea:focus{box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 22%,transparent)}
+input[type=search]{font:inherit;color:var(--ink);background:var(--surface2);border:1px solid var(--line);border-radius:8px;padding:9px 12px;width:100%;min-height:40px;transition:all .2s ease}
+input[type=search]:focus{outline:none;border-color:var(--accent)}
+@media (pointer:coarse){.btn,.btn.sm{min-height:44px}.btn.icon{min-width:44px}}
+@media (prefers-reduced-motion:reduce){.btn,.prow,.wz-opt,.lstep,.laud,.lmethod{transition:none}.btn:hover,.prow:hover,.lstep:hover,.laud:hover,.lmethod:hover{transform:none}}
+
+/* ---- barra superior ---- */
+.topbar .brand{background:color-mix(in srgb,var(--ink) 3%,transparent)}
+.topbar .brand:hover{background:color-mix(in srgb,var(--ink) 7%,transparent);border-color:color-mix(in srgb,var(--accent) 45%,var(--line));box-shadow:0 4px 16px color-mix(in srgb,var(--accent) 15%,transparent)}
+.topbar .brand .brand-sub{font-size:11.5px}
+.brand-row{display:flex;align-items:center;gap:6px;line-height:1.2}
+.brand-badge{font:600 10px var(--f-mono);padding:1px 6px;border-radius:4px;background:color-mix(in srgb,var(--ink) 9%,transparent);color:var(--muted)}
+.topbar-nav .navlink{display:inline-flex;align-items:center;min-height:40px}
+.topbar-nav .navlink:hover{background:color-mix(in srgb,var(--ink) 6%,transparent)}
+.topbar-nav .navlink.active{background:color-mix(in srgb,var(--ink) 9%,transparent)}
+@media (pointer:coarse){.topbar-nav .navlink{min-height:44px}}
+@media (max-width:640px){.topbar-right{justify-content:flex-start}.topbar-actions{margin-left:auto}}
+
+/* ---- portada ---- */
+.lstrip{list-style:none;padding:0;margin:26px 0 0;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:16px 28px;max-width:560px}
+.lmock .tag{border:0;padding:0;border-radius:0;color:var(--accent)}
+.lmock-cap{font-size:12px;line-height:1.4;color:var(--muted)}
+.lgrid4{list-style:none;margin:0;padding:0}
+.lmethods{grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr))}
+.lmethod{border:1px solid var(--line);border-top:3px solid var(--fam);border-radius:8px;padding:16px;background:var(--bg);grid-template-rows:auto auto 1fr auto;align-content:start;gap:8px}
+.lmethod .need{font-size:12.5px;border-top:1px dashed var(--line);padding-top:8px;line-height:1.45}
+.lmethod .need i{display:block;font:600 10.5px var(--f-mono);font-style:normal;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:2px}
+.lweights{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(min(100%,290px),1fr))}
+.lweight{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px;display:grid;gap:8px;align-content:start}
+.lweight b{font:700 17px var(--f-display)}
+.lweight .sub{font:500 11.5px var(--f-mono);letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+.lweight p{font-size:13.5px;line-height:1.5;color:var(--muted)}
+.lweight .when i{display:block;font:600 10.5px var(--f-mono);font-style:normal;text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px}
+.lgeo{display:grid;gap:28px;align-items:center}
+@media (min-width:860px){.lgeo{grid-template-columns:1.2fr 1fr;gap:48px}}
+.lgeo-list{margin:0;padding:0;list-style:none;display:grid;gap:14px}
+.lgeo-list li{border-left:3px solid var(--geo-accent);padding-left:14px;font-size:13.5px;line-height:1.5;color:var(--muted)}
+.lgeo-list b{color:var(--ink)}
+.lfoot nav{display:flex;gap:18px;flex-wrap:wrap}
+
+/* ---- guía «¿Qué método uso?» ---- */
+.mcallout{margin-top:20px;display:flex;gap:14px;justify-content:space-between;align-items:center;flex-wrap:wrap;border-left:3px solid var(--geo-accent)}
+.mcallout>div{max-width:62ch}
+.mcallout p{margin:4px 0 0;font-size:13.5px}
+.wz-wrap{margin-top:24px}
+.wz,.rec{display:grid;gap:18px;padding:24px 28px}
+@media (max-width:560px){.wz,.rec{padding:18px 16px}}
+.wz{border-top:3px solid var(--accent)}
+.wz-top{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.wz-step{font:700 12px var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--accent)}
+.wz-step .muted{font-weight:500}
+.wz-dots{display:inline-flex;gap:6px}
+.wz-dots i{width:22px;height:4px;border-radius:2px;background:var(--line)}
+.wz-dots i.on{background:var(--accent)}
+.wz-q,.rec-name{color:var(--ink)}
+.wz-q:focus,.rec-name:focus{outline:none}
+.wz-q{font-size:20px}
+.wz-hint{font-size:13.5px;margin-top:6px}
+.wz-opts{display:grid;gap:12px}
+.wz-opt{appearance:none;font:inherit;color:inherit;text-align:left;display:flex;align-items:center;gap:16px;min-height:64px;padding:14px 18px;border:1px solid var(--line);border-radius:10px;background:var(--surface2);cursor:pointer;transition:border-color .2s ease,transform .2s ease,box-shadow .2s ease}
+.wz-opt:hover{border-color:var(--accent);box-shadow:0 6px 20px color-mix(in srgb,var(--accent) 16%,transparent)}
+@media (prefers-reduced-motion:no-preference){.wz-opt:hover{transform:translateY(-2px)}}
+.wz-badge{width:36px;height:36px;flex:none;display:grid;place-items:center;border-radius:8px;border:1px solid var(--line);background:var(--surface);font:700 14px var(--f-mono);color:var(--muted)}
+.wz-body{flex:1;min-width:0;display:grid;gap:3px}
+.wz-title{font-size:15px;font-weight:600;color:var(--ink);line-height:1.35}
+.wz-desc{font-size:13px;color:var(--muted);line-height:1.45}
+.wz-tag{justify-self:start;font:600 10.5px var(--f-mono);letter-spacing:.05em;text-transform:uppercase;padding:2px 7px;border-radius:4px;background:color-mix(in srgb,var(--ink) 7%,transparent);color:var(--muted);margin-top:4px}
+.wz-arrow{font-size:18px;color:var(--muted)}
+.wz-foot{display:flex;gap:10px;flex-wrap:wrap;padding-top:12px;border-top:1px solid var(--line)}
+.rec{border-left:5px solid var(--fam,var(--accent));background:linear-gradient(135deg,var(--surface) 0%,color-mix(in srgb,var(--fam,var(--accent)) 7%,var(--surface)) 100%)}
+.rec-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.rec-fam{font:700 11px var(--f-mono);text-transform:uppercase;letter-spacing:.05em;padding:2px 8px;border-radius:4px;border:1px solid var(--fam,var(--accent));color:var(--ink)}
+.rec-lbl{font:500 12px var(--f-mono);text-transform:uppercase;letter-spacing:.05em}
+.rec-name{font-size:24px}
+.rec-sum{font-size:14.5px;color:var(--muted);line-height:1.6;margin-top:8px;max-width:75ch}
+.rec-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:12px;margin:0}
+.rec-grid>div{background:var(--surface2);border:1px solid var(--line);border-radius:8px;padding:12px 14px}
+.rec-grid dt{font:600 11px var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+.rec-grid dd{margin:0;font-size:13.5px;line-height:1.5}
+.rec-w{display:grid;gap:10px;border-top:1px solid var(--line);padding-top:16px}
+.rec-w h4{font:700 16px var(--f-display);text-transform:none;letter-spacing:0;color:var(--ink);margin:0}
+.rec-wnote{font-size:13.5px;color:var(--muted);line-height:1.5;max-width:75ch}
+.rec-wopts{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr));gap:10px}
+.rec-wopt{position:relative;display:grid;gap:4px;align-content:start;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--surface2);cursor:pointer;min-height:44px}
+.rec-wopt input{position:absolute;opacity:0;inset:0;margin:0;cursor:pointer;width:100%;height:100%}
+.rec-wopt:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:2px}
+.rec-wopt:hover{border-color:color-mix(in srgb,var(--accent) 55%,var(--line))}
+.rec-wopt.on{border-color:var(--accent);background:var(--accent-soft);box-shadow:0 0 0 1px var(--accent)}
+.rec-wopt b{font-size:14.5px}
+.rec-wopt .sub{font:500 11px var(--f-mono);text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+.rec-wopt .whn{font-size:12.5px;line-height:1.45}
+.rec-wopt .nds{font-size:12px;line-height:1.4;color:var(--muted)}
+.rec-wopt .nds i{font-style:normal;font-weight:600}
+.rec-wcaveat{font-size:13px;line-height:1.5;background:var(--surface2);border-radius:8px;padding:10px 12px}
+.rec-ref{display:block;margin-top:6px;font:400 12px/1.5 var(--f-mono);color:var(--muted);overflow-wrap:anywhere}
+.rec-ref-box{background:var(--surface2);border:1px solid var(--line);border-radius:8px;padding:12px 14px;display:grid;gap:4px}
+.rec-ref-lbl{font:600 11px var(--f-mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.rec-ref-txt{font-size:13px;line-height:1.5;overflow-wrap:anywhere}
+.rec-acts .rec-cta{margin-left:auto}
+@media (max-width:560px){.rec-acts .rec-cta{margin-left:0;width:100%}}
+.mcard{margin-top:28px;display:grid;gap:12px}
+.mcard h3{font-size:18px}
+.mcard>p.muted,.mnote{font-size:13.5px}
+table.cmp{min-width:900px;font-size:13px}
+.cmp th,.cmp td{padding:12px 14px 12px 0;vertical-align:top;line-height:1.5;text-align:left}
+.cmp tbody th{font:inherit;text-transform:none;letter-spacing:0;color:var(--ink);white-space:nowrap;position:sticky;left:0;background:var(--surface)}
+.cmp-name{display:flex;align-items:center;gap:8px;font:700 14px var(--f-display)}
+.cmp-name i{width:10px;height:10px;border-radius:50%;background:var(--m-color);flex:none}
+.cmp-fam{display:block;font:500 11px var(--f-mono);color:var(--muted);margin-top:2px;text-transform:uppercase;letter-spacing:.04em}
+.cmp td{color:var(--ink)}
+.tbl[tabindex]:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+.wref-grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr))}
+.wref{background:var(--surface2);border:1px solid var(--line);border-radius:10px;padding:16px;display:grid;gap:8px;align-content:start;font-size:13.5px;line-height:1.5}
+.wref h4{font:700 16px var(--f-display);text-transform:none;letter-spacing:0;color:var(--ink);margin:0}
+.wref-apa{margin:4px 0 0;padding:8px 0 0;list-style:none;display:grid;gap:6px;font:400 12px/1.5 var(--f-mono);color:var(--muted);border-top:1px solid var(--line);overflow-wrap:anywhere}
+.bib{display:grid;gap:10px}
+.bib-item{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;padding:14px 16px;border-radius:8px;background:var(--surface2);border-left:4px solid var(--m-color,var(--line))}
+.bib-txt{flex:1 1 280px;min-width:0;display:grid;gap:4px}
+.bib-txt b{font-size:14px}
+.bib-txt span{font-size:13px;color:var(--muted);line-height:1.45;overflow-wrap:anywhere}
+.bib-acts{display:flex;gap:8px;flex-wrap:wrap}
+
+/* ---- acceso ---- */
+.pwhead{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:6px;min-height:24px}
+.linkbtn{appearance:none;background:none;border:0;padding:6px 0;font:600 12.5px var(--f-body);color:var(--accent);text-decoration:underline;cursor:pointer;min-height:32px}
+.pwfield{position:relative}
+.pwfield input{padding-right:88px}
+.pwtoggle{position:absolute;right:4px;top:50%;transform:translateY(-50%);min-height:36px;padding:0 10px;border:0;border-radius:6px;background:transparent;color:var(--accent);font:600 12.5px var(--f-body);cursor:pointer}
+.pwtoggle:hover{background:var(--accent-soft)}
+.authcard .eyebrow+h1{margin-top:4px}
+
+/* ---- panel: lista de proyectos y «Nuevo proyecto» ---- */
+.dash-head{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap}
+.dash-head p{margin-top:4px;font-size:14px;max-width:60ch}
+.pempty{display:grid;grid-template-columns:auto 1fr auto;gap:18px;align-items:center;padding:26px}
+.pempty h2{font-size:20px;margin-bottom:4px}
+.pempty p{font-size:14px;max-width:62ch}
+.pempty-ico{width:48px;height:48px;border-radius:12px;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent)}
+@media (max-width:700px){.pempty{grid-template-columns:1fr;justify-items:start}}
+.psearch{display:flex;gap:12px;align-items:center}
+.psearch input{max-width:380px}
+.psearch .count{white-space:nowrap}
+.flash{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;background:var(--pass-soft);border:1px solid var(--pass);color:var(--ink);border-radius:8px;padding:10px 14px;font-size:13.5px}
+.flash-ok{color:var(--pass-t);font-weight:700}
+.flash a{font-weight:600}
+.flash-x{margin-left:auto;appearance:none;background:none;border:0;font-size:20px;line-height:1;color:var(--muted);cursor:pointer;min-width:32px;min-height:32px;border-radius:6px}
+.flash-x:hover{background:color-mix(in srgb,var(--ink) 8%,transparent)}
+.prow-main b{overflow-wrap:anywhere}
+.prow .btn.icon{min-width:40px;min-height:40px}
+.prow:hover{border-color:color-mix(in srgb,var(--accent) 60%,var(--line))}
+#nuevo{scroll-margin-top:84px}
+.mhelp{margin-top:8px;display:grid;gap:4px;font-size:13px;line-height:1.5;padding:10px 12px;border-radius:8px;background:var(--surface2);border-left:3px solid var(--m-color,var(--line))}
+.mhelp p{margin:0}
+.mhelp a{font-weight:600}
+.mhelp .preset{color:var(--accent);font-weight:600}
+.wpick{border:0;margin:0;padding:0;min-width:0}
+.wpick-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+.wpick-card{position:relative;display:grid;gap:2px;align-content:start;padding:10px 12px;border:1px solid var(--line);border-radius:10px;cursor:pointer;min-height:44px;background:var(--surface2)}
+.wpick-card input{position:absolute;opacity:0;inset:0;margin:0;cursor:pointer;width:100%;height:100%}
+.wpick-card:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:2px}
+.wpick-card:hover{border-color:color-mix(in srgb,var(--accent) 55%,var(--line))}
+.wpick-card.on{border-color:var(--accent);background:var(--accent-soft);box-shadow:0 0 0 1px var(--accent)}
+.wpick-card b{font-size:14px}
+.wpick-card span{font-size:12px;line-height:1.4;color:var(--muted)}
+.wpick-note{font-size:12.5px;margin-top:8px}
+.mhint{font-size:12.5px}
+@media print {
+  /* una nota va pegada a la tabla que comenta, y las firmas al último bloque del documento (sin hoja final con solo la firma) */
+  #executive-report-container .rpt-note { break-before: avoid; page-break-before: avoid; }
+  #executive-report-container .rpt-foot { break-before: avoid; page-break-before: avoid; }
+}
+/* lista de proyectos en móvil: título y meta a todo el ancho, y la etiqueta + acciones en una segunda fila
+   (antes el título quedaba aplastado en una columna de ~90px entre la etiqueta y los botones). */
+.prow-main{flex:1 1 320px}
+@media (max-width:640px){
+  .prow{display:grid;grid-template-columns:1fr auto auto;gap:10px 8px}
+  .prow-main{grid-column:1/-1}
+  .prow .pill{justify-self:start}
+}
+.lhero h1{margin-top:8px}
+/* las rejillas auto-fit de dentro no deben ensanchar la columna de la portada (a 375px empujaban todo el héroe a 522px) */
+.lhero>*,.lgeo>*{min-width:0}
+/* tutorial en móvil: la tabla del mini-tutorial (min-width 520px) ensanchaba toda la guía hasta 578px; ahora se desplaza dentro de su caja */
+.tlayout>*{min-width:0}

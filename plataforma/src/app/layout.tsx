@@ -3,7 +3,7 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: 'Plataforma MCDA',
-  description: 'Priorización de criterios y AHP con expertos, enlaces compartibles y resultados exportables a Excel.',
+  description: 'Toma de decisiones multicriterio: AHP, TOPSIS, VIKOR, PROMETHEE, ELECTRE, SAW y Fuzzy TOPSIS, con pesos por expertos, CRITIC o Entropía, geovisor AHP+SIG e informe exportable.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

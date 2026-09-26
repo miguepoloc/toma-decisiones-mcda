@@ -24,9 +24,9 @@ export default async function TutorialPage() {
         <div className="eyebrow">Guía completa</div>
         <h1>Del objetivo al ranking, paso a paso</h1>
         <p className="muted lnote" style={{ marginTop: 10 }}>
-          Este es el mismo flujo que verías montando el ejercicio a mano en Excel — la plataforma solo se encarga de
-          las cuentas, los enlaces y la aritmética. Nada de esto reemplaza entender AHP; te deja tiempo para pensar
-          en los juicios en vez de en las fórmulas.
+          Este es el mismo flujo que verías montando el ejercicio a mano en Excel: la plataforma solo se encarga de
+          las cuentas, los enlaces y la aritmética. Nada de esto reemplaza entender los métodos; te deja tiempo para
+          pensar en los juicios y los datos en vez de en las fórmulas.
         </p>
       </div>
 
@@ -44,13 +44,13 @@ export default async function TutorialPage() {
             <div className="titem">
               <span className="no">2</span>
               <h3>Tus criterios y alternativas</h3>
-              <p>Los criterios con los que vas a juzgar (idealmente ya priorizados: 3 a 9 es el rango manejable) y las alternativas entre las que vas a elegir (2 o más).</p>
+              <p>Los criterios con los que vas a juzgar (idealmente ya priorizados: 3 a 9 es el rango manejable) y las alternativas entre las que vas a elegir (2 o más). Si usas un método con datos, también necesitas el valor de cada alternativa en cada criterio.</p>
               <div className="tip"><b>Tip:</b> si ya hiciste la priorización de criterios de la Sesión 1 (lluvia de ideas → tamizaje → independencia → panel → corte), la pestaña «Priorización (A)» del proyecto reproduce ese mismo proceso y luego lleva los finalistas directo al AHP con un clic.</div>
             </div>
             <div className="titem">
               <span className="no">3</span>
-              <h3>Elige el método</h3>
-              <p>AHP (comparar de a pares) o TOPSIS (matriz de datos reales) — los dos pesan los criterios igual, cambia cómo comparas las alternativas. <Link href="/metodo">Responde 2 preguntas y te decimos cuál</Link>.</p>
+              <h3>Elige el método y cómo pesar los criterios</h3>
+              <p>Son dos decisiones. <b>Método</b> (cómo comparas las alternativas): AHP con juicios por pares; TOPSIS, VIKOR, PROMETHEE, ELECTRE o SAW con una matriz de datos; Fuzzy TOPSIS con etiquetas como «buena» o «regular». <b>Pesos</b> (cuánto importa cada criterio): por juicios de expertos (AHP) o, en los métodos con datos, calculados desde la matriz con CRITIC o Entropía. <Link href="/metodo">Responde unas pocas preguntas y te decimos cuál</Link>.</p>
             </div>
           </div>
 
@@ -61,27 +61,34 @@ export default async function TutorialPage() {
             <div className="titem">
               <span className="no">4</span>
               <h3>Crea el proyecto</h3>
-              <p>Desde «Mis proyectos» → «Nuevo proyecto»: título y objetivo. Arranca con 3 criterios y 3 alternativas de ejemplo — los editas, renombras o agregas/quitas los que necesites en la pestaña «Proyecto».</p>
-              <div className="tip"><b>Tip:</b> ¿ya tienes un respaldo de la herramienta HTML del curso (.json o el .xlsx que descargaste)? Usa «Importar de la herramienta HTML» en vez de empezar de cero: trae el proyecto, los expertos y todos los juicios.</div>
+              <p>Desde «Mis proyectos» → «Nuevo proyecto»: elige el tipo (decisión con alternativas o mapa de aptitud), el método y, si no es AHP, cómo pesar los criterios; escribe el título y el objetivo. El proyecto nace en blanco, con «Criterio 1–3» y «Alternativa 1–3» de relleno que renombras, agregas o quitas en la pestaña «Proyecto». Si quieres ver el flujo completo antes de meter tus datos, marca «Empezar con el caso de ejemplo del curso».</p>
+              <div className="tip"><b>Tip:</b> ¿ya tienes un respaldo de la herramienta HTML del curso (.json o el .xlsx que descargaste) o el Excel del taller de AHP? Usa «Importar un archivo» en vez de empezar de cero: trae el proyecto, los expertos y todos los juicios.</div>
             </div>
             <div className="titem">
               <span className="no">5</span>
               <h3>Escribe la regla de cada criterio</h3>
               <p>Junto a cada criterio hay un campo «Regla: ¿qué es mejor?». Es la frase que verán tus expertos al comparar — importante sobre todo en criterios donde <i>menos es mejor</i> (costo, riesgo), para comparar en la dirección correcta.</p>
             </div>
+            <div className="titem">
+              <span className="no">6</span>
+              <h3>Llena la matriz de decisión (métodos con datos)</h3>
+              <p>Con TOPSIS, VIKOR, PROMETHEE, ELECTRE o SAW, la pestaña «Matriz de decisión» pide un número por alternativa y criterio, y si cada criterio es de beneficio (más es mejor), de costo (menos es mejor) o de valor objetivo. Con Fuzzy TOPSIS eliges una etiqueta (Muy mala → Muy buena) en cada celda. Con AHP no hay matriz: tus expertos comparan las alternativas de a pares.</p>
+              <div className="tip"><b>Ojo:</b> con CRITIC o Entropía los pesos salen de esta matriz, así que cambiarla los recalcula. Miden cuánto se diferencian tus alternativas, no qué tan importante es un criterio para ti.</div>
+            </div>
           </div>
 
           <div className="tphase" id="expertos">
             <span className="k">Los expertos</span>
             <h2>Reunir los juicios</h2>
+            <p className="muted" style={{ fontSize: 14, maxWidth: '60ch', marginTop: 6 }}>Aplica cuando los pesos salen de juicios por pares (AHP), o cuando usas AHP como método. Si pesas con CRITIC o Entropía, la pestaña «Expertos» no se usa y puedes saltar a los resultados.</p>
 
             <div className="titem">
-              <span className="no">6</span>
+              <span className="no">7</span>
               <h3>Agrega a tus expertos</h3>
               <p>Pestaña «Expertos» → nombre y rol de cada uno. Cada persona genera automáticamente un enlace propio (<code className="mono">/e/&lt;token&gt;</code>) que solo funciona para ella.</p>
             </div>
             <div className="titem">
-              <span className="no">7</span>
+              <span className="no">8</span>
               <h3>Comparte el enlace</h3>
               <p>Copia y envía el enlace de cada experto (WhatsApp, correo, lo que uses). No necesitan crear cuenta ni instalar nada: abren el enlace, mueven un control por cada par de elementos, y pulsan «Enviar respuestas» al terminar. Pueden cerrar la pestaña y volver después con el mismo enlace.</p>
               <div className="tip"><b>Tip:</b> ¿entrevistaste a un experto en persona o por llamada? Puedes llenar sus juicios tú mismo desde «Llenar yo por él/ella», sin que necesite abrir nada.</div>
@@ -93,14 +100,14 @@ export default async function TutorialPage() {
             <h2>Leer y compartir lo que salió</h2>
 
             <div className="titem">
-              <span className="no">8</span>
+              <span className="no">9</span>
               <h3>Revisa pesos y consistencia</h3>
-              <p>Pestaña «Resultados»: el ranking final, cuánto aporta cada criterio, y el CR (razón de consistencia) de cada matriz — agregado o filtrando por experto individual. Un CR ≥ 0.10 es la señal de que alguien se contradijo y vale la pena revisar esos juicios con esa persona.</p>
+              <p>Pestaña «Resultados»: el ranking (o, en ELECTRE, el grafo de superación), cuánto aporta cada criterio, los pesos y su procedencia, y el CR (razón de consistencia) de cada matriz — agregado o por experto. Un CR ≥ 0.10 es la señal de que alguien se contradijo y vale la pena revisar esos juicios con esa persona. La pestaña «Comparativa» pone los métodos lado a lado sobre los mismos datos, y el simulador de sensibilidad te deja mover un peso para ver si el ganador cambia.</p>
             </div>
             <div className="titem">
-              <span className="no">9</span>
+              <span className="no">10</span>
               <h3>Exporta o publica</h3>
-              <p>Pestaña «Compartir»: descarga el Excel con la misma estructura del ejercicio del curso (fórmulas vivas, listo para el informe), o activa un enlace público de solo resultados — sin nombres de expertos, sin sus enlaces, sin la priorización de criterios.</p>
+              <p>Descarga el Excel con la misma estructura del ejercicio del curso (fórmulas vivas, listo para el informe) o genera el informe ejecutivo en PDF desde «Resultados». En «Compartir» puedes activar un enlace público de solo resultados — sin nombres de expertos, sin sus enlaces, sin la priorización de criterios.</p>
             </div>
           </div>
 
@@ -167,44 +174,27 @@ export default async function TutorialPage() {
           </div>
 
           <div className="tphase" id="referencias">
-            <span className="k">Marco Científico</span>
-            <h2>Literatura y Referencias Fundacionales</h2>
-
-            <div className="titem">
-              <span className="no">📚</span>
-              <h3>AHP (Analytic Hierarchy Process)</h3>
-              <p><b>Saaty, T. L. (1980).</b> <em>The Analytic Hierarchy Process: Planning, Priority Setting, Resource Allocation</em>. McGraw-Hill, New York. DOI/ISBN: 0-07-054371-2. Fundamenta la escala de juicios pareados 1 al 9 y el autovector principal como estimador de pesos con razón de consistencia CR &lt; 0.10.</p>
-            </div>
-
-            <div className="titem">
-              <span className="no">📚</span>
-              <h3>TOPSIS (Technique for Order Preference by Similarity to Ideal Solution)</h3>
-              <p><b>Hwang, C. L., & Yoon, K. (1981).</b> <em>Multiple Attribute Decision Making: Methods and Applications</em>. Springer-Verlag, Berlin/Heidelberg. Introduce la métrica euclidiana de proximidad simultánea a la solución ideal positiva (PIS) y lejanía de la anti-ideal (NIS).</p>
-            </div>
-
-            <div className="titem">
-              <span className="no">📚</span>
-              <h3>VIKOR (Compromise Solution MCDM)</h3>
-              <p><b>Opricovic, S., & Tzeng, G. H. (2004).</b> Compromise solution by MCDM methods: A comparative analysis of VIKOR and TOPSIS. <em>European Journal of Operational Research</em>, 156(2), 445–455. Formula la optimización multicriterio de compromiso basada en la medida de utilidad de la mayoría (S) y el pesar individual (R).</p>
-            </div>
-
-            <div className="titem">
-              <span className="no">📚</span>
-              <h3>PROMETHEE (Outranking Methods)</h3>
-              <p><b>Brans, J. P., & Vincke, P. (1985).</b> A preference ranking organisation method: The PROMETHEE method for multiple criteria decision-making. <em>Management Science</em>, 31(6), 647–656. Relaciones de superación basadas en funciones de preferencia y flujos netos Φ.</p>
-            </div>
-
-            <div className="titem">
-              <span className="no">📚</span>
-              <h3>ELECTRE (Concordance & Discordance)</h3>
-              <p><b>Roy, B. (1991).</b> The outranking approach and the foundations of ELECTRE methods. <em>Theory and Decision</em>, 31(1), 49–73. Procedimientos de partición no compensatoria basados en umbrales de veto y concordancia.</p>
-            </div>
-
-            <div className="titem">
-              <span className="no">📚</span>
-              <h3>Ponderación Objetiva (CRITIC y Entropía)</h3>
-              <p><b>Diakoulaki, D., Mavrotas, G., & Papayannakis, L. (1995).</b> Determining objective weights in multiple criteria problems: The CRITIC method. <em>Computers & Operations Research</em>, 22(7), 763–770. Junto con <b>Shannon, C. E. (1948)</b>, permite calcular pesos estadísticos cuando no se cuenta con panel de expertos.</p>
-            </div>
+            <span className="k">Marco científico</span>
+            <h2>Literatura y referencias fundacionales</h2>
+            <p className="muted" style={{ fontSize: 14, maxWidth: '60ch', marginTop: 6 }}>
+              La lista completa, con enlaces al artículo (DOI) y las fórmulas de cada método, está en <Link href="/metodo#bib-h">¿Qué método uso?</Link>.
+            </p>
+            {[
+              ['AHP (Analytic Hierarchy Process)', 'Saaty, T. L. (1980).', 'The Analytic Hierarchy Process: Planning, Priority Setting, Resource Allocation', ' McGraw-Hill. Fundamenta la escala de juicios pareados 1 a 9 y el autovector principal como estimador de pesos, con razón de consistencia CR < 0.10.'],
+              ['TOPSIS', 'Hwang, C. L., & Yoon, K. (1981).', 'Multiple Attribute Decision Making: Methods and Applications', '. Springer-Verlag. Introduce la proximidad simultánea a la solución ideal positiva (PIS) y la lejanía de la anti-ideal (NIS).'],
+              ['VIKOR (solución de compromiso)', 'Opricovic, S., & Tzeng, G. H. (2004).', 'Compromise solution by MCDM methods: A comparative analysis of VIKOR and TOPSIS', '. European Journal of Operational Research, 156(2), 445–455. Optimización de compromiso con la utilidad de grupo (S) y el pesar individual (R).'],
+              ['PROMETHEE', 'Brans, J. P., & Vincke, P. (1985).', 'A preference ranking organisation method: The PROMETHEE method for multiple criteria decision-making', '. Management Science, 31(6), 647–656. Relaciones de superación con funciones de preferencia y flujos netos Φ.'],
+              ['ELECTRE', 'Roy, B. (1991).', 'The outranking approach and the foundations of ELECTRE methods', '. Theory and Decision, 31(1), 49–73. Relaciones de superación no compensatorias con umbrales de concordancia y discordancia.'],
+              ['SAW (suma ponderada simple)', 'MacCrimmon, K. R. (1968).', 'Decisionmaking among multiple-attribute alternatives: A survey and consolidated approach', '. RAND Memorandum RM-4823-ARPA.'],
+              ['Fuzzy TOPSIS', 'Chen, C.-T. (2000).', 'Extensions of the TOPSIS for group decision-making under fuzzy environment', '. Fuzzy Sets and Systems, 114(1), 1–9. Evaluaciones lingüísticas como números difusos triangulares.'],
+              ['Ponderación objetiva (CRITIC y Entropía)', 'Diakoulaki, D., Mavrotas, G., & Papayannakis, L. (1995).', 'Determining objective weights in multiple criteria problems: The CRITIC method', '. Computers & Operations Research, 22(7), 763–770. Junto con Shannon, C. E. (1948), A mathematical theory of communication (Bell System Technical Journal, 27(3), 379–423), permite calcular pesos estadísticos cuando no hay panel de expertos.'],
+            ].map(([t, a, ti, rest], i) => (
+              <div className="titem" key={t}>
+                <span className="no">{i + 1}</span>
+                <h3>{t}</h3>
+                <p><b>{a}</b> <em>{ti}</em>{rest}</p>
+              </div>
+            ))}
           </div>
         </div>
 

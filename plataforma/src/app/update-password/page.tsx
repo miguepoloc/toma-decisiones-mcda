@@ -1,6 +1,9 @@
 import { Suspense } from 'react';
 import { createClient } from '@/lib/supabase/server';
+import type { Metadata } from 'next';
 import UpdatePasswordForm from '@/components/UpdatePasswordForm';
+
+export const metadata: Metadata = { title: 'Nueva contraseña · Plataforma MCDA', robots: { index: false } };
 
 export default async function UpdatePasswordPage() {
   const supabase = await createClient();

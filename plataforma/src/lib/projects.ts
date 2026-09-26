@@ -8,6 +8,7 @@ export type ProjectListRow = {
   title: string;
   objective: string;
   is_public: boolean;
+  updated_at?: string | null;
   kind?: 'decision' | 'spatial' | null;
   method?: Method | null;
   weighting_method?: WeightingMethod | null;

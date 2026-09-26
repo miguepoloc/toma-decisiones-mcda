@@ -12,13 +12,19 @@ const MOTIVOS: Record<string, { title: string; text: string; tone: 'info' | 'war
   pausada: { title: 'Cuenta desactivada.', text: 'Cerramos tu sesión. Cuando quieras volver, inicia sesión y se reactiva sola, con todos tus proyectos.', tone: 'info' },
   eliminada: { title: 'Cuenta eliminada.', text: 'Borramos tu cuenta y tus datos. Puedes crear una nueva cuando quieras.', tone: 'info' },
   suspendida: { title: 'Cuenta suspendida.', text: 'Un administrador suspendió esta cuenta. Escribe al docente para revisarlo.', tone: 'warn' },
+  // /auth/callback redirige aquí con ?error=callback cuando el enlace del correo ya se usó o caducó.
+  callback: { title: 'Ese enlace ya no es válido.', text: 'Los enlaces del correo caducan y solo sirven una vez. Inicia sesión, o usa «¿Olvidaste tu contraseña?» para pedir uno nuevo.', tone: 'warn' },
 };
+
+/** Solo rutas internas: un `?next=https://otro-sitio` haría que el login redirigiera fuera de la plataforma
+ * (el callback del servidor ya filtra igual). */
+const safeNext = (raw: string | null) => (raw && raw.startsWith('/') && !raw.startsWith('//') && !raw.startsWith('/\\') ? raw : '/dashboard');
 
 function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
-  const next = params.get('next') || '/dashboard';
-  const motivoParam = params.get('motivo');
+  const next = safeNext(params.get('next'));
+  const motivoParam = params.get('motivo') ?? (params.get('error') === 'callback' ? 'callback' : null);
   const aviso = motivoParam && Object.prototype.hasOwnProperty.call(MOTIVOS, motivoParam) ? MOTIVOS[motivoParam] : null;
   const [mode, setMode] = useState<'in' | 'up' | 'reset'>('in');
   const [email, setEmail] = useState('');
@@ -27,6 +33,7 @@ function LoginForm() {
   const [msg, setMsg] = useState('');
   const [msgType, setMsgType] = useState<'err' | 'ok'>('err');
   const [busy, setBusy] = useState(false);
+  const [showPw, setShowPw] = useState(false);
   const [cooldown, setCooldown] = useState(0);
 
   // Cuenta regresiva tras enviar el enlace de recuperación: Supabase rechaza un segundo
@@ -75,7 +82,7 @@ function LoginForm() {
       else if (data.session) { router.push(next); router.refresh(); }
       else {
         setMsgType('ok');
-        setMsg('Cuenta creada con éxito. Hemos enviado un correo de confirmación. Revisa tu bandeja de entrada y haz clic en el enlace para activar tu cuenta.');
+        setMsg('Cuenta creada. Te enviamos un correo de confirmación: abre el enlace que trae para activar tu cuenta (revisa también el spam).');
       }
     } else {
       // mode === 'reset'
@@ -102,9 +109,10 @@ function LoginForm() {
           <div className="eyebrow">Toma de Decisiones Multicriterio</div>
           <h2>Tu modelo, tus expertos, tu ranking.</h2>
           <ul>
-            <li>Crea proyectos con tus propios criterios y alternativas — sin límite fijo.</li>
+            <li>Crea proyectos con tus propios criterios y alternativas, sin límite fijo.</li>
+            <li>Elige entre 7 métodos y pesa los criterios con expertos (AHP) o con los datos (CRITIC, Entropía).</li>
             <li>Invita a tus expertos con un enlace: ellos no necesitan cuenta.</li>
-            <li>Exporta a Excel cuando quieras, con las mismas fórmulas del curso.</li>
+            <li>Exporta a Excel con fórmulas vivas o genera el informe ejecutivo.</li>
           </ul>
           <p className="muted" style={{ fontSize: 13 }}><Link href="/tutorial">Ver el paso a paso completo →</Link></p>
         </div>
@@ -130,31 +138,33 @@ function LoginForm() {
           )}
           {!supabaseConfigurado && <div className="banner"><span><b>Falta configurar Supabase.</b> Define NEXT_PUBLIC_SUPABASE_URL y NEXT_PUBLIC_SUPABASE_ANON_KEY (ver README).</span></div>}
           <form className="card form" onSubmit={submit}>
-            {mode === 'up' && <div><label className="lbl" htmlFor="n">Nombre completo</label><input id="n" type="text" required value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" placeholder="Ej. Dr. Carlos Mendoza" /></div>}
+            {mode === 'up' && <div><label className="lbl" htmlFor="n">Nombre completo</label><input id="n" type="text" required value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" placeholder="Ej.: Ana Pérez" /></div>}
             <div>
               <label className="lbl" htmlFor="e">Correo electrónico</label>
               <input id="e" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" placeholder="tu-correo@universidad.edu.co" />
             </div>
             {mode !== 'reset' && (
               <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                <div className="pwhead">
                   <label className="lbl" htmlFor="p" style={{ margin: 0 }}>Contraseña</label>
                   {mode === 'in' && (
-                    <button
-                      type="button"
-                      onClick={() => { setMode('reset'); setMsg(''); }}
-                      style={{ background: 'none', border: 'none', color: 'var(--accent)', fontSize: 12, cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
-                    >
+                    <button type="button" className="linkbtn" onClick={() => { setMode('reset'); setMsg(''); }}>
                       ¿Olvidaste tu contraseña?
                     </button>
                   )}
                 </div>
-                <input id="p" type="password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete={mode === 'in' ? 'current-password' : 'new-password'} placeholder="Mínimo 8 caracteres" />
+                <div className="pwfield">
+                  <input id="p" type={showPw ? 'text' : 'password'} required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete={mode === 'in' ? 'current-password' : 'new-password'} placeholder="Mínimo 8 caracteres" aria-describedby={mode === 'up' ? 'pwhelp' : undefined} />
+                  <button type="button" className="pwtoggle" onClick={() => setShowPw((v) => !v)} aria-pressed={showPw} aria-label={showPw ? 'Ocultar contraseña' : 'Mostrar contraseña'}>
+                    {showPw ? 'Ocultar' : 'Mostrar'}
+                  </button>
+                </div>
+                {mode === 'up' && <p id="pwhelp" className="muted" style={{ fontSize: 12.5, marginTop: 6 }}>Usa al menos 8 caracteres.</p>}
               </div>
             )}
             {msg && (
               <div className={msgType === 'ok' ? 'banner info' : 'banner'} role="alert" style={{ margin: 0, fontSize: 13.5 }}>
-                <span><b>{msgType === 'ok' ? '✓ Enviado:' : 'Error:'}</b> {msg}</span>
+                <span><b>{msgType === 'ok' ? 'Listo:' : 'Error:'}</b> {msg}</span>
               </div>
             )}
             <button className="btn primary" type="submit" disabled={busy || (mode === 'reset' && cooldown > 0)}>
