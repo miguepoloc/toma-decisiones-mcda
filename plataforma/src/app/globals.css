@@ -1194,19 +1194,6 @@ table.cmp{min-width:900px;font-size:13px}
 .mx .mx-cell.has-u input[type=number]{padding-right:46px;text-align:right;padding-left:10px}
 .mx .mx-u{position:absolute;right:10px;top:50%;transform:translateY(-50%);max-width:36px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:500 11px var(--f-mono);color:var(--muted);pointer-events:none}
 
-/* ---- selector de unidad (UnitField): lista propia en un portal, en vez del <datalist> nativo ---- */
-.unit-pop{position:fixed;z-index:3500;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 32px rgba(0,0,0,.28);padding:10px 12px 8px;max-height:min(420px,70vh);overflow:auto}
-.unit-grp{margin-bottom:8px}
-.unit-grp-l{font:600 10.5px var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
-.unit-chips{display:flex;flex-wrap:wrap;gap:6px}
-.unit-chip,.unit-use{font:500 13px var(--f-body);color:var(--ink);background:var(--surface2);border:1px solid var(--line);border-radius:99px;padding:5px 11px;min-height:32px;cursor:pointer;transition:border-color .15s ease,background .15s ease}
-.unit-chip:hover,.unit-use:hover{border-color:var(--accent)}
-.unit-chip:focus-visible,.unit-use:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
-.unit-chip[aria-pressed=true]{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 16%,var(--surface2));font-weight:700}
-.unit-use{display:flex;align-items:center;gap:6px;width:100%;justify-content:flex-start;margin-bottom:10px;border-style:dashed;border-radius:8px;font-weight:600}
-.unit-head{margin:0 0 10px;padding-bottom:8px;border-bottom:1px solid var(--line);font-size:12.5px;line-height:1.4;color:var(--muted)}
-@media (pointer:coarse){.unit-chip,.unit-use{min-height:44px}}
-
 /* ---- ELECTRE: matrices con cada celda marcada según cumpla o no (color + ✓/✗) ---- */
 .em th.alt{text-align:left;font-weight:600}
 .em td{white-space:nowrap}

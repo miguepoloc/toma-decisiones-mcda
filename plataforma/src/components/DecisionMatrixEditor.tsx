@@ -2,7 +2,6 @@
 
 import WeightBars from './WeightBars';
 import { missingUnits, withUnit } from '@/lib/units';
-import UnitField from './UnitField';
 import type { Alternative, Criterion, DecisionMatrix, MatrixKind, TargetSpec } from '@/lib/types';
 import { getCell, getKind, getTarget, targetDistance } from '@/lib/topsis';
 import { LINGUISTIC_LABELS, type LinguisticLabel } from '@/lib/fuzzy_topsis';
@@ -96,7 +95,7 @@ export default function DecisionMatrixEditor({ criteria, alternatives, matrix, m
                   <th key={c.id} scope="col">
                     <span className="crit-name">{c.name}</span>
                     {!isFuzzy && onSetUnit && (
-                      <UnitField className={'unit-in' + (c.unit?.trim() ? '' : ' missing')} value={c.unit ?? ''} placeholder="unidad…" ariaLabel={`Unidad de ${c.name}`} onChange={(u) => onSetUnit(c.id, u)} />
+                      <input type="text" className={'unit-in' + (c.unit?.trim() ? '' : ' missing')} value={c.unit ?? ''} placeholder="unidad…" autoComplete="off" aria-label={`Unidad de ${c.name}`} onChange={(e) => onSetUnit(c.id, e.target.value)} />
                     )}
                     <div className="seg" role="group" aria-label={`Tipo de ${c.name}`}>
                       <button type="button" aria-pressed={getKind(matrix, c.id) === 'max'} onClick={() => onSetType(c.id, 'max')}>Beneficio</button>
