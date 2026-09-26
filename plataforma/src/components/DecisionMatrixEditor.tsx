@@ -1,5 +1,6 @@
 'use client';
 
+import WeightBars from './WeightBars';
 import type { Alternative, Criterion, DecisionMatrix, MatrixKind, TargetSpec } from '@/lib/types';
 import { getCell, getKind, getTarget, targetDistance } from '@/lib/topsis';
 import { LINGUISTIC_LABELS, type LinguisticLabel } from '@/lib/fuzzy_topsis';
@@ -32,9 +33,14 @@ type Props = {
   /** Objetivo de decisión del proyecto: se recuerda aquí porque al llenar la matriz es cuando más se necesita saber qué se busca. */
   objective?: string;
   onEditObjective?: () => void;
+  /** Pesos que salen de esta matriz (CRITIC o Entropía), para verlos cambiar mientras se llena. Solo con pesos objetivos. */
+  liveWeights?: { label: string; rows: { name: string; weight: number }[] };
+  /** «AHP», «CRITIC» o «Entropía»: de dónde salen los pesos del proyecto. */
+  weightingLabel?: string;
+  onGoExperts?: () => void;
 };
 
-export default function DecisionMatrixEditor({ criteria, alternatives, matrix, method, onSetCell, onSetFuzzyCell, onSetType, onSetTarget, objective, onEditObjective }: Props) {
+export default function DecisionMatrixEditor({ criteria, alternatives, matrix, method, onSetCell, onSetFuzzyCell, onSetType, onSetTarget, objective, onEditObjective, liveWeights, weightingLabel, onGoExperts }: Props) {
   const isFuzzy = method === 'fuzzy_topsis';
   const targetCrit = isFuzzy ? [] : criteria.filter((c) => getKind(matrix, c.id) === 'target');
   const sinObjetivo = targetCrit.filter((c) => !getTarget(matrix, c.id));
@@ -167,6 +173,28 @@ export default function DecisionMatrixEditor({ criteria, alternatives, matrix, m
           </table>
         </div>
       </div>
+
+      {/* De dónde salen los pesos de los criterios: sin esto, elegir CRITIC o Entropía no muestra ningún efecto en ninguna pantalla de captura */}
+      {liveWeights ? (
+        <div className="card" style={{ marginTop: 12 }}>
+          <div className="eyebrow">Pesos de los criterios · {liveWeights.label}</div>
+          <p className="muted" style={{ margin: '4px 0 8px', maxWidth: '110ch' }}>
+            No se digitan: se calculan solos a partir de la matriz de arriba y cambian cuando cambias un dato.
+            {liveWeights.label === 'CRITIC'
+              ? ' CRITIC da más peso al criterio que más varía entre alternativas (contraste) y que menos se repite con los demás (correlación baja).'
+              : ' La entropía da más peso al criterio cuyos valores más se diferencian entre alternativas.'}
+            {' '}Un criterio con el mismo valor en todas las alternativas no distingue nada y recibe peso 0.
+          </p>
+          {alternatives.length >= 2
+            ? <WeightBars rows={liveWeights.rows} />
+            : <p className="muted">Agrega al menos 2 alternativas con datos para ver los pesos.</p>}
+        </div>
+      ) : weightingLabel === 'AHP' && onGoExperts ? (
+        <p className="muted" style={{ marginTop: 12, maxWidth: '110ch' }}>
+          Los pesos de los criterios salen de la comparación por pares de los expertos, no de esta matriz.{' '}
+          <button type="button" className="btn" onClick={onGoExperts}>Ir a Expertos</button>
+        </p>
+      ) : null}
     </div>
   );
 }

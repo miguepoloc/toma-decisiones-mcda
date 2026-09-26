@@ -7,7 +7,9 @@ import { indexJudgments, type JMap } from '@/lib/ahp';
 import { finalists, normalizePrio, type PrioState } from '@/lib/prio';
 import { downloadExcel, downloadPrioExcel } from '@/lib/excel';
 import { friendlyError } from '@/lib/errors';
-import { normalizeMatrix, setCell as setMatrixCell, setTarget as setMatrixTarget, setType as setMatrixType, type MatrixKind, type TargetSpec } from '@/lib/topsis';
+import { normalizeMatrix, resolveTargets, setCell as setMatrixCell, setTarget as setMatrixTarget, setType as setMatrixType, type MatrixKind, type TargetSpec } from '@/lib/topsis';
+import { criticWeights, entropyWeights } from '@/lib/weights';
+import { defuzzifyMatrix } from '@/lib/fuzzy_topsis';
 import JudgmentEditor from './JudgmentEditor';
 import PrioritizationEditor from './PrioritizationEditor';
 import DecisionMatrixEditor from './DecisionMatrixEditor';
@@ -58,7 +60,12 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
   const [save, setSave] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [saveErr, setSaveErr] = useState('');
   const [showSciModal, setShowSciModal] = useState(false);
-  const TABS = project.kind === 'spatial' ? TABS_SPATIAL : project.method === 'ahp' ? TABS_AHP : TABS_MATRIX;
+  // Con pesos objetivos (CRITIC/Entropía) los pesos salen de la matriz de decisión, no de juicios de expertos: la pestaña Expertos
+  // no se usa (los juicios ya guardados se conservan; si vuelves a AHP reaparece).
+  const objectiveWeighting = project.kind !== 'spatial' && project.method !== 'ahp' && (project.weighting_method === 'critic' || project.weighting_method === 'entropy');
+  const TABS = project.kind === 'spatial' ? TABS_SPATIAL
+    : project.method === 'ahp' ? TABS_AHP
+    : objectiveWeighting ? TABS_MATRIX.filter((t) => t !== 'Expertos') : TABS_MATRIX;
 
   // La pestaña activa vive en el hash de la URL. Se lee tras montar (no en el useState inicial) para que el HTML
   // del servidor y el primer render del cliente coincidan; hashchange cubre atrás/adelante y enlaces con #pestaña.
@@ -99,6 +106,15 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
   const prio = useMemo(() => normalizePrio(project.prioritization), [project.prioritization]);
   const idx = useMemo(() => indexJudgments(judgments), [judgments]);
   const dm = useMemo(() => normalizeMatrix(project.decision_matrix), [project.decision_matrix]);
+  // Vista previa de los pesos objetivos mientras se llena la matriz (los mismos que usa Results: criterios objetivo ya resueltos y,
+  // en Fuzzy TOPSIS, etiquetas desdifusificadas).
+  const liveWeights = useMemo(() => {
+    if (!objectiveWeighting) return undefined;
+    const eff = resolveTargets(project.criteria, project.alternatives, dm);
+    const num = project.method === 'fuzzy_topsis' ? defuzzifyMatrix(eff, project.criteria, project.alternatives) : eff;
+    const w = project.weighting_method === 'critic' ? criticWeights(project.criteria, project.alternatives, num) : entropyWeights(project.criteria, project.alternatives, num);
+    return { label: project.weighting_method === 'critic' ? 'CRITIC' : 'Entropía', rows: project.criteria.map((c, i) => ({ name: c.name, weight: w[i] ?? 0 })) };
+  }, [objectiveWeighting, project.criteria, project.alternatives, project.method, project.weighting_method, dm]);
   const examples = useExamples(supabase);
   const geoCfg = useMemo<GeoConfig>(() => {
     const g = project.geo as Partial<GeoConfig>;
@@ -417,6 +433,16 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
                     );
                   })}
                 </div>
+                <p className="hint" style={{ marginTop: 8 }}>
+                  {objectiveWeighting
+                    ? <>Con <b>{project.weighting_method === 'critic' ? 'CRITIC' : 'Entropía'}</b> no hay nada que digitar aquí: los pesos se calculan solos a partir de la <b>matriz de decisión</b> y se recalculan cada vez que cambias un dato. Por eso la pestaña Expertos deja de usarse (los juicios ya guardados se conservan).</>
+                    : <>Con <b>AHP</b> los pesos salen de la comparación por pares de criterios que hacen los expertos (pestaña Expertos).</>}
+                </p>
+                {project.method === 'fuzzy_topsis' && (project.weighting_method ?? 'ahp') !== 'ahp' && (
+                  <p className="hint" style={{ marginTop: 8 }}>
+                    Con Fuzzy TOPSIS, CRITIC y Entropía se calculan sobre el valor nítido (centroide) de cada etiqueta lingüística, como en ul Amin et al. (2022). El método original de Chen (2000) usa pesos dados por los decisores, así que los pesos por AHP son lo más cercano a ese planteamiento.
+                  </p>
+                )}
               </div>
             )}
           </div>
@@ -572,6 +598,9 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
           onSetTarget={setDMTarget}
           objective={project.objective}
           onEditObjective={() => goTab('Proyecto')}
+          liveWeights={liveWeights}
+          weightingLabel={project.weighting_method === 'critic' ? 'CRITIC' : project.weighting_method === 'entropy' ? 'Entropía' : 'AHP'}
+          onGoExperts={() => goTab('Expertos')}
         />
       )}
 
