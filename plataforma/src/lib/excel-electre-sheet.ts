@@ -109,10 +109,10 @@ export function electreSheet(criteria: Criterion[], alternatives: Alternative[],
     alternatives.forEach((_, k) => {
       if (i === k) { put(rr, 1 + k, '', { s: stl.c }); return; }
       const cCell = colL(1 + k) + conRow, dCell = colL(1 + k) + disRow;
-      put(rr, 1 + k, r.outranks[i][k] ? 'Sí' : '', { f: `IF(AND(${cCell}>=$B$${rCStarCell},${dCell}<=$B$${rDStarCell}),"Sí","")`, s: stl.c });
+      put(rr, 1 + k, r.outranks[i][k] ? 'Sí' : '', { f: `IF(AND(${cCell}>=$B$${rCStarCell}-1E-9,${dCell}<=$B$${rDStarCell}+1E-9),"Sí","")`, s: stl.c });
     });
     put(rr, cNet, syn.netOutdegree[i], {
-      f: `SUMPRODUCT((B${conRow}:${lastAlt}${conRow}>=$B$${rCStarCell})*(B${disRow}:${lastAlt}${disRow}<=$B$${rDStarCell}))-SUMPRODUCT((${colL(1 + i)}${rCon0}:${colL(1 + i)}${rCon0 + n - 1}>=$B$${rCStarCell})*(${colL(1 + i)}${rDis0}:${colL(1 + i)}${rDis0 + n - 1}<=$B$${rDStarCell}))`,
+      f: `SUMPRODUCT((B${conRow}:${lastAlt}${conRow}>=$B$${rCStarCell}-1E-9)*(B${disRow}:${lastAlt}${disRow}<=$B$${rDStarCell}+1E-9))-SUMPRODUCT((${colL(1 + i)}${rCon0}:${colL(1 + i)}${rCon0 + n - 1}>=$B$${rCStarCell}-1E-9)*(${colL(1 + i)}${rDis0}:${colL(1 + i)}${rDis0 + n - 1}<=$B$${rDStarCell}+1E-9))`,
       s: stl.key, z: '0',
     });
   });

@@ -2,6 +2,7 @@
 
 import { useMemo, useState, type CSSProperties } from 'react';
 import ElectreGraph from './ElectreGraph';
+import ElectreMatrices from './ElectreMatrices';
 import { withUnit } from '@/lib/units';
 import MethodCharts, { type MethodChartData } from './MethodCharts';
 import type { Alternative, Criterion, DecisionMatrix, JudgmentRow, Method, WeightingMethod } from '@/lib/types';
@@ -444,13 +445,10 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
         )}
       </div>
       <div className="card res">
-        <h3>Matrices de concordancia y discordancia</h3>
+        <h3>Cómo se decide quién supera a quién</h3>
         <details open>
           <summary>Ver detalle</summary>
-          <h4>Concordancia (fila supera a columna si ≥ {elecSyn.result.cStar.toFixed(2)})</h4>
-          <Table names={elecSyn.names} M={elecSyn.result.concordance} f={(x) => x.toFixed(2)} />
-          <h4>Discordancia (fila supera a columna si ≤ {elecSyn.result.dStar.toFixed(2)})</h4>
-          <Table names={elecSyn.names} M={elecSyn.result.discordance} f={(x) => x.toFixed(2)} />
+          <ElectreMatrices names={elecSyn.names} result={elecSyn.result} />
         </details>
       </div>
     </>

@@ -1206,3 +1206,12 @@ table.cmp{min-width:900px;font-size:13px}
 .unit-use{display:flex;align-items:center;gap:6px;width:100%;justify-content:flex-start;margin-bottom:10px;border-style:dashed;border-radius:8px;font-weight:600}
 .unit-head{margin:0 0 10px;padding-bottom:8px;border-bottom:1px solid var(--line);font-size:12.5px;line-height:1.4;color:var(--muted)}
 @media (pointer:coarse){.unit-chip,.unit-use{min-height:44px}}
+
+/* ---- ELECTRE: matrices con cada celda marcada según cumpla o no (color + ✓/✗) ---- */
+.em th.alt{text-align:left;font-weight:600}
+.em td{white-space:nowrap}
+.em .em-ok,.em-key .em-ok{background:color-mix(in srgb,var(--pass) 22%,var(--surface));color:var(--ink)}
+.em .em-no,.em-key .em-no{background:color-mix(in srgb,var(--m-promethee,#F43F5E) 20%,var(--surface));color:var(--ink)}
+.em .em-diag{color:var(--muted);background:var(--surface2)}
+.em-key{display:inline-flex;gap:8px;margin-left:10px;vertical-align:middle}
+.em-key span{padding:2px 10px;border-radius:99px;font:600 12px var(--f-body);border:1px solid var(--line)}

@@ -31,5 +31,13 @@ const ok = (cond: boolean, msg: string) => { console.log((cond ? 'OK   ' : 'FALL
   ok(Math.abs(dSigfoxLoRaWAN - 1.0) < 1e-9, `discordancia Sigfox->LoRaWAN = ${dSigfoxLoRaWAN.toFixed(2)} (esperado 1.00)`);
 }
 
+{
+  // Empate con el umbral: pesos 0.1 + 0.7 suman 0.7999999999999999 en coma flotante; con c* = 0.8 la relación no debe perderse por redondeo.
+  const r = electre([[2, 2, 1], [1, 1, 2]], [0.1, 0.7, 0.2], ['max', 'max', 'max'], 0.8, 1);
+  ok(r.concordance[0][1] < 0.8 || Math.abs(r.concordance[0][1] - 0.8) < 1e-9, `concordancia A->B = ${r.concordance[0][1]} (≈ 0.8)`);
+  ok(r.outranks[0][1], 'A supera a B aunque la concordancia sea 0.7999999999999999 con c* = 0.8 (tolerancia 1e-9)');
+  ok(!electre([[2, 2, 1], [1, 1, 2]], [0.1, 0.7, 0.2], ['max', 'max', 'max'], 0.81, 1).outranks[0][1], 'con c* = 0.81 sí deja de superar');
+}
+
 console.log(fallos ? `\n${fallos} prueba(s) fallaron` : '\nTodas las pruebas pasaron');
 process.exit(fallos ? 1 : 0);

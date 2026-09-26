@@ -26,6 +26,10 @@ export function electreDStar(dm: DecisionMatrix): number {
   return typeof d === 'number' && Number.isFinite(d) && d >= 0 && d <= 1 ? d : ELECTRE_D_STAR_DEFAULT;
 }
 
+/** Tolerancia al comparar con c* y d*: sumas de pesos como 0.1 + 0.7 dan 0.7999999999999999, y con c* = 0.8 la relación se perdería por
+ * un error de redondeo que en pantalla se ve como «0.80 ≥ 0.80». El Excel usa la misma tolerancia. */
+export const EPS = 1e-9;
+
 export type ElectreResult = {
   n: number;
   concordance: number[][]; // concordance[i][k]: qué tan de acuerdo están los criterios en que i >= k
@@ -77,7 +81,7 @@ export function electre(matrix: number[][], weights: number[], types: MatrixType
     return d;
   }));
 
-  const outranks = concordance.map((row, i) => row.map((c, k) => i !== k && c >= cStar && discordance[i][k] <= dStar));
+  const outranks = concordance.map((row, i) => row.map((c, k) => i !== k && c >= cStar - EPS && discordance[i][k] <= dStar + EPS));
   return { n, concordance, discordance, outranks, cStar, dStar, weights: w, ranges, g };
 }
 
