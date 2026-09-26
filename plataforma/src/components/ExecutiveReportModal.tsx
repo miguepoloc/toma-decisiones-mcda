@@ -1,12 +1,14 @@
 'use client';
 
 import { useEffect, useRef, type CSSProperties } from 'react';
-import type { Criterion, Alternative, DecisionMatrix } from '@/lib/types';
+import type { Criterion, Alternative, DecisionMatrix, WeightingMethod } from '@/lib/types';
 import ElectreGraph from './ElectreGraph';
 import ClosenessBars from './ClosenessBars';
 import VikorSensitivityChart from './VikorSensitivityChart';
 import { METHOD_SPECS, type MethodKey } from './ScientificMethodModal';
 import { getCell, getKind, getTarget } from '@/lib/topsis';
+import { LINGUISTIC_ALT } from '@/lib/fuzzy_topsis';
+import type { WeightMethod } from '@/lib/ahp';
 
 /** Colores del informe: el modal es siempre blanco (también en impresión), pero los gráficos leen las variables del tema de la app;
  * en modo oscuro `--ink` sería casi blanco sobre papel blanco. Se redefinen aquí en claro, con los tonos de método oscurecidos
@@ -18,6 +20,72 @@ const REPORT_VARS = {
   '--m-topsis': '#0891B2', '--m-vikor': '#059669', '--m-electre': '#B45309',
 } as CSSProperties;
 
+/** Consistencia de UNA hoja de comparaciones por pares (criterios, o las alternativas bajo un criterio). */
+export type ReportSheetCr = {
+  label: string;
+  /** Elementos comparados (matriz n×n). Con n < 3 el CR es siempre 0 (RI = 0), no informa nada. */
+  n: number;
+  cr: number;
+  /** CR < 0.10 (Saaty). */
+  ok: boolean;
+  /** Pares con juicio registrado, sumados entre los expertos incluidos, y los que habría con todos respondidos. */
+  answered: number;
+  total: number;
+  /** CR de cada experto por separado: el agregado puede verse consistente aunque un experto no lo sea. */
+  perExpert: { label: string; cr: number; ok: boolean }[];
+};
+
+/** Todo lo del informe que sale de juicios por pares (AHP). Solo se pasa cuando hay juicios detrás: AHP, o un método de matriz
+ * con pesos por AHP. */
+export type ReportAhpInfo = {
+  weightMethod: WeightMethod;
+  /** Expertos incluidos en el cálculo (agregados por media geométrica). */
+  expertCount: number;
+  criteriaSheet: ReportSheetCr;
+  /** Una por criterio. Vacío en los métodos de matriz (no tienen hojas de alternativas). */
+  altSheets: ReportSheetCr[];
+  /** Prioridad local de cada alternativa (fila, en el orden de `alternatives`) bajo cada criterio (columna). Vacío fuera de AHP. */
+  local: number[][];
+};
+
+/** Qué mide el puntaje de cada método y hacia dónde es mejor: un mismo número (0.62) significa cosas opuestas en TOPSIS y en VIKOR. */
+const SCORE: Record<MethodKey, { label: string; short: string; fmt: (v: number) => string }> = {
+  ahp: { label: 'Prioridad global (mayor es mejor)', short: 'Prioridad global', fmt: (v) => v.toFixed(4) },
+  topsis: { label: 'Cercanía relativa C (0 a 1, mayor es mejor)', short: 'Cercanía relativa C', fmt: (v) => v.toFixed(4) },
+  vikor: { label: 'Índice Q (0 a 1, MENOR es mejor)', short: 'Índice Q', fmt: (v) => v.toFixed(4) },
+  promethee: { label: 'Flujo neto φ (mayor es mejor)', short: 'Flujo neto φ', fmt: (v) => (v >= 0 ? '+' : '') + v.toFixed(4) },
+  saw: { label: 'Puntaje SAW (0 a 1, mayor es mejor)', short: 'Puntaje SAW', fmt: (v) => v.toFixed(4) },
+  fuzzy_topsis: { label: 'Coeficiente de cercanía CC (0 a 1, mayor es mejor)', short: 'Coeficiente CC', fmt: (v) => v.toFixed(4) },
+  // ELECTRE no tiene puntaje: la entrada existe solo para completar el Record; el informe usa la relación de superación.
+  electre: { label: 'Sin puntaje (relación de superación)', short: 'Sin puntaje', fmt: (v) => v.toFixed(4) },
+};
+
+/** Por qué la ganadora lo es, en los términos del método (la frase genérica «compromiso más favorable» no vale para todos). */
+const WINNER_NOTE: Partial<Record<MethodKey, string>> = {
+  ahp: 'tiene la mayor prioridad global: la suma, sobre todos los criterios, del peso del criterio por la prioridad local de la alternativa en él.',
+  topsis: 'es la más cercana a la solución ideal positiva y la más lejana de la ideal negativa.',
+  vikor: 'tiene el menor índice Q, que combina la utilidad de grupo (S) y el arrepentimiento individual máximo (R).',
+  promethee: 'tiene el mayor flujo neto φ: la diferencia entre cuánto supera a las demás y cuánto la superan.',
+  saw: 'obtiene la mayor suma ponderada de sus valores normalizados.',
+  fuzzy_topsis: 'tiene el mayor coeficiente de cercanía CC a la solución ideal difusa, con las evaluaciones lingüísticas como números difusos triangulares.',
+};
+
+/** De dónde salen los pesos cuando NO son juicios de expertos: cita y frase. CRITIC y Entropía leen la matriz, no a los expertos. */
+const OBJECTIVE_WEIGHTS: Record<'critic' | 'entropy', { text: string; apa: string }> = {
+  critic: {
+    text: 'Pesos objetivos calculados con CRITIC a partir de la propia matriz de decisión (contraste o desviación estándar de cada criterio y correlación entre criterios). No provienen de juicios de expertos.',
+    apa: 'Diakoulaki, D., Mavrotas, G., & Papayannakis, L. (1995). Determining objective weights in multiple criteria problems: The CRITIC method. Computers & Operations Research, 22(7), 763–770.',
+  },
+  entropy: {
+    text: 'Pesos objetivos calculados con el método de Entropía de Shannon a partir de la propia matriz de decisión (un criterio que varía más entre alternativas informa más y recibe más peso). No provienen de juicios de expertos.',
+    apa: 'Shannon, C. E. (1948). A mathematical theory of communication. Bell System Technical Journal, 27(3), 379–423.',
+  },
+};
+
+const SEC_H3: CSSProperties = { fontSize: 15, fontWeight: 700, margin: '0 0 8px', color: '#0F172A', borderBottom: '1px solid #E2E8F0', paddingBottom: 4 };
+const NOTE_P: CSSProperties = { fontSize: 12.5, color: '#475569', margin: '8px 0 0' };
+const LINGUISTIC_NAME: Record<string, string> = { VP: 'Muy pobre', P: 'Pobre', F: 'Regular', G: 'Bueno', VG: 'Muy bueno' };
+
 interface ExecutiveReportModalProps {
   projectTitle: string;
   projectObjective: string;
@@ -26,6 +94,10 @@ interface ExecutiveReportModalProps {
   alternatives: Alternative[];
   decisionMatrix: DecisionMatrix;
   weights: number[];
+  /** De dónde salen los pesos: juicios de expertos (AHP) o la propia matriz (CRITIC/Entropía). En AHP siempre 'ahp'. Default 'ahp'. */
+  weightingMethod?: WeightingMethod;
+  /** Consistencia (CR), expertos y prioridades locales de AHP. Solo AHP o pesos por AHP; sin él el informe no afirma nada sobre juicios. */
+  ahp?: ReportAhpInfo;
   rankingRows: { name: string; score: number; rank: number }[];
   /** Solo VIKOR: v usado (se declara en el informe, no sale de los datos). */
   vikorV?: number;
@@ -46,6 +118,8 @@ export default function ExecutiveReportModal({
   alternatives,
   decisionMatrix,
   weights,
+  weightingMethod = 'ahp',
+  ahp,
   rankingRows,
   vikorV,
   compromiseSet,
@@ -53,8 +127,61 @@ export default function ExecutiveReportModal({
   electre,
   onClose,
 }: ExecutiveReportModalProps) {
+  // El fallback solo protege de un `method` inesperado en la base; con los 7 valores del tipo Method siempre existe su ficha.
   const methodDoc = METHOD_SPECS[method] || METHOD_SPECS.topsis;
+  const methodLabel = methodDoc.name.split(' · ')[0];
+  const score = SCORE[method] ?? SCORE.topsis;
+  const isAhp = method === 'ahp';
+  const isFuzzy = method === 'fuzzy_topsis';
   const winner = rankingRows.find((r) => r.rank === 1) || rankingRows[0];
+  // Empate en el 1.er lugar (todas iguales por falta de datos, o dos que empatan): no hay «ganadora» que recomendar.
+  const tied = rankingRows.filter((r) => r.rank === 1);
+  const inCompromise = (name: string) => !!compromiseSet && compromiseSet.length > 1 && compromiseSet.includes(name);
+  // La matriz de decisión existe solo donde el método la usa. AHP trabaja con juicios por pares: los valores que queden en
+  // `decision_matrix` (de un método anterior) no son datos de este análisis y no deben aparecer.
+  const showMatrix = !isAhp;
+  const weightsFromJudgments = isAhp || weightingMethod === 'ahp';
+  // Secciones que existen para este método, en orden: la numeración se deriva de aquí para que siga siendo consecutiva.
+  const sections = ['weights', ...(isAhp ? ['consistency', 'local'] : ['matrix']), electre ? 'outranking' : 'ranking', 'justification'];
+  const secNo = (k: string) => sections.indexOf(k) + 1;
+
+  /** Regla de lectura del criterio. Fuzzy TOPSIS no tiene tipo «objetivo» (la matriz lingüística no lo admite) y trata cualquier
+   * tipo que no sea max como costo, igual que `getType` en la biblioteca. */
+  const ruleText = (critId: string) => {
+    const k = getKind(decisionMatrix, critId);
+    if (isFuzzy) return k === 'max' ? 'Maximizar (Beneficio)' : 'Minimizar (Costo)';
+    if (k === 'min') return 'Minimizar (Costo)';
+    if (k === 'target') {
+      const t = getTarget(decisionMatrix, critId);
+      return t ? `Objetivo ${t.value}${t.tol ? ` ± ${t.tol}` : ''} (minimizar la distancia)` : 'Objetivo (sin valor definido)';
+    }
+    return 'Maximizar (Beneficio)';
+  };
+
+  /** Celda de la matriz. Fuzzy TOPSIS guarda etiquetas (texto), no números; `getCell` solo lee números y las daría por vacías. */
+  const cellText = (altId: string, critId: string) => {
+    if (isFuzzy) {
+      const v = decisionMatrix.values[altId]?.[critId];
+      return typeof v === 'string' && v in LINGUISTIC_ALT ? v : 'F*';
+    }
+    const val = getCell(decisionMatrix, altId, critId);
+    return val != null ? val : '—';
+  };
+
+  /** Estado legible de una hoja de AHP. Sin juicios (o con n < 3) el CR sale 0, pero eso no significa «consistente». */
+  const sheetStatus = (sh: ReportSheetCr) => {
+    if (sh.answered === 0) return { text: 'Sin juicios registrados: el CR no informa', color: '#64748B', bold: false };
+    if (sh.n < 3) return { text: 'Con menos de 3 elementos siempre es consistente', color: '#64748B', bold: false };
+    return sh.ok
+      ? { text: 'Consistente (CR < 0.10)', color: '#15803D', bold: false }
+      : { text: 'Revisar: CR ≥ 0.10, hay juicios contradictorios', color: '#B45309', bold: true };
+  };
+  const crText = (sh: ReportSheetCr) => {
+    const st = sheetStatus(sh);
+    return sh.answered === 0 || sh.n < 3
+      ? `Consistencia de los juicios de criterios: ${st.text.toLowerCase()}.`
+      : `Razón de consistencia de la comparación de criterios: CR = ${sh.cr.toFixed(4)} (${sh.ok ? 'aceptable, CR < 0.10 según Saaty' : 'NO aceptable: CR ≥ 0.10, conviene revisar los juicios'}).`;
+  };
   const currentDate = new Date().toLocaleDateString('es-CO', {
     year: 'numeric',
     month: 'long',
@@ -201,7 +328,7 @@ export default function ExecutiveReportModal({
             </div>
             <div style={{ textAlign: 'right', fontSize: 12, color: '#64748B', fontFamily: 'monospace' }}>
               <div>Fecha: <b>{currentDate}</b></div>
-              <div>Algoritmo: <b>{method.toUpperCase()}</b></div>
+              <div>Algoritmo: <b>{methodLabel}</b></div>
             </div>
           </div>
         </div>
@@ -264,6 +391,18 @@ export default function ExecutiveReportModal({
               Según <b>{methodDoc.name}</b>, ninguna alternativa cumple a la vez las condiciones de ventaja aceptable y estabilidad (Opricovic &amp; Tzeng, 2004), así que se recomienda considerar estas alternativas en conjunto. La de menor Q es <b>{winner.name}</b> ({winner.score.toFixed(4)}), pero no es un ganador único.
             </p>
           </div>
+        ) : winner && tied.length > 1 ? (
+          <div style={{ background: '#FFFBEB', border: '1px solid #FCD34D', borderLeft: '5px solid #D97706', borderRadius: 8, padding: '16px 20px' }}>
+            <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', color: '#B45309', letterSpacing: '0.06em' }}>
+              Empate en el primer lugar (sin ganadora única)
+            </div>
+            <div style={{ marginTop: 4 }}>
+              <span style={{ fontSize: 20, fontWeight: 800, color: '#78350F' }}>{tied.length === rankingRows.length ? 'Todas las alternativas' : tied.map((r) => r.name).join(', ')}</span>
+            </div>
+            <p style={{ fontSize: 13, color: '#92400E', margin: '6px 0 0' }}>
+              Según <b>{methodDoc.name}</b>, {tied.length === rankingRows.length ? 'los datos actuales no distinguen entre las alternativas' : 'estas alternativas quedan empatadas'} ({score.short}: {score.fmt(winner.score)}). No hay una recomendación que respaldar: completa o revisa los datos antes de decidir.
+            </p>
+          </div>
         ) : winner && (
           <div style={{ background: '#F0FDF4', border: '1px solid #86EFAC', borderLeft: '5px solid #16A34A', borderRadius: 8, padding: '16px 20px' }}>
             <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', color: '#16A34A', letterSpacing: '0.06em' }}>
@@ -272,11 +411,11 @@ export default function ExecutiveReportModal({
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginTop: 4 }}>
               <span style={{ fontSize: 20, fontWeight: 800, color: '#14532D' }}>{winner.name}</span>
               <span style={{ fontSize: 13, fontFamily: 'monospace', color: '#15803D' }}>
-                (Puntaje de desempeño: {winner.score.toFixed(4)})
+                ({score.short}: {score.fmt(winner.score)})
               </span>
             </div>
             <p style={{ fontSize: 13, color: '#166534', margin: '6px 0 0' }}>
-              De acuerdo con la síntesis matemática del método <b>{methodDoc.name}</b>, esta alternativa representa el compromiso más favorable frente al vector de preferencias establecido.
+              Según <b>{methodLabel}</b>, esta alternativa {WINNER_NOTE[method] ?? 'representa la opción más favorable frente a los pesos establecidos.'}
             </p>
           </div>
         )}
@@ -292,16 +431,17 @@ export default function ExecutiveReportModal({
           </p>
         )}
 
-        {/* Sección 1: Ponderación de Criterios */}
+        {/* Sección: Ponderación de Criterios */}
         <div>
-          <h3 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 8px', color: '#0F172A', borderBottom: '1px solid #E2E8F0', paddingBottom: 4 }}>
-            1. Ponderación de Criterios ({criteria.length})
+          <h3 style={SEC_H3}>
+            {secNo('weights')}. Ponderación de Criterios ({criteria.length})
           </h3>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr style={{ background: '#F1F5F9', textAlign: 'left', borderBottom: '2px solid #CBD5E1' }}>
                 <th style={{ padding: '8px 10px' }}>Criterio</th>
-                <th style={{ padding: '8px 10px' }}>Regla de Decisión</th>
+                {/* AHP compara por pares, no lee valores: «maximizar/minimizar» no existe en su método. */}
+                {showMatrix && <th style={{ padding: '8px 10px' }}>Regla de Decisión</th>}
                 <th style={{ padding: '8px 10px', textAlign: 'right' }}>Peso Obtenido (w_j)</th>
                 <th style={{ padding: '8px 10px', textAlign: 'right' }}>Porcentaje Relativo</th>
               </tr>
@@ -312,12 +452,9 @@ export default function ExecutiveReportModal({
                 return (
                   <tr key={c.id} style={{ borderBottom: '1px solid #E2E8F0' }}>
                     <td style={{ padding: '8px 10px', fontWeight: 600 }}>{c.name}</td>
-                    <td style={{ padding: '8px 10px', color: '#64748B' }}>
-                      {(() => {
-                        const k = getKind(decisionMatrix, c.id), t = getTarget(decisionMatrix, c.id);
-                        return k === 'min' ? 'Minimizar (Costo)' : k === 'target' ? (t ? `Objetivo ${t.value}${t.tol ? ` ± ${t.tol}` : ''} (minimizar la distancia)` : 'Objetivo (sin valor definido)') : 'Maximizar (Beneficio)';
-                      })()}
-                    </td>
+                    {showMatrix && (
+                      <td style={{ padding: '8px 10px', color: '#64748B' }}>{ruleText(c.id)}</td>
+                    )}
                     <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'monospace' }}>{w.toFixed(4)}</td>
                     <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 700, color: '#0284C7', fontFamily: 'monospace' }}>
                       {(w * 100).toFixed(1)}%
@@ -327,49 +464,173 @@ export default function ExecutiveReportModal({
               })}
             </tbody>
           </table>
+          {/* Procedencia de los pesos: sin esto el lector no sabe si son juicios de expertos o cálculo sobre la matriz. */}
+          {weightsFromJudgments ? (
+            ahp && (
+              <p style={NOTE_P}>
+                {ahp.expertCount === 0
+                  ? <><b>Sin juicios de expertos incluidos:</b> los pesos son iguales (1/{criteria.length}) porque no hay comparaciones por pares que agregar.</>
+                  : <>Pesos derivados de la comparación por pares de criterios de <b>{ahp.expertCount} experto{ahp.expertCount === 1 ? '' : 's'}</b>{ahp.expertCount > 1 ? ', agregados por media geométrica (AIJ)' : ''}; se calculan como {ahp.weightMethod === 'eigenvector' ? 'el eigenvector principal de Saaty (iteración de potencias)' : 'el promedio de columnas normalizadas (procedimiento a mano del curso)'}.</>}
+                {' '}{crText(ahp.criteriaSheet)}
+              </p>
+            )
+          ) : (
+            <p style={NOTE_P}>{OBJECTIVE_WEIGHTS[weightingMethod].text}</p>
+          )}
+          {isFuzzy && !weightsFromJudgments && (
+            // CRITIC y Entropía leen valores numéricos; las etiquetas lingüísticas no lo son y la plataforma las cuenta como 0 en ese cálculo.
+            <p style={{ ...NOTE_P, color: '#B45309' }}>
+              <b>Advertencia:</b> la ponderación objetiva necesita valores numéricos y la matriz de Fuzzy TOPSIS es lingüística (etiquetas), así que estos pesos no reflejan las evaluaciones. Usa pesos por AHP con este método.
+            </p>
+          )}
+          {ahp && weightsFromJudgments && ahp.criteriaSheet.perExpert.some((e) => !e.ok) && (
+            <p style={{ ...NOTE_P, color: '#B45309' }}>
+              Expertos con CR ≥ 0.10 en la comparación de criterios: {ahp.criteriaSheet.perExpert.filter((e) => !e.ok).map((e) => `${e.label} (${e.cr.toFixed(3)})`).join(', ')}. La matriz agregada puede verse consistente aunque un experto no lo sea.
+            </p>
+          )}
         </div>
 
-        {/* Sección 2: Matriz de Desempeño */}
-        <div>
-          <h3 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 8px', color: '#0F172A', borderBottom: '1px solid #E2E8F0', paddingBottom: 4 }}>
-            2. Matriz de Decisión Cuantitativa
-          </h3>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+        {/* AHP: consistencia de los juicios (CR), lo que en los métodos de matriz no existe */}
+        {isAhp && ahp && (
+          <div style={{ breakInside: 'avoid' }}>
+            <h3 style={SEC_H3}>
+              {secNo('consistency')}. Consistencia de los Juicios (CR)
+            </h3>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr style={{ background: '#F1F5F9', textAlign: 'left', borderBottom: '2px solid #CBD5E1' }}>
-                  <th style={{ padding: '6px 8px' }}>Alternativa</th>
-                  {criteria.map((c) => (
-                    <th key={c.id} style={{ padding: '6px 8px', textAlign: 'right' }}>
-                      {c.name}
-                    </th>
-                  ))}
+                  <th style={{ padding: '8px 10px' }}>Matriz de comparación</th>
+                  <th style={{ padding: '8px 10px', textAlign: 'right' }}>Juicios</th>
+                  <th style={{ padding: '8px 10px', textAlign: 'right' }}>CR</th>
+                  <th style={{ padding: '8px 10px' }}>Estado</th>
                 </tr>
               </thead>
               <tbody>
-                {alternatives.map((alt) => (
-                  <tr key={alt.id} style={{ borderBottom: '1px solid #E2E8F0' }}>
-                    <td style={{ padding: '6px 8px', fontWeight: 600 }}>{alt.name}</td>
-                    {criteria.map((c) => {
-                      const val = getCell(decisionMatrix, alt.id, c.id);
-                      return (
-                        <td key={c.id} style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'monospace' }}>
-                          {val != null ? val : '—'}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
+                {[ahp.criteriaSheet, ...ahp.altSheets].map((sh, i) => {
+                  const st = sheetStatus(sh);
+                  return (
+                    <tr key={sh.label + i} style={{ borderBottom: '1px solid #E2E8F0' }}>
+                      <td style={{ padding: '8px 10px', fontWeight: 600 }}>
+                        {i === 0 ? sh.label : `Alternativas según «${sh.label}»`}
+                      </td>
+                      <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'monospace' }}>{sh.answered} de {sh.total}</td>
+                      <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: st.color }}>{sh.cr.toFixed(4)}</td>
+                      <td style={{ padding: '8px 10px', fontSize: 12, color: st.color, fontWeight: st.bold ? 700 : 500 }}>{st.text}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
+            <p style={NOTE_P}>
+              Criterio de Saaty: CR &lt; 0.10 es aceptable. Los juicios se agregan entre {ahp.expertCount} experto{ahp.expertCount === 1 ? '' : 's'} y la tabla muestra el CR de la matriz agregada; «Juicios» cuenta los pares comparados (sumados entre expertos) frente a los posibles. Un par sin juicio cuenta como igual importancia (1).
+            </p>
+            {(() => {
+              const flagged = [ahp.criteriaSheet, ...ahp.altSheets].flatMap((sh) => sh.perExpert.filter((e) => !e.ok).map((e) => `${e.label} en «${sh.label}» (${e.cr.toFixed(3)})`));
+              const bad = [ahp.criteriaSheet, ...ahp.altSheets].filter((sh) => !sh.ok).map((sh) => sh.label);
+              return (
+                <>
+                  {bad.length > 0 && (
+                    <p style={{ ...NOTE_P, color: '#B45309' }}>
+                      <b>Revisar consistencia:</b> CR ≥ 0.10 en {bad.map((b) => `«${b}»`).join(', ')}. Hay juicios que se contradicen entre sí (por ejemplo, A mucho mejor que B, B mejor que C, pero C mejor que A); conviene que los expertos los revisen antes de tomar la decisión.
+                    </p>
+                  )}
+                  {flagged.length > 0 && (
+                    <p style={{ ...NOTE_P, color: '#B45309' }}>Expertos con CR ≥ 0.10: {flagged.join('; ')}.</p>
+                  )}
+                </>
+              );
+            })()}
           </div>
-        </div>
+        )}
+
+        {/* AHP: prioridades locales (alternativa × criterio), de donde sale la síntesis global */}
+        {isAhp && ahp && ahp.local.length > 0 && (
+          <div>
+            <h3 style={SEC_H3}>
+              {secNo('local')}. Prioridades Locales por Criterio
+            </h3>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead>
+                  <tr style={{ background: '#F1F5F9', textAlign: 'left', borderBottom: '2px solid #CBD5E1' }}>
+                    <th style={{ padding: '6px 8px' }}>Alternativa</th>
+                    {criteria.map((c, j) => (
+                      <th key={c.id} style={{ padding: '6px 8px', textAlign: 'right' }}>
+                        {c.name}
+                        <div style={{ fontWeight: 400, color: '#64748B', fontFamily: 'monospace' }}>w = {(weights[j] ?? 0).toFixed(3)}</div>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {alternatives.map((alt, i) => (
+                    <tr key={alt.id} style={{ borderBottom: '1px solid #E2E8F0' }}>
+                      <td style={{ padding: '6px 8px', fontWeight: 600 }}>{alt.name}</td>
+                      {criteria.map((c, j) => {
+                        const v = ahp.local[i]?.[j];
+                        const best = v != null && v >= Math.max(...ahp.local.map((r) => r[j] ?? 0)) - 1e-12;
+                        return (
+                          <td key={c.id} style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'monospace', fontWeight: best ? 700 : 400 }}>
+                            {v != null ? v.toFixed(4) : '—'}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p style={NOTE_P}>
+              Cada columna suma 1: es el reparto de prioridad entre las alternativas según ese criterio, derivado de las comparaciones por pares de los expertos (en negrita, la mayor de cada criterio). La prioridad global es la suma de cada valor multiplicado por el peso <i>w</i> de su criterio.
+            </p>
+          </div>
+        )}
+
+        {/* Matriz de decisión: solo los métodos que leen valores por alternativa y criterio (todos menos AHP) */}
+        {showMatrix && (
+          <div>
+            <h3 style={SEC_H3}>
+              {secNo('matrix')}. {isFuzzy ? 'Matriz de Decisión Lingüística' : 'Matriz de Decisión Cuantitativa'}
+            </h3>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead>
+                  <tr style={{ background: '#F1F5F9', textAlign: 'left', borderBottom: '2px solid #CBD5E1' }}>
+                    <th style={{ padding: '6px 8px' }}>Alternativa</th>
+                    {criteria.map((c) => (
+                      <th key={c.id} style={{ padding: '6px 8px', textAlign: 'right' }}>
+                        {c.name}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {alternatives.map((alt) => (
+                    <tr key={alt.id} style={{ borderBottom: '1px solid #E2E8F0' }}>
+                      <td style={{ padding: '6px 8px', fontWeight: 600 }}>{alt.name}</td>
+                      {criteria.map((c) => (
+                        <td key={c.id} style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'monospace' }}>
+                          {cellText(alt.id, c.id)}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {isFuzzy && (
+              <p style={NOTE_P}>
+                Escala lingüística (Chen, 2000): {Object.keys(LINGUISTIC_ALT).map((k) => `${k} = ${LINGUISTIC_NAME[k]}`).join(', ')}. Una celda marcada con <b>F*</b> no tiene evaluación: el método le asigna «Regular» (F) por defecto.
+              </p>
+            )}
+          </div>
+        )}
 
         {/* Sección 3 (ELECTRE): relación de superación en vez de orden de mérito */}
         {el && electre && (
           <div>
-            <h3 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 8px', color: '#0F172A', borderBottom: '1px solid #E2E8F0', paddingBottom: 4 }}>
-              3. Relación de Superación (ELECTRE)
+            <h3 style={SEC_H3}>
+              {secNo('outranking')}. Relación de Superación (ELECTRE)
             </h3>
             <div style={{ breakInside: 'avoid' }}>
               <ElectreGraph names={electre.names} outranks={electre.outranks} concordance={electre.concordance} discordance={electre.discordance} cStar={electre.cStar} dStar={electre.dStar} />
@@ -402,18 +663,18 @@ export default function ExecutiveReportModal({
           </div>
         )}
 
-        {/* Sección 3: Orden de Mérito (Ranking Final) */}
+        {/* Orden de Mérito (Ranking Final) */}
         {!electre && (
         <div>
-          <h3 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 8px', color: '#0F172A', borderBottom: '1px solid #E2E8F0', paddingBottom: 4 }}>
-            3. Orden de Mérito y Síntesis Final
+          <h3 style={SEC_H3}>
+            {secNo('ranking')}. Orden de Mérito y Síntesis Final
           </h3>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr style={{ background: '#F1F5F9', textAlign: 'left', borderBottom: '2px solid #CBD5E1' }}>
                 <th style={{ padding: '8px 10px', width: 80 }}>Posición</th>
                 <th style={{ padding: '8px 10px' }}>Alternativa</th>
-                <th style={{ padding: '8px 10px', textAlign: 'right' }}>Puntaje ({methodDoc.family})</th>
+                <th style={{ padding: '8px 10px', textAlign: 'right' }}>{score.label}</th>
                 <th style={{ padding: '8px 10px', textAlign: 'center' }}>Dictamen</th>
               </tr>
             </thead>
@@ -428,13 +689,18 @@ export default function ExecutiveReportModal({
                 >
                   <td style={{ padding: '8px 10px', fontWeight: 700, fontFamily: 'monospace' }}>#{row.rank}</td>
                   <td style={{ padding: '8px 10px', fontWeight: row.rank === 1 ? 700 : 500 }}>
-                    {row.name} {row.rank === 1 && '✓'}
+                    {row.name} {row.rank === 1 && tied.length === 1 && !(compromiseSet && compromiseSet.length > 1) && '✓'}
                   </td>
                   <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 600 }}>
-                    {row.score.toFixed(4)}
+                    {score.fmt(row.score)}
                   </td>
                   <td style={{ padding: '8px 10px', textAlign: 'center', fontSize: 12 }}>
-                    {row.rank === 1 ? (
+                    {inCompromise(row.name) ? (
+                      // VIKOR sin ganador único: las del conjunto de compromiso se consideran juntas, ninguna es «la recomendada».
+                      <span style={{ color: '#B45309', fontWeight: 700 }}>Conjunto de compromiso</span>
+                    ) : row.rank === 1 && tied.length > 1 ? (
+                      <span style={{ color: '#B45309', fontWeight: 700 }}>Empate</span>
+                    ) : row.rank === 1 && !(compromiseSet && compromiseSet.length > 1) ? (
                       <span style={{ color: '#16A34A', fontWeight: 700 }}>Recomendada</span>
                     ) : (
                       <span style={{ color: '#64748B' }}>Viable</span>
@@ -474,7 +740,7 @@ export default function ExecutiveReportModal({
         {/* Sección 4: Sustento Metodológico y Citas APA */}
         <div style={{ borderTop: '1px solid #E2E8F0', paddingTop: 14 }}>
           <h4 style={{ fontSize: 13, fontWeight: 700, color: '#475569', textTransform: 'uppercase', margin: '0 0 6px' }}>
-            4. Justificación Metodológica y Citas Científicas
+            {secNo('justification')}. Justificación Metodológica y Citas Científicas
           </h4>
           <p style={{ fontSize: 12, color: '#64748B', lineHeight: 1.5, margin: '0 0 6px' }}>
             {methodDoc.summary}
@@ -482,6 +748,13 @@ export default function ExecutiveReportModal({
           <div style={{ fontSize: 11, fontFamily: 'monospace', color: '#0F172A', background: '#F8FAFC', padding: '8px 12px', borderRadius: 4, border: '1px solid #E2E8F0' }}>
             <strong>Cita formal:</strong> {methodDoc.citationApa}
           </div>
+          {/* Los pesos tienen su propia fuente (no es la del método de ranking): se cita aparte. AHP ya se cita arriba. */}
+          {!isAhp && (
+            <div style={{ fontSize: 11, fontFamily: 'monospace', color: '#0F172A', background: '#F8FAFC', padding: '8px 12px', borderRadius: 4, border: '1px solid #E2E8F0', marginTop: 6 }}>
+              <strong>Cita de la ponderación ({weightingMethod === 'ahp' ? 'AHP' : weightingMethod === 'critic' ? 'CRITIC' : 'Entropía'}):</strong>{' '}
+              {weightingMethod === 'ahp' ? METHOD_SPECS.ahp.citationApa : OBJECTIVE_WEIGHTS[weightingMethod].apa}
+            </div>
+          )}
         </div>
 
         {/* Pie de Página */}

@@ -16,7 +16,7 @@ import { sawSynthesis } from '@/lib/saw';
 import { fuzzyTopsisSynthesis } from '@/lib/fuzzy_topsis';
 import { criticWeights, entropyWeights } from '@/lib/weights';
 import SensitivitySimulator from './SensitivitySimulator';
-import ExecutiveReportModal from './ExecutiveReportModal';
+import ExecutiveReportModal, { type ReportAhpInfo, type ReportSheetCr } from './ExecutiveReportModal';
 import GroupDiagnostics from './GroupDiagnostics';
 import type { MethodKey } from './ScientificMethodModal';
 
@@ -272,6 +272,30 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
   const viewExpert = view !== 'agg' ? experts.find((e) => e.id === view) : undefined;
   const vm = viewExpert ? (idx[viewExpert.id]?.[sheet] ?? {}) : {};
   const vr = viewExpert ? sheetResult(sheet, items, [viewExpert.id], idx, wm) : null;
+
+  // Consistencia y procedencia de los pesos para el informe ejecutivo. Solo cuando algo del informe sale de juicios por pares:
+  // AHP (pesos + prioridades locales) o un método de matriz cuyos pesos se ponderaron con AHP. Con CRITIC/Entropía los pesos no
+  // vienen de juicios y no se calcula nada de esto. Se reutiliza `sheetResult` (mismo cálculo que el detalle por hoja), no se re-implementa.
+  const reportAhp = useMemo<ReportAhpInfo | undefined>(() => {
+    if (method !== 'ahp' && weightingMethod !== 'ahp') return undefined;
+    const sheetCr = (key: string, label: string): ReportSheetCr => {
+      const its = sheetItems(key, criteria, alternatives);
+      const res = sheetResult(key, its, used, idx, wm);
+      return {
+        label, n: its.length, cr: res.agg.cr, ok: res.agg.ok,
+        answered: res.answered.reduce((a, b) => a + b, 0), total: pairsOf(its.length).length * used.length,
+        perExpert: res.per.map((p, i) => ({ label: experts.find((e) => e.id === used[i])?.label ?? 'Experto', cr: p.cr, ok: p.ok })),
+      };
+    };
+    return {
+      weightMethod: wm,
+      expertCount: used.length,
+      criteriaSheet: sheetCr(CRIT_SHEET, 'Comparación de criterios'),
+      // Las hojas de alternativas solo existen en AHP; en los otros métodos la matriz de decisión ocupa su lugar.
+      altSheets: method === 'ahp' ? criteria.map((c) => sheetCr(altSheet(c.id), c.name)) : [],
+      local: method === 'ahp' ? syn.rows.map((r) => r.loc) : [],
+    };
+  }, [method, weightingMethod, criteria, alternatives, used, idx, wm, experts, syn]);
 
   const blocked = mode === 'single' ? (method !== 'ahp' ? !dmFilled : !withData.length) : decidableViews.length === 0;
   if (blocked) {
@@ -799,6 +823,8 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
           alternatives={alternatives}
           decisionMatrix={dmRaw}
           weights={critWeights}
+          weightingMethod={method === 'ahp' ? 'ahp' : weightingMethod}
+          ahp={reportAhp}
           // ELECTRE no da ranking total: quant.rows caería en la rama de PROMETHEE y el informe mostraría flujos φ ajenos.
           // Su informe se arma con la relación de superación (`electre`).
           rankingRows={
