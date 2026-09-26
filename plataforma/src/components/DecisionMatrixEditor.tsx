@@ -1,7 +1,8 @@
 'use client';
 
 import WeightBars from './WeightBars';
-import { missingUnits, UNIT_SUGGESTIONS, withUnit } from '@/lib/units';
+import { missingUnits, withUnit } from '@/lib/units';
+import UnitField from './UnitField';
 import type { Alternative, Criterion, DecisionMatrix, MatrixKind, TargetSpec } from '@/lib/types';
 import { getCell, getKind, getTarget, targetDistance } from '@/lib/topsis';
 import { LINGUISTIC_LABELS, type LinguisticLabel } from '@/lib/fuzzy_topsis';
@@ -74,7 +75,6 @@ export default function DecisionMatrixEditor({ criteria, alternatives, matrix, m
           ? 'Para cada alternativa, selecciona la variable lingüística que mejor describe su desempeño en cada criterio: desde Muy mala (VP) hasta Muy buena (VG). Marca si el criterio es de beneficio (MÁS es mejor) o costo (MENOS es mejor).'
           : 'Para cada alternativa, escribe el valor real que tiene en cada criterio — un dato (precio, kilómetros, años, una métrica técnica), no un juicio de 1 a 9 como en AHP. Marca el tipo de cada criterio: Beneficio (MÁS es mejor), Costo (MENOS es mejor) u Objetivo (lo mejor es un valor específico, por ejemplo un voltaje de 110 V: ni más ni menos es mejor).'}
       </p>
-      {!isFuzzy && onSetUnit && <datalist id="mx-unit-suggestions">{UNIT_SUGGESTIONS.map((u) => <option key={u} value={u} />)}</datalist>}
       {!isFuzzy && onSetUnit && missingUnits(criteria).length > 0 && (
         <div className="banner" role="status" style={{ marginBottom: 12 }}>
           <span><b>Falta la unidad de:</b> {missingUnits(criteria).map((c) => c.name).join(', ')}. Escríbela bajo el nombre del criterio (km, años, USD, «escala 1–5»…); si es un puntaje, «escala 1–5» o «sin unidad».</span>
@@ -96,8 +96,7 @@ export default function DecisionMatrixEditor({ criteria, alternatives, matrix, m
                   <th key={c.id} scope="col">
                     <span className="crit-name">{c.name}</span>
                     {!isFuzzy && onSetUnit && (
-                      <input type="text" className={'unit-in' + (c.unit?.trim() ? '' : ' missing')} list="mx-unit-suggestions" value={c.unit ?? ''} placeholder="unidad…"
-                        aria-label={`Unidad de ${c.name}`} onChange={(e) => onSetUnit(c.id, e.target.value)} />
+                      <UnitField className={'unit-in' + (c.unit?.trim() ? '' : ' missing')} value={c.unit ?? ''} placeholder="unidad…" ariaLabel={`Unidad de ${c.name}`} onChange={(u) => onSetUnit(c.id, u)} />
                     )}
                     <div className="seg" role="group" aria-label={`Tipo de ${c.name}`}>
                       <button type="button" aria-pressed={getKind(matrix, c.id) === 'max'} onClick={() => onSetType(c.id, 'max')}>Beneficio</button>
