@@ -135,7 +135,9 @@ export type JudgmentRow = { expert_id: string; sheet: string; pair_key: string; 
 
 export type ExpertGet = {
   expert: { name: string; role_desc: string; status: ExpertStatus };
-  project: { title: string; objective: string; method: Method; criteria: Criterion[]; alternatives: Alternative[] };
+  /** `weighting_method` aún NO lo devuelve expert_get (habría que añadirlo en una migración): se lee si llega, para que el flujo del
+   * experto avise cuando el proyecto pasó a pesos objetivos (CRITIC/Entropía) y sus respuestas ya no cuentan. */
+  project: { title: string; objective: string; method: Method; weighting_method?: WeightingMethod; criteria: Criterion[]; alternatives: Alternative[] };
   judgments: { sheet: string; pair_key: string; value: number }[];
 };
 

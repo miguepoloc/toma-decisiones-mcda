@@ -24,6 +24,8 @@ interface SensitivitySimulatorProps {
   baseWeights: number[];
   method: MethodKey;
   ahpSynthRows?: AhpSynthRow[];
+  /** Nombre del método objetivo («CRITIC», «Entropía») cuando los pesos base NO los dieron expertos sino que se derivan de la matriz de decisión. */
+  derivedWeights?: string;
 }
 
 export default function SensitivitySimulator({
@@ -33,6 +35,7 @@ export default function SensitivitySimulator({
   baseWeights,
   method,
   ahpSynthRows,
+  derivedWeights,
 }: SensitivitySimulatorProps) {
   // Inicializar pesos simulados con los pesos base
   const [simWeights, setSimWeights] = useState<number[]>(() => [...baseWeights]);
@@ -41,11 +44,6 @@ export default function SensitivitySimulator({
   useEffect(() => {
     setSimWeights([...baseWeights]);
   }, [baseWeights]);
-
-  // Si no hay alternativas o criterios suficientes, no renderizar
-  if (!criteria.length || !alternatives.length || !baseWeights.length) {
-    return null;
-  }
 
   // Función para re-ponderar proporcionalmente al mover un slider
   function handleWeightChange(index: number, newRawVal: number) {
@@ -99,6 +97,11 @@ export default function SensitivitySimulator({
     return computeRanking(method, criteria, alternatives, decisionMatrix, simWeights, ahpSynthRows);
   }, [method, criteria, alternatives, decisionMatrix, simWeights, ahpSynthRows]);
 
+  // Después de todos los hooks (un return antes de ellos rompe el orden de hooks si cambia el número de criterios).
+  if (!criteria.length || !alternatives.length || !baseWeights.length) {
+    return null;
+  }
+
   const baseWinner = baseResult.find((r) => r.rank === 1);
   const simWinner = simResult.find((r) => r.rank === 1);
   const winnerChanged = baseWinner && simWinner && baseWinner.name !== simWinner.name;
@@ -143,6 +146,13 @@ export default function SensitivitySimulator({
             Desplaza los controles para evaluar qué tan robusto es el ranking si cambian las prioridades de los criterios.
             Los demás criterios se rebalancean proporcionalmente de forma automática.
           </p>
+          {derivedWeights && (
+            <p className="muted" style={{ fontSize: 13, margin: '6px 0 0', maxWidth: '65ch' }}>
+              <b style={{ color: 'var(--ink)' }}>Los pesos base no son de expertos: los calculó {derivedWeights} a partir de la matriz de decisión</b> y se
+              recalculan solos si cambias un dato. Aquí los mueves solo como hipótesis («¿y si este criterio importara más?»): es un ejercicio
+              en pantalla, no cambia los pesos del proyecto ni sus resultados.
+            </p>
+          )}
         </div>
 
         <button
@@ -151,7 +161,7 @@ export default function SensitivitySimulator({
           onClick={resetWeights}
           style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
         >
-          ↺ Restablecer pesos base
+          ↺ {derivedWeights ? `Volver a los pesos ${derivedWeights}` : 'Restablecer pesos base'}
         </button>
       </div>
 

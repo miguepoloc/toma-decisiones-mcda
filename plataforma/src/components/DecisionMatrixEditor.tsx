@@ -37,10 +37,12 @@ type Props = {
   liveWeights?: { label: string; rows: { name: string; weight: number }[] };
   /** «AHP», «CRITIC» o «Entropía»: de dónde salen los pesos del proyecto. */
   weightingLabel?: string;
+  /** Con pesos AHP: ningún experto ha pesado todavía los criterios, así que Resultados no calcula nada. */
+  noExpertWeights?: boolean;
   onGoExperts?: () => void;
 };
 
-export default function DecisionMatrixEditor({ criteria, alternatives, matrix, method, onSetCell, onSetFuzzyCell, onSetType, onSetTarget, objective, onEditObjective, liveWeights, weightingLabel, onGoExperts }: Props) {
+export default function DecisionMatrixEditor({ criteria, alternatives, matrix, method, onSetCell, onSetFuzzyCell, onSetType, onSetTarget, objective, onEditObjective, liveWeights, weightingLabel, noExpertWeights, onGoExperts }: Props) {
   const isFuzzy = method === 'fuzzy_topsis';
   const targetCrit = isFuzzy ? [] : criteria.filter((c) => getKind(matrix, c.id) === 'target');
   const sinObjetivo = targetCrit.filter((c) => !getTarget(matrix, c.id));
@@ -190,10 +192,17 @@ export default function DecisionMatrixEditor({ criteria, alternatives, matrix, m
             : <p className="muted">Agrega al menos 2 alternativas con datos para ver los pesos.</p>}
         </div>
       ) : weightingLabel === 'AHP' && onGoExperts ? (
-        <p className="muted" style={{ marginTop: 12, maxWidth: '110ch' }}>
-          Los pesos de los criterios salen de la comparación por pares de los expertos, no de esta matriz.{' '}
-          <button type="button" className="btn" onClick={onGoExperts}>Ir a Expertos</button>
-        </p>
+        noExpertWeights ? (
+          <div className="banner" role="status" style={{ marginTop: 12 }}>
+            <span><b>Faltan los pesos de los criterios.</b> Con ponderación AHP salen de la comparación por pares de los expertos, no de esta matriz, y todavía nadie la ha hecho: mientras tanto Resultados no calcula el ranking.</span>
+            <button type="button" className="btn" onClick={onGoExperts}>Ir a Expertos</button>
+          </div>
+        ) : (
+          <p className="muted" style={{ marginTop: 12, maxWidth: '110ch' }}>
+            Los pesos de los criterios salen de la comparación por pares de los expertos, no de esta matriz.{' '}
+            <button type="button" className="btn" onClick={onGoExperts}>Ir a Expertos</button>
+          </p>
+        )
       ) : null}
     </div>
   );

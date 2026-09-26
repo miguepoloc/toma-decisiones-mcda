@@ -19,6 +19,8 @@ import { criticWeights, entropyWeights } from '@/lib/weights';
 import SensitivitySimulator from './SensitivitySimulator';
 import ExecutiveReportModal, { type ReportAhpInfo, type ReportSheetCr } from './ExecutiveReportModal';
 import GroupDiagnostics from './GroupDiagnostics';
+import WeightingCard from './WeightingCard';
+import { WEIGHTING_SHORT, effectiveWeighting, expertsWithJudgments, isObjectiveFor, resultsGate } from '@/lib/weightingMode';
 import type { MethodKey } from './ScientificMethodModal';
 
 export type ExpertLite = { id: string; label: string };
@@ -49,6 +51,9 @@ type Props = {
    * en pantalla. */
   onChangeCStar?: (c: number) => void;
   onChangeDStar?: (d: number) => void;
+  /** Solo dueño: atajos de los mensajes de «faltan juicios». Sin ellos (vista pública) el mensaje va sin botón. */
+  onGoExperts?: () => void;
+  onGoProject?: () => void;
 };
 
 const METHOD_LABEL: Record<Method, string> = {
@@ -149,17 +154,22 @@ function Table({ names, M, f }: { names: string[]; M: number[][]; f: (x: number)
   );
 }
 
-export default function Results({ mode, criteria, alternatives, experts, judgments, method = 'ahp', weightingMethod = 'ahp', decisionMatrix, showPerExpert, projectTitle = 'Proyecto MCDA', projectObjective = '', onChangeV, onChangeCStar, onChangeDStar }: Props) {
+export default function Results({ mode, criteria, alternatives, experts, judgments, method = 'ahp', weightingMethod = 'ahp', decisionMatrix, showPerExpert, projectTitle = 'Proyecto MCDA', projectObjective = '', onChangeV, onChangeCStar, onChangeDStar, onGoExperts, onGoProject }: Props) {
   const [showReportModal, setShowReportModal] = useState(false);
   const idx = useMemo(() => indexJudgments(judgments), [judgments]);
-  const withData = useMemo(() => experts.filter((e) => Object.keys(idx[e.id] ?? {}).length > 0).map((e) => e.id), [experts, idx]);
+  // Con CRITIC/Entropía los pesos salen de la matriz de decisión: los juicios guardados de una fase anterior (AHP) NO cuentan para nada
+  // (ni expertos incluidos, ni CR, ni consenso, ni bloqueo). `weighting` es la ponderación efectiva (AHP como método ignora weightingMethod).
+  const weighting = effectiveWeighting(method, weightingMethod);
+  const objective = isObjectiveFor(method, weightingMethod);
+  const withData = useMemo(() => expertsWithJudgments(experts.map((e) => e.id), idx, method, weightingMethod), [experts, idx, method, weightingMethod]);
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [sheet, setSheet] = useState(CRIT_SHEET);
   const [view, setView] = useState('agg');
   // Cómo se obtienen los pesos AHP. Vista local: no se guarda. El Excel exportado siempre calcula el eigenvector y muestra el promedio de columnas al lado.
   const [wm, setWm] = useState<WeightMethod>(DEFAULT_WEIGHT_METHOD);
 
-  const used = withData.filter((id) => !excluded.has(id));
+  // useMemo: una identidad nueva en cada render reiniciaría los controles del simulador de sensibilidad (su efecto depende de los pesos base).
+  const used = useMemo(() => withData.filter((id) => !excluded.has(id)), [withData, excluded]);
   // Pesos de AHP (siempre calculados para la pestaña de detalle por hoja)
   const ahpWeights = useMemo(() => sheetResult(CRIT_SHEET, criteria, used, idx, wm).agg.w, [criteria, used, idx, wm]);
   // Pesos efectivos para los métodos de ranking: CRITIC, Entropía o AHP según weighting_method
@@ -190,10 +200,10 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
     if (method === 'ahp') return ahpWeights;
     // CRITIC y Entropía necesitan números: en Fuzzy TOPSIS las etiquetas se desdifusifican (centroide) antes de calcularlos.
     const dmNum = method === 'fuzzy_topsis' ? defuzzifyMatrix(dm, criteria, alternatives) : dm;
-    if (weightingMethod === 'critic') return criticWeights(criteria, alternatives, dmNum);
-    if (weightingMethod === 'entropy') return entropyWeights(criteria, alternatives, dmNum);
+    if (weighting === 'critic') return criticWeights(criteria, alternatives, dmNum);
+    if (weighting === 'entropy') return entropyWeights(criteria, alternatives, dmNum);
     return ahpWeights; // 'ahp' (default)
-  }, [method, weightingMethod, ahpWeights, criteria, alternatives, dm]);
+  }, [method, weighting, ahpWeights, criteria, alternatives, dm]);
 
   const topSyn = useMemo(() => topsisSynthesis(criteria, alternatives, dm, critWeights), [criteria, alternatives, dm, critWeights]);
   const vikSyn = useMemo(() => vikorSynthesis(criteria, alternatives, dm, critWeights), [criteria, alternatives, dm, critWeights]);
@@ -222,8 +232,10 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
       higherBetter: true, bar: (v: number) => Math.max(0, Math.min(100, (v / maxAhpG) * 100)), fmt: (v: number) => v.toFixed(4), unit: 'prioridad global (mayor es mejor)',
     };
     const quantViews = QUANT_KEYS.map((k) => ({ key: k, label: METHOD_LABEL[k], color: METHOD_COLOR[k], ...quantViewFor(k, topSyn, vikSyn, promSyn, sawSyn, fuzzyTopSyn) }));
-    return [ahpView, ...quantViews];
-  }, [syn, topSyn, vikSyn, promSyn, sawSyn, fuzzyTopSyn]);
+    // Con pesos objetivos el AHP de alternativas saldría de juicios viejos de expertos, que no cuentan: se omite la columna entera
+    // (mismos datos y mismos pesos CRITIC/Entropía para todos los métodos que se comparan).
+    return objective ? quantViews : [ahpView, ...quantViews];
+  }, [objective, syn, topSyn, vikSyn, promSyn, sawSyn, fuzzyTopSyn]);
   const decidableViews = compareViews.filter((m) => !m.tie);
   // ELECTRE no da un ranking total, así que va en su propia columna: cuántas alternativas supera cada
   // una y por cuántas es superada. Su "primer lugar" solo existe si hay relaciones y una única alternativa
@@ -268,7 +280,8 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
     : [{ key: CRIT_SHEET, label: 'Criterios' }];
   const items = sheetItems(sheet, criteria, alternatives);
   const r = useMemo(() => sheetResult(sheet, items, used, idx, wm), [sheet, items, used, idx, wm]);
-  const bad = sheets.filter((s) => !sheetResult(s.key, sheetItems(s.key, criteria, alternatives), used, idx, wm).agg.ok).map((s) => s.label);
+  // Consistencia (CR) solo tiene sentido si hay juicios de expertos detrás de los pesos.
+  const bad = objective ? [] : sheets.filter((s) => !sheetResult(s.key, sheetItems(s.key, criteria, alternatives), used, idx, wm).agg.ok).map((s) => s.label);
   const colv = (i: number) => (i < 5 ? `var(--s${i + 1})` : 'var(--other)');
   const wmax = Math.max(...r.agg.w, 0.0001) * 1.12;
 
@@ -328,13 +341,33 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
     return data;
   }, [method, criteria, alternatives, dm, critWeights, syn, sawSyn, promSyn, topSyn, fuzzyTopSyn]);
 
-  const blocked = mode === 'single' ? (method !== 'ahp' ? !dmFilled : !withData.length) : decidableViews.length === 0;
-  if (blocked) {
+  // Con pesos objetivos el bloqueo depende SOLO de la matriz de decisión. Con pesos AHP en un método de matriz, sin juicios sobre los
+  // criterios los pesos quedarían iguales en silencio: se bloquea y se manda a Expertos.
+  const gate = resultsGate({ mode, method, weighting: weightingMethod, matrixFilled: dmFilled, expertCount: withData.length, decidableCount: decidableViews.length });
+  if (gate) {
+    if (gate === 'no-weight-judgments') {
+      return (
+        <div className="card" role="status">
+          <h3 style={{ marginBottom: 6 }}>Faltan los pesos de los criterios</h3>
+          <p className="muted" style={{ maxWidth: '72ch' }}>
+            La ponderación de este proyecto es <b>AHP</b>: los pesos salen de la comparación por pares de criterios que hacen los expertos, y todavía nadie la ha hecho.
+            Sin esos juicios los criterios pesarían igual (1/{criteria.length || 'n'}) y el ranking no reflejaría ninguna prioridad, así que no se calcula.
+          </p>
+          <div className="acts" style={{ marginTop: 10 }}>
+            {onGoExperts && <button type="button" className="btn primary" onClick={onGoExperts}>Ir a Expertos</button>}
+            {onGoProject && <button type="button" className="btn" onClick={onGoProject}>O usar CRITIC / Entropía (pestaña Proyecto)</button>}
+          </div>
+          {!onGoExperts && !onGoProject && <p className="muted" style={{ fontSize: 13, marginTop: 8 }}>El autor aún no ha registrado juicios de expertos sobre los criterios.</p>}
+        </div>
+      );
+    }
     return (
       <div className="card muted">
-        {mode === 'compare'
-          ? 'Todavía no hay datos para comparar. Ningún método tiene información suficiente: llena los juicios por pares de al menos un experto (para AHP) y/o la matriz de decisión con valores reales (pestaña «Matriz de decisión», solo visible con un método distinto de AHP) para ver el ranking de cada uno lado a lado.'
-          : method !== 'ahp'
+        {gate === 'compare-nothing'
+          ? (objective
+            ? 'Todavía no hay datos para comparar: llena la matriz de decisión con valores reales (pestaña «Matriz de decisión»). Los pesos CRITIC/Entropía se calculan solos a partir de ella.'
+            : 'Todavía no hay datos para comparar. Ningún método tiene información suficiente: llena los juicios por pares de al menos un experto (para AHP) y/o la matriz de decisión con valores reales (pestaña «Matriz de decisión», solo visible con un método distinto de AHP) para ver el ranking de cada uno lado a lado.')
+          : gate === 'no-matrix'
             ? 'Todavía no hay datos en la matriz de decisión. Complétala en su pestaña para ver resultados.'
             : 'Todavía no hay juicios. Cuando tú o tus expertos respondan, aquí aparecerán los resultados.'}
       </div>
@@ -434,14 +467,14 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
           <div>
             <h2 style={{ margin: 0, fontSize: 20 }}>Síntesis y Ranking de Resultados</h2>
             <p className="muted" style={{ margin: '2px 0 0', fontSize: 13 }}>
-              Ponderación por {weightingMethod.toUpperCase()} · Algoritmo de ranking {METHOD_LABEL[method]}
+              Ponderación por {WEIGHTING_SHORT[weighting]} · Algoritmo de ranking {METHOD_LABEL[method]}
             </p>
           </div>
         ) : (
           <div>
-            <h2 style={{ margin: 0, fontSize: 20 }}>Comparativa de los 6 métodos</h2>
+            <h2 style={{ margin: 0, fontSize: 20 }}>Comparativa de los {compareViews.length + 1} métodos</h2>
             <p className="muted" style={{ margin: '2px 0 0', fontSize: 13 }}>
-              Mismos datos y los mismos pesos de criterio — el ranking de cada algoritmo, lado a lado.
+              Mismos datos y los mismos pesos de criterio ({weighting === 'ahp' ? 'AHP, de los juicios de los expertos' : `${WEIGHTING_SHORT[weighting]}, calculados de la matriz de decisión`}) — el ranking de cada algoritmo, lado a lado.
             </p>
           </div>
         )}
@@ -457,6 +490,15 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
         )}
       </div>
 
+      {objective && method !== 'ahp' && (weighting === 'critic' || weighting === 'entropy') && (
+        <WeightingCard
+          weighting={weighting}
+          rows={criteria.map((c, i) => ({ name: c.name, weight: critWeights[i] ?? 0 }))}
+          alternativesCount={alternatives.length}
+        />
+      )}
+
+      {!objective && (
       <div className="card">
         <div className="eyebrow">Expertos incluidos en el cálculo ({used.length} de {withData.length})</div>
         <div className="chips" style={{ marginTop: 8 }}>
@@ -471,7 +513,11 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
           })}
           {!withData.length && <span className="muted" style={{ fontSize: 13 }}>Ningún experto ha pesado los criterios todavía — se usan pesos iguales.</span>}
         </div>
+        {withData.length > 0 && used.length === 0 && (
+          <p className="muted" style={{ fontSize: 13, margin: '8px 0 0' }}><b>Excluiste a todos los expertos:</b> los criterios pesan igual (1/{criteria.length}). Marca al menos uno.</p>
+        )}
       </div>
+      )}
 
       {mode === 'single' && (method === 'electre' ? electrePanel : (
         <>
@@ -605,7 +651,7 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
               </div>
               <details style={{ marginTop: 12 }}>
                 <summary>Ver matriz de decisión y pesos usados</summary>
-                <h4>Peso de cada criterio (de la hoja Criterios)</h4>
+                <h4>{objective ? `Peso de cada criterio (${WEIGHTING_SHORT[weighting]}, calculado de esta matriz)` : 'Peso de cada criterio (de la hoja Criterios)'}</h4>
                 <div className="tbl" style={{ marginTop: 8 }}>
                   <table>
                     <thead><tr><th></th>{criteria.map((c) => <th key={c.id} className="n">{c.name}</th>)}</tr></thead>
@@ -633,7 +679,8 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
             </div>
             <div className="card">
               <h3 style={{ marginBottom: 4 }}>Gráficas del método</h3>
-              <MethodCharts method={method} data={methodCharts} />
+              {/* Con pesos objetivos las barras de pesos ya van en su propia tarjeta (con método y referencia): no se repiten. */}
+              <MethodCharts method={method} data={methodCharts} showWeights={!objective} />
             </div>
             {method === 'vikor' && (
               <VikorPanel criteria={criteria} alternatives={alternatives} dm={dm} weights={critWeights} synth={vikSyn} v={vEff} onChangeV={changeV} persisted={!!onChangeV} />
@@ -768,7 +815,7 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
 
       {mode === 'single' && (
         <>
-          {(method === 'ahp' || weightingMethod === 'ahp') && (
+          {!objective && (
             <div className="card">
               <label className="lbl" htmlFor="wm">Cálculo de los pesos AHP</label>
               <select id="wm" value={wm} onChange={(e) => setWm(e.target.value as WeightMethod)}>
@@ -791,8 +838,11 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
             baseWeights={critWeights}
             method={method as MethodKey}
             ahpSynthRows={syn.rows.map((r) => ({ name: r.name, score: r.g, rank: r.rank, loc: r.loc }))}
+            derivedWeights={objective ? WEIGHTING_SHORT[weighting] : undefined}
           />
 
+      {/* Detalle por hoja = juicios por pares, CR, λmax y consenso de los expertos: con pesos objetivos no existe nada de eso que mostrar. */}
+      {!objective && (
       <div className="card res">
         <h3>Detalle por hoja</h3>
         <div className="sheetnav" role="group" aria-label="Hoja">
@@ -836,6 +886,7 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
           </>
         )}
       </div>
+      )}
 
       {showReportModal && (
         <ExecutiveReportModal

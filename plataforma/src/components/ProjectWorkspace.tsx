@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { hexToken, uid, type Alternative, type Criterion, type ExpertRow, type GeoConfig, type JudgmentRow, type Method, type WeightingMethod, type ProjectRow } from '@/lib/types';
 import { indexJudgments, type JMap } from '@/lib/ahp';
@@ -10,6 +10,7 @@ import { friendlyError } from '@/lib/errors';
 import { normalizeMatrix, resolveTargets, setCell as setMatrixCell, setTarget as setMatrixTarget, setType as setMatrixType, type MatrixKind, type TargetSpec } from '@/lib/topsis';
 import { criticWeights, entropyWeights } from '@/lib/weights';
 import { defuzzifyMatrix } from '@/lib/fuzzy_topsis';
+import { WEIGHTING_SHORT, effectiveWeighting, expertsWithJudgments, isObjectiveFor } from '@/lib/weightingMode';
 import JudgmentEditor from './JudgmentEditor';
 import PrioritizationEditor from './PrioritizationEditor';
 import DecisionMatrixEditor from './DecisionMatrixEditor';
@@ -55,25 +56,36 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
   const [project, setProject] = useState(initialProject);
   const [experts, setExperts] = useState(initialExperts);
   const [judgments, setJudgments] = useState(initialJudgments);
-  const [tab, setTab] = useState('Proyecto');
+  const [tabState, setTab] = useState('Proyecto');
   const [editing, setEditing] = useState<string | null>(null);
   const [save, setSave] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [saveErr, setSaveErr] = useState('');
   const [showSciModal, setShowSciModal] = useState(false);
   // Con pesos objetivos (CRITIC/Entropía) los pesos salen de la matriz de decisión, no de juicios de expertos: la pestaña Expertos
   // no se usa (los juicios ya guardados se conservan; si vuelves a AHP reaparece).
-  const objectiveWeighting = project.kind !== 'spatial' && project.method !== 'ahp' && (project.weighting_method === 'critic' || project.weighting_method === 'entropy');
-  const TABS = project.kind === 'spatial' ? TABS_SPATIAL
+  const objectiveWeighting = project.kind !== 'spatial' && isObjectiveFor(project.method, project.weighting_method);
+  const weighting = effectiveWeighting(project.method, project.weighting_method);
+  // useMemo: el filtro devolvía un arreglo nuevo en cada render y el efecto del hash (que depende de TABS) corría tras cada render,
+  // reiniciando `editing` (con pesos objetivos) y peleando con goTab.
+  const TABS = useMemo(() => project.kind === 'spatial' ? TABS_SPATIAL
     : project.method === 'ahp' ? TABS_AHP
-    : objectiveWeighting ? TABS_MATRIX.filter((t) => t !== 'Expertos') : TABS_MATRIX;
+    : objectiveWeighting ? TABS_MATRIX.filter((t) => t !== 'Expertos') : TABS_MATRIX,
+  [project.kind, project.method, objectiveWeighting]);
+  // Si la pestaña activa desaparece (p. ej. Expertos al pasar a CRITIC) se cae a la primera, sin esperar al efecto.
+  const tab = TABS.includes(tabState) ? tabState : TABS[0];
 
   // La pestaña activa vive en el hash de la URL. Se lee tras montar (no en el useState inicial) para que el HTML
   // del servidor y el primer render del cliente coincidan; hashchange cubre atrás/adelante y enlaces con #pestaña.
-  useEffect(() => {
+  // useLayoutEffect (no useEffect): corre antes de pintar, así un enlace con #resultados no muestra un instante la pestaña Proyecto.
+  useLayoutEffect(() => {
     const fromHash = () => {
       const h = window.location.hash.slice(1);
-      setTab(TABS.find((t) => tabSlug(t) === h) ?? TABS[0]);
+      const match = TABS.find((t) => tabSlug(t) === h);
+      setTab(match ?? TABS[0]);
       setEditing(null);
+      // Un enlace a una pestaña que en este proyecto no existe (#expertos con CRITIC, #geovisor en un proyecto de decisión) cae en
+      // la primera; se corrige también el hash para que el enlace no siga mintiendo (replaceState no dispara hashchange).
+      if (h && !match) window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#${tabSlug(TABS[0])}`);
     };
     fromHash();
     window.addEventListener('hashchange', fromHash);
@@ -106,15 +118,17 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
   const prio = useMemo(() => normalizePrio(project.prioritization), [project.prioritization]);
   const idx = useMemo(() => indexJudgments(judgments), [judgments]);
   const dm = useMemo(() => normalizeMatrix(project.decision_matrix), [project.decision_matrix]);
+  // Con pesos AHP en un método de matriz: ¿algún experto ya pesó los criterios? Sin eso no hay resultados (ver Results/resultsGate).
+  const weightExperts = useMemo(() => expertsWithJudgments(experts.map((e) => e.id), idx, project.method, project.weighting_method).length, [experts, idx, project.method, project.weighting_method]);
   // Vista previa de los pesos objetivos mientras se llena la matriz (los mismos que usa Results: criterios objetivo ya resueltos y,
   // en Fuzzy TOPSIS, etiquetas desdifusificadas).
   const liveWeights = useMemo(() => {
     if (!objectiveWeighting) return undefined;
     const eff = resolveTargets(project.criteria, project.alternatives, dm);
     const num = project.method === 'fuzzy_topsis' ? defuzzifyMatrix(eff, project.criteria, project.alternatives) : eff;
-    const w = project.weighting_method === 'critic' ? criticWeights(project.criteria, project.alternatives, num) : entropyWeights(project.criteria, project.alternatives, num);
-    return { label: project.weighting_method === 'critic' ? 'CRITIC' : 'Entropía', rows: project.criteria.map((c, i) => ({ name: c.name, weight: w[i] ?? 0 })) };
-  }, [objectiveWeighting, project.criteria, project.alternatives, project.method, project.weighting_method, dm]);
+    const w = weighting === 'critic' ? criticWeights(project.criteria, project.alternatives, num) : entropyWeights(project.criteria, project.alternatives, num);
+    return { label: WEIGHTING_SHORT[weighting], rows: project.criteria.map((c, i) => ({ name: c.name, weight: w[i] ?? 0 })) };
+  }, [objectiveWeighting, weighting, project.criteria, project.alternatives, project.method, project.weighting_method, dm]);
   const examples = useExamples(supabase);
   const geoCfg = useMemo<GeoConfig>(() => {
     const g = project.geo as Partial<GeoConfig>;
@@ -410,7 +424,7 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
               );
             })()}
 
-            {project.method !== 'ahp' && (
+            {project.method !== 'ahp' && project.kind !== 'spatial' && (
               <div style={{ marginTop: 14 }}>
                 <label className="lbl">Método de ponderación de criterios</label>
                 <div className="weights-grid" role="group" aria-label="Ponderación de criterios">
@@ -435,8 +449,8 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
                 </div>
                 <p className="hint" style={{ marginTop: 8 }}>
                   {objectiveWeighting
-                    ? <>Con <b>{project.weighting_method === 'critic' ? 'CRITIC' : 'Entropía'}</b> no hay nada que digitar aquí: los pesos se calculan solos a partir de la <b>matriz de decisión</b> y se recalculan cada vez que cambias un dato. Por eso la pestaña Expertos deja de usarse (los juicios ya guardados se conservan).</>
-                    : <>Con <b>AHP</b> los pesos salen de la comparación por pares de criterios que hacen los expertos (pestaña Expertos).</>}
+                    ? <>Con <b>{WEIGHTING_SHORT[weighting]}</b> no hay nada que digitar aquí: los pesos se calculan solos a partir de la <b>matriz de decisión</b> y se recalculan cada vez que cambias un dato. Por eso la pestaña Expertos deja de usarse y los juicios de expertos <b>no cuentan</b> en Resultados, Comparativa, la vista pública ni el informe (los ya guardados se conservan: si vuelves a AHP reaparecen).{experts.length > 0 && <> Tienes {experts.length} experto{experts.length === 1 ? '' : 's'} registrado{experts.length === 1 ? '' : 's'}: sus enlaces siguen abiertos, pero lo que respondan ya no influye.</>}</>
+                    : <>Con <b>AHP</b> los pesos salen de la comparación por pares de criterios que hacen los expertos (pestaña Expertos). Sin esos juicios no se calculan resultados.</>}
                 </p>
                 {project.method === 'fuzzy_topsis' && (project.weighting_method ?? 'ahp') !== 'ahp' && (
                   <p className="hint" style={{ marginTop: 8 }}>
@@ -599,7 +613,8 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
           objective={project.objective}
           onEditObjective={() => goTab('Proyecto')}
           liveWeights={liveWeights}
-          weightingLabel={project.weighting_method === 'critic' ? 'CRITIC' : project.weighting_method === 'entropy' ? 'Entropía' : 'AHP'}
+          weightingLabel={WEIGHTING_SHORT[weighting]}
+          noExpertWeights={weighting === 'ahp' && weightExperts === 0}
           onGoExperts={() => goTab('Expertos')}
         />
       )}
@@ -625,6 +640,8 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
             onChangeV={setVikorV}
             onChangeCStar={setElectreCStar}
             onChangeDStar={setElectreDStar}
+            onGoExperts={objectiveWeighting ? undefined : () => goTab('Expertos')}
+            onGoProject={() => goTab('Proyecto')}
           />
         </div>
       )}
@@ -643,6 +660,8 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
             showPerExpert
             projectTitle={project.title}
             projectObjective={project.objective}
+            onGoExperts={objectiveWeighting ? undefined : () => goTab('Expertos')}
+            onGoProject={() => goTab('Proyecto')}
           />
         </div>
       )}
@@ -655,7 +674,9 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
               <p className="muted" style={{ maxWidth: '70ch' }}>Un mapa de aptitud se publica desde «Geovisor → Exportar → Vista pública»: ahí activas el enlace y eliges cuándo publicar o actualizar el mapa. La vista pública muestra solo el resultado (no tus capas ni tus expertos).</p>
             ) : (
               <>
-                <p className="muted" style={{ maxWidth: '70ch' }}>Por defecto, nadie más que tú ve tu proyecto. Si activas el enlace público, cualquier persona con el enlace podrá ver los resultados (ranking, pesos y consistencia). No verá nombres de expertos, ni sus enlaces, ni la priorización de criterios.</p>
+                <p className="muted" style={{ maxWidth: '70ch' }}>Por defecto, nadie más que tú ve tu proyecto. Si activas el enlace público, cualquier persona con el enlace podrá ver los resultados ({objectiveWeighting
+                  ? `ranking y los pesos ${WEIGHTING_SHORT[weighting]}, calculados de la matriz de decisión, que también verá`
+                  : project.method === 'ahp' ? 'ranking, pesos y consistencia' : 'ranking, pesos y consistencia, más la matriz de decisión'}). No verá nombres de expertos, ni sus enlaces, ni la priorización de criterios.{objectiveWeighting && ' Con pesos objetivos los juicios de expertos guardados no se muestran ni cuentan.'}</p>
                 <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontWeight: 600 }}>
                   <input type="checkbox" checked={project.is_public} onChange={(e) => patch({ is_public: e.target.checked }, true)} /> Hacer público con enlace
                 </label>

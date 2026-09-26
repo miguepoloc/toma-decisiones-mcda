@@ -1,4 +1,5 @@
 // Prueba de humo de la matemática AHP. Compara contra valores obtenidos con la herramienta HTML / el Excel del ejercicio.
+import { effectiveWeighting, expertsWithJudgments, isObjectiveFor, resultsGate, usesExpertJudgments } from '../src/lib/weightingMode.ts';
 import { CRIT_SHEET, altSheet, analyze, expertMatrix, indexJudgments, pairsOf, synthesis, sheetResult } from '../src/lib/ahp.ts';
 
 let fallos = 0;
@@ -53,6 +54,30 @@ const cerca = (a: number, b: number, tol = 5e-4) => Math.abs(a - b) <= tol;
   const items = [{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }];
   const r = sheetResult(CRIT_SHEET, items, [], {});
   ok(r.agg.w.every((x) => Number.isFinite(x)), 'sin expertos: pesos finitos');
+}
+// 5) Pesos objetivos (CRITIC/Entropía): los juicios de expertos guardados no deben influir en nada ni bloquear nada
+{
+  const idx = indexJudgments([
+    { expert_id: 'e1', sheet: CRIT_SHEET, pair_key: 'a-b', value: -2 },
+    { expert_id: 'e2', sheet: altSheet('a'), pair_key: 'x-y', value: 1 }, // solo hoja de alternativas (sobrante de una fase AHP)
+  ]);
+  const ids = ['e1', 'e2', 'e3'];
+  ok(effectiveWeighting('ahp', 'critic') === 'ahp', 'AHP como método ignora weighting_method');
+  ok(effectiveWeighting('topsis', undefined) === 'ahp' && effectiveWeighting('topsis', null) === 'ahp', 'sin weighting_method se asume AHP');
+  ok(isObjectiveFor('topsis', 'critic') && isObjectiveFor('fuzzy_topsis', 'entropy') && !isObjectiveFor('topsis', 'ahp') && !isObjectiveFor('ahp', 'critic'), 'objetivo solo con método de matriz + CRITIC/Entropía');
+  ok(usesExpertJudgments('vikor', 'ahp') && !usesExpertJudgments('vikor', 'entropy'), 'los juicios cuentan solo con pesos AHP');
+  ok(expertsWithJudgments(ids, idx, 'topsis', 'critic').length === 0, 'con CRITIC ningún experto cuenta (aunque tengan juicios guardados)');
+  ok(expertsWithJudgments(ids, idx, 'topsis', 'ahp').join() === 'e1', 'método de matriz + AHP: solo cuenta quien pesó la hoja Criterios');
+  ok(expertsWithJudgments(ids, idx, 'ahp', 'critic').join() === 'e1,e2', 'AHP: cuenta cualquier hoja (y weighting_method no influye)');
+  const g = (mode: 'single' | 'compare', method: 'ahp' | 'topsis', weighting: 'ahp' | 'critic', matrixFilled: boolean, expertCount: number, decidableCount = 0) =>
+    resultsGate({ mode, method, weighting, matrixFilled, expertCount, decidableCount });
+  ok(g('single', 'topsis', 'critic', true, 0) === null, 'CRITIC con matriz llena y sin expertos: no se bloquea');
+  ok(g('single', 'topsis', 'critic', false, 3) === 'no-matrix', 'CRITIC sin matriz: se bloquea solo por la matriz aunque haya expertos');
+  ok(g('single', 'topsis', 'ahp', true, 0) === 'no-weight-judgments', 'AHP en método de matriz sin juicios de criterios: mensaje a Expertos, no pesos iguales en silencio');
+  ok(g('single', 'topsis', 'ahp', true, 2) === null && g('single', 'topsis', 'ahp', false, 2) === 'no-matrix', 'AHP en método de matriz con juicios: solo depende de la matriz');
+  ok(g('single', 'ahp', 'critic', true, 0) === 'no-judgments' && g('single', 'ahp', 'ahp', false, 1) === null, 'AHP como método: bloquea sin juicios');
+  ok(g('compare', 'topsis', 'critic', true, 0, 5) === null && g('compare', 'topsis', 'critic', false, 0, 0) === 'compare-nothing', 'Comparativa con CRITIC: depende solo de la matriz');
+  ok(g('compare', 'topsis', 'ahp', true, 0, 5) === 'no-weight-judgments', 'Comparativa con AHP y sin juicios: no compara con pesos iguales');
 }
 console.log(fallos ? `\n${fallos} prueba(s) fallaron` : '\nTodas las pruebas pasaron');
 process.exit(fallos ? 1 : 0);
