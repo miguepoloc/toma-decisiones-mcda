@@ -1,9 +1,11 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { ago, countByFilter, filterUsers, fmtDate, INACTIVE_DAYS, sortUsers, type UserFilter, type UserSort, type UserSortKey } from '@/lib/admin';
+import { friendlyError } from '@/lib/errors';
+import { ago, countByFilter, filterUsers, fmtDate, fmtDateTime, INACTIVE_DAYS, sortUsers, usersToCsv, type UserFilter, type UserSort, type UserSortKey } from '@/lib/admin';
 import type { AccountState, AdminUserActivity } from '@/lib/types';
 import ConfirmDialog from '../ConfirmDialog';
 
@@ -14,7 +16,32 @@ const FILTERS: { id: UserFilter; label: string; hint: string }[] = [
   { id: 'sin_confirmar', label: 'Correo sin confirmar', hint: 'No abrieron el enlace de confirmación del correo: no pueden entrar hasta que lo confirmes' },
   { id: 'sin_login', label: 'Nunca entraron', hint: 'Cuenta creada, sin ningún inicio de sesión' },
   { id: 'inactivos', label: `Inactivas +${INACTIVE_DAYS} d`, hint: `Sin iniciar sesión hace más de ${INACTIVE_DAYS} días` },
+  { id: 'sin_proyectos', label: 'Sin proyectos', hint: 'Cuentas (sin contar admins) que todavía no han creado ningún proyecto' },
 ];
+
+/** Cuántas filas se pintan de una vez: con cientos de cuentas, 50 mantienen la página ágil y la tabla legible. */
+const PAGE = 50;
+
+const SORTS: { value: string; label: string; key: UserSortKey; dir: 'asc' | 'desc' }[] = [
+  { value: 'ultimo_acceso:desc', label: 'Último login: más reciente', key: 'ultimo_acceso', dir: 'desc' },
+  { value: 'ultimo_acceso:asc', label: 'Último login: más antiguo (o nunca)', key: 'ultimo_acceso', dir: 'asc' },
+  { value: 'nombre:asc', label: 'Nombre: A → Z', key: 'nombre', dir: 'asc' },
+  { value: 'creado:desc', label: 'Registro: más reciente', key: 'creado', dir: 'desc' },
+  { value: 'proyectos:desc', label: 'Proyectos: más primero', key: 'proyectos', dir: 'desc' },
+  { value: 'proyectos:asc', label: 'Proyectos: menos primero', key: 'proyectos', dir: 'asc' },
+];
+
+/** Mensaje de error de las acciones. Las funciones admin_* lanzan textos en español pensados para mostrarse
+ * («No puedes eliminar tu propia cuenta…», «Indica el motivo…»): esos se muestran tal cual. Lo que huela a base de
+ * datos (permisos, esquema, red) pasa por friendlyError para no filtrar nombres internos. */
+function actionError(e: { message?: string } | unknown): string {
+  const raw = (e && typeof e === 'object' && 'message' in e ? String((e as { message?: unknown }).message ?? '') : '').trim();
+  if (/^no autorizado$/i.test(raw)) return 'Tu sesión ya no es de administrador. Recarga la página o vuelve a iniciar sesión.';
+  const known = friendlyError(e, '');
+  if (known) return known;
+  if (!raw || /does not exist|syntax|violates|relation|column|function |pgrst|pg_|schema|timeout/i.test(raw)) return 'No se pudo completar la acción. Intenta de nuevo.';
+  return raw;
+}
 
 /** Icono + texto (no solo color) para que el estado se entienda sin distinguir colores. */
 function StatePill({ estado }: { estado: AccountState }) {
@@ -31,10 +58,10 @@ function StatePill({ estado }: { estado: AccountState }) {
   );
 }
 
-function SortTh({ k, sort, onSort, children }: { k: UserSortKey; sort: UserSort; onSort: (k: UserSortKey) => void; children: string }) {
+function SortTh({ k, sort, onSort, children, className }: { k: UserSortKey; sort: UserSort; onSort: (k: UserSortKey) => void; children: string; className?: string }) {
   const active = sort.key === k;
   return (
-    <th scope="col" aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+    <th scope="col" role="columnheader" className={className} aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
       <button type="button" className="thsort" onClick={() => onSort(k)}>
         {children}<span aria-hidden="true">{active ? (sort.dir === 'asc' ? ' ↑' : ' ↓') : ' ↕'}</span>
       </button>
@@ -43,54 +70,87 @@ function SortTh({ k, sort, onSort, children }: { k: UserSortKey; sort: UserSort;
 }
 
 type DialogKind = 'suspend' | 'reactivate' | 'confirm' | 'delete';
+type Notice = { text: string; href?: string; link?: string };
 
-/** Tabla de usuarios del backoffice: búsqueda, filtros por estado, orden y acciones por cuenta: Suspender /
- * Reactivar (`admin_set_user_status`), Confirmar correo (`admin_confirm_user_email`, para quien no recibió el
- * mensaje) y Eliminar (`admin_delete_user`). La base valida que seas admin, que no sea tu propia cuenta ni otro
- * admin, y exige el motivo al suspender/eliminar. Los datos vienen del servidor; tras cada acción se refresca. */
-export default function AdminUsers({ users, currentUserId, initialFilter = 'todos' }: { users: AdminUserActivity[]; currentUserId: string; initialFilter?: UserFilter }) {
+/** Tabla de usuarios del backoffice: búsqueda, filtros por estado, orden, paginación y exportación a CSV, y las
+ * acciones por cuenta: Suspender / Reactivar (`admin_set_user_status`), Confirmar correo (`admin_confirm_user_email`,
+ * para quien no recibió el mensaje) y Eliminar (`admin_delete_user`). La base valida que seas admin, que no sea tu
+ * propia cuenta ni otro admin, y exige el motivo al suspender/eliminar. Los datos vienen del servidor; tras cada
+ * acción se refresca. Todo el filtrado ocurre en el navegador sobre la lista completa (cientos de cuentas caben de
+ * sobra), sin nuevas consultas. */
+export default function AdminUsers({ users, currentUserId, initialFilter = 'todos', suspensionReasons = {} }: {
+  users: AdminUserActivity[]; currentUserId: string; initialFilter?: UserFilter;
+  /** Motivo de la última suspensión de cada correo (en minúsculas), tomado del registro de auditoría. */
+  suspensionReasons?: Record<string, string>;
+}) {
   const router = useRouter();
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<UserFilter>(initialFilter);
   const [sort, setSort] = useState<UserSort>({ key: 'ultimo_acceso', dir: 'desc' });
+  const [limit, setLimit] = useState(PAGE);
   const [dialog, setDialog] = useState<{ kind: DialogKind; user: AdminUserActivity } | null>(null);
   const [reason, setReason] = useState('');
   const [typed, setTyped] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
+  const [notice, setNotice] = useState<Notice | null>(null);
+  // Doble envío: `busy` deshabilita los botones al siguiente render, pero un doble clic muy rápido puede colar dos
+  // llamadas antes de ese render. El ref lo cierra en el mismo instante.
+  const inFlight = useRef(false);
 
   const [now] = useState(() => Date.now());
   const counts = useMemo(() => countByFilter(users, now), [users, now]);
   const rows = useMemo(() => sortUsers(filterUsers(users, query, filter, now), sort), [users, query, filter, sort, now]);
+  const shown = rows.slice(0, limit);
+  const activeFilter = FILTERS.find((f) => f.id === filter);
 
-  const onSort = (key: UserSortKey) => setSort((s) => (s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: key === 'nombre' ? 'asc' : 'desc' }));
+  const onSort = (key: UserSortKey) => { setLimit(PAGE); setSort((s) => (s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: key === 'nombre' ? 'asc' : 'desc' })); };
+  const changeFilter = (f: UserFilter) => { setFilter(f); setLimit(PAGE); };
   const closeDialog = () => { if (busy) return; setDialog(null); setReason(''); setTyped(''); setError(''); };
-  const open = (kind: DialogKind, user: AdminUserActivity) => { setNotice(''); setDialog({ kind, user }); };
+  const open = (kind: DialogKind, user: AdminUserActivity) => { setNotice(null); setError(''); setDialog({ kind, user }); };
 
   async function run() {
-    if (!dialog) return;
+    if (!dialog || inFlight.current) return;
+    inFlight.current = true;
     const { kind, user: u } = dialog;
     setBusy(true); setError('');
-    const sb = createClient();
-    const { error: e } = kind === 'confirm'
-      ? await sb.rpc('admin_confirm_user_email', { p_user: u.id })
-      : kind === 'delete'
-        ? await sb.rpc('admin_delete_user', { p_user: u.id, p_reason: reason })
-        : await sb.rpc('admin_set_user_status', { p_user: u.id, p_action: kind, p_reason: kind === 'suspend' ? reason : null });
-    if (e) { setError(e.message); setBusy(false); return; }
-    setNotice({
-      suspend: `Suspendiste la cuenta de ${u.email}. Ya no puede iniciar sesión y sus enlaces dejaron de funcionar.`,
-      reactivate: `Reactivaste la cuenta de ${u.email}.`,
-      confirm: `Confirmaste el correo de ${u.email}: ya puede iniciar sesión con su contraseña.`,
-      delete: `Eliminaste la cuenta de ${u.email}. Si subió mapas, sus archivos quedaron huérfanos: límpialos en la pestaña Mapas.`,
-    }[kind]);
-    setBusy(false); setDialog(null); setReason(''); setTyped('');
-    router.refresh();
+    try {
+      const sb = createClient();
+      const { error: e } = kind === 'confirm'
+        ? await sb.rpc('admin_confirm_user_email', { p_user: u.id })
+        : kind === 'delete'
+          ? await sb.rpc('admin_delete_user', { p_user: u.id, p_reason: reason })
+          : await sb.rpc('admin_set_user_status', { p_user: u.id, p_action: kind, p_reason: kind === 'suspend' ? reason : null });
+      if (e) { setError(actionError(e)); return; }
+      setNotice({
+        suspend: { text: `Suspendiste la cuenta de ${u.email}. Ya no puede iniciar sesión y sus enlaces dejaron de funcionar.` },
+        reactivate: { text: `Reactivaste la cuenta de ${u.email}.` },
+        confirm: { text: `Confirmaste el correo de ${u.email}: ya puede iniciar sesión con su contraseña.` },
+        delete: { text: `Eliminaste la cuenta de ${u.email}. Si subió mapas, sus archivos quedaron huérfanos: límpialos en la pestaña `, href: '/admin?tab=mapas', link: 'Mapas' },
+      }[kind]);
+      setDialog(null); setReason(''); setTyped('');
+      router.refresh();
+    } catch (err) {
+      setError(actionError(err));
+    } finally {
+      inFlight.current = false; setBusy(false);
+    }
+  }
+
+  function exportCsv() {
+    // BOM UTF-8: sin él Excel abre las tildes como «Ã¡». Se exportan las filas que se ven con el filtro/orden actual.
+    const blob = new Blob(['﻿', usersToCsv(rows)], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `cuentas-${fmtDate(new Date().toISOString()).split('/').reverse().join('-')}.csv`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
   const reasonOk = reason.trim().length >= 3;
   const typedOk = dialog?.kind === 'delete' && typed.trim().toLowerCase() === dialog.user.email.toLowerCase();
+  const hasFilters = !!query || filter !== 'todos';
 
   return (
     <div className="stack">
@@ -98,81 +158,115 @@ export default function AdminUsers({ users, currentUserId, initialFilter = 'todo
         <div className="usearch">
           <label htmlFor="u-search" className="sr-only">Buscar por nombre o correo</label>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" /></svg>
-          <input id="u-search" type="search" placeholder="Buscar por nombre o correo" value={query} onChange={(e) => setQuery(e.target.value)} autoComplete="off" />
+          <input id="u-search" type="search" placeholder="Buscar por nombre o correo" value={query} onChange={(e) => { setQuery(e.target.value); setLimit(PAGE); }} autoComplete="off" />
         </div>
         <div className="seg" role="group" aria-label="Filtrar por estado">
           {FILTERS.map((f) => (
-            <button key={f.id} type="button" aria-pressed={filter === f.id} title={f.hint} onClick={() => setFilter(f.id)}>
+            <button key={f.id} type="button" aria-pressed={filter === f.id} title={f.hint} onClick={() => changeFilter(f.id)}>
               {f.label} <span className="mono">{counts[f.id]}</span>
             </button>
           ))}
         </div>
       </div>
 
-      <p className="muted" style={{ fontSize: 13 }} role="status" aria-live="polite">
-        {notice ? <b style={{ color: 'var(--ink)' }}>{notice}</b> : `Mostrando ${rows.length} de ${users.length} cuentas.`}
+      <div className="utools">
+        {/* En pantallas angostas la tabla se vuelve tarjetas y desaparece su encabezado: este selector es el orden. */}
+        <label className="usort">
+          <span className="muted">Ordenar</span>
+          <select value={`${sort.key}:${sort.dir}`} onChange={(e) => { const o = SORTS.find((x) => x.value === e.target.value); if (o) { setSort({ key: o.key, dir: o.dir }); setLimit(PAGE); } }}>
+            {!SORTS.some((x) => x.value === `${sort.key}:${sort.dir}`) && <option value={`${sort.key}:${sort.dir}`}>Personalizado</option>}
+            {SORTS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </label>
+        <button type="button" className="btn sm" onClick={exportCsv} disabled={rows.length === 0}
+          title="Descarga en CSV las cuentas que se ven ahora, con el filtro y el orden actuales">
+          Exportar CSV ({rows.length})
+        </button>
+      </div>
+
+      {notice && (
+        <p className="unotice" role="status">
+          <span>{notice.text}{notice.href && <Link href={notice.href}>{notice.link}</Link>}{notice.href && '.'}</span>
+          <button type="button" className="btn sm icon" onClick={() => setNotice(null)} aria-label="Cerrar este aviso">Cerrar</button>
+        </p>
+      )}
+      <p className="muted" style={{ fontSize: 13 }} aria-live="polite">
+        Mostrando {shown.length} de {rows.length}{rows.length !== users.length ? ` (${users.length} cuentas en total)` : ' cuentas'}.
+        {filter !== 'todos' && activeFilter && <> Filtro «{activeFilter.label}»: {activeFilter.hint}.</>}
       </p>
 
       {rows.length === 0 ? (
         <div className="card empty">
-          <p><b>Ninguna cuenta coincide.</b></p>
-          <p className="muted">{query ? 'Prueba con otro nombre o correo.' : 'No hay cuentas en este filtro.'}</p>
-          {(query || filter !== 'todos') && <button type="button" className="btn sm" onClick={() => { setQuery(''); setFilter('todos'); }}>Quitar búsqueda y filtros</button>}
+          <p><b>{users.length === 0 ? 'Todavía no hay cuentas.' : 'Ninguna cuenta coincide.'}</b></p>
+          {users.length > 0 && <p className="muted">{query ? 'Prueba con otro nombre o correo.' : 'No hay cuentas en este filtro.'}</p>}
+          {hasFilters && <button type="button" className="btn sm" onClick={() => { setQuery(''); changeFilter('todos'); }}>Quitar búsqueda y filtros</button>}
         </div>
       ) : (
-        <div className="tbl utable-wrap">
-          <table className="utable">
-            <caption className="sr-only">Cuentas de la plataforma, con estado, último inicio de sesión y acciones</caption>
-            <thead>
-              <tr>
-                <SortTh k="nombre" sort={sort} onSort={onSort}>Cuenta</SortTh>
-                <th scope="col">Estado</th>
-                <SortTh k="creado" sort={sort} onSort={onSort}>Registrada</SortTh>
-                <SortTh k="ultimo_acceso" sort={sort} onSort={onSort}>Último login</SortTh>
-                <th scope="col" className="n">Proyectos</th>
-                <th scope="col"><span className="sr-only">Acciones</span></th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((u) => {
-                const self = u.id === currentUserId;
-                return (
-                  <tr key={u.id} className={u.estado === 'suspendida' ? 'row-susp' : undefined}>
-                    <th scope="row" className="ucell">
-                      <span className="uname">{u.nombre || u.email}{u.rol === 'admin' && <span className="pill neutral" style={{ marginLeft: 8 }}>Admin</span>}{self && <span className="muted"> (tú)</span>}</span>
-                      {u.nombre && <span className="mono muted uemail">{u.email}</span>}
-                    </th>
-                    <td>
-                      <StatePill estado={u.estado} />
-                      {u.estado !== 'activa' && <span className="muted since">desde {fmtDate((u.suspendida_el ?? u.pausada_el) as string)}</span>}
-                      {!u.correo_confirmado && <span className="pill warn unconf" title="No abrió el enlace de confirmación del correo">Correo sin confirmar</span>}
-                    </td>
-                    <td className="mono">{fmtDate(u.creado)}</td>
-                    <td>
-                      {u.ultimo_acceso
-                        ? <><span>{ago(u.ultimo_acceso)}</span><span className="mono muted since">{fmtDate(u.ultimo_acceso)}</span></>
-                        : <span className="muted">Nunca ha entrado</span>}
-                    </td>
-                    <td className="n">{u.proyectos}</td>
-                    <td className="uact">
-                      {self || u.rol === 'admin'
-                        ? <span className="muted" style={{ fontSize: 12 }}>{self ? '—' : 'Cuenta admin'}</span>
-                        : (
-                          <div className="uact-btns">
-                            {!u.correo_confirmado && <button type="button" className="btn sm primary" onClick={() => open('confirm', u)}>Confirmar correo</button>}
-                            {u.estado === 'suspendida'
-                              ? <button type="button" className="btn sm" onClick={() => open('reactivate', u)}>Reactivar</button>
-                              : <button type="button" className="btn sm danger" onClick={() => open('suspend', u)}>Suspender</button>}
-                            <button type="button" className="btn sm" onClick={() => open('delete', u)} aria-label={`Eliminar la cuenta de ${u.email}`}>Eliminar…</button>
-                          </div>
-                        )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <>
+          <div className="tbl utable-wrap" role="region" aria-label="Tabla de cuentas (desplázala para ver más columnas)" tabIndex={0}>
+            <table className="utable" role="table">
+              <caption className="sr-only">Cuentas de la plataforma, con estado, último inicio de sesión y acciones</caption>
+              <thead role="rowgroup">
+                <tr role="row">
+                  <SortTh k="nombre" sort={sort} onSort={onSort}>Cuenta</SortTh>
+                  <th scope="col" role="columnheader">Estado</th>
+                  <SortTh k="creado" sort={sort} onSort={onSort}>Registrada</SortTh>
+                  <SortTh k="ultimo_acceso" sort={sort} onSort={onSort}>Último login</SortTh>
+                  <SortTh k="proyectos" sort={sort} onSort={onSort} className="n">Proyectos</SortTh>
+                  <th scope="col" role="columnheader"><span className="sr-only">Acciones</span></th>
+                </tr>
+              </thead>
+              <tbody role="rowgroup">
+                {shown.map((u) => {
+                  const self = u.id === currentUserId;
+                  const why = u.estado === 'suspendida' ? suspensionReasons[u.email.toLowerCase()] : undefined;
+                  return (
+                    <tr key={u.id} role="row" className={u.estado === 'suspendida' ? 'row-susp' : undefined}>
+                      <th scope="row" role="rowheader" className="ucell">
+                        <span className="uname">{u.nombre || u.email}{u.rol === 'admin' && <span className="pill neutral" style={{ marginLeft: 8 }}>Admin</span>}{self && <span className="muted"> (tú)</span>}</span>
+                        {u.nombre && <span className="mono muted uemail">{u.email}</span>}
+                      </th>
+                      <td role="cell" data-label="Estado">
+                        <div>
+                          <StatePill estado={u.estado} />
+                          {u.estado !== 'activa' && <span className="muted since">desde {fmtDate((u.suspendida_el ?? u.pausada_el) as string)}</span>}
+                          {why && <span className="muted since ureason" title={why}>Motivo: {why}</span>}
+                          {!u.correo_confirmado && <span className="pill warn unconf" title="No abrió el enlace de confirmación del correo">Correo sin confirmar</span>}
+                        </div>
+                      </td>
+                      <td role="cell" data-label="Registrada" className="mono">{fmtDate(u.creado)}</td>
+                      <td role="cell" data-label="Último login">
+                        {u.ultimo_acceso
+                          ? <div><span>{ago(u.ultimo_acceso, now)}</span><span className="mono muted since" title={fmtDateTime(u.ultimo_acceso)}>{fmtDate(u.ultimo_acceso)}</span></div>
+                          : <span className="muted">Nunca ha entrado</span>}
+                      </td>
+                      <td role="cell" data-label="Proyectos" className="n">{u.proyectos}</td>
+                      <td role="cell" className="uact">
+                        {self || u.rol === 'admin'
+                          ? <span className="muted" style={{ fontSize: 12 }}>{self ? '—' : 'Cuenta admin'}</span>
+                          : (
+                            <div className="uact-btns">
+                              {!u.correo_confirmado && <button type="button" className="btn sm primary" onClick={() => open('confirm', u)} aria-label={`Confirmar el correo de ${u.email}`}>Confirmar correo</button>}
+                              {u.estado === 'suspendida'
+                                ? <button type="button" className="btn sm" onClick={() => open('reactivate', u)} aria-label={`Reactivar la cuenta de ${u.email}`}>Reactivar</button>
+                                : <button type="button" className="btn sm danger" onClick={() => open('suspend', u)} aria-label={`Suspender la cuenta de ${u.email}`}>Suspender</button>}
+                              <button type="button" className="btn sm" onClick={() => open('delete', u)} aria-label={`Eliminar la cuenta de ${u.email}`}>Eliminar…</button>
+                            </div>
+                          )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          {rows.length > shown.length && (
+            <div className="umore">
+              <button type="button" className="btn sm" onClick={() => setLimit((l) => l + PAGE)}>Mostrar {Math.min(PAGE, rows.length - shown.length)} más</button>
+              <button type="button" className="btn sm" onClick={() => setLimit(rows.length)}>Mostrar las {rows.length}</button>
+            </div>
+          )}
+        </>
       )}
 
       {dialog?.kind === 'suspend' && (
@@ -236,7 +330,7 @@ export default function AdminUsers({ users, currentUserId, initialFilter = 'todo
         <ConfirmDialog
           title={`Reactivar a ${dialog.user.nombre || dialog.user.email}`} tone="neutral" confirmLabel="Reactivar cuenta" busyLabel="Reactivando…"
           busy={busy} error={error} onConfirm={() => void run()} onClose={closeDialog}
-          description={<>Podrá iniciar sesión otra vez y sus enlaces de expertos y públicos vuelven a funcionar tal como estaban.</>}
+          description={<><p>Reactivarás <b className="mono">{dialog.user.email}</b>. Podrá iniciar sesión otra vez y sus enlaces de expertos y públicos vuelven a funcionar tal como estaban.</p></>}
         />
       )}
     </div>

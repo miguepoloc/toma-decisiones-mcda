@@ -2,10 +2,11 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import Topbar from '@/components/Topbar';
 import GeoAdmin from '@/components/GeoAdmin';
-import AdminTabs, { ADMIN_TABS, type AdminTab } from '@/components/admin/AdminTabs';
+import AdminTabs from '@/components/admin/AdminTabs';
+import { ADMIN_TABS, type AdminTab } from '@/components/admin/tabs';
 import AdminUsers from '@/components/admin/AdminUsers';
 import type { AccountAction, AdminAccountEvent, AdminAhpRawProject, AdminStats, AdminUserActivity, Method, WeightingMethod } from '@/lib/types';
-import { ago, collapseAccesses, computeAhpConsistency, fmtDate, sparklinePoints, type UserFilter } from '@/lib/admin';
+import { ago, collapseAccesses, computeAhpConsistency, fmtDate, fmtDateTime, sparklinePoints, USER_FILTERS, type UserFilter } from '@/lib/admin';
 
 export const dynamic = 'force-dynamic';
 
@@ -69,7 +70,8 @@ function Sparkline({ label, values }: { label: string; values: number[] }) {
       <span className="l">{label}</span>
       <span className="n">{last}<small>{delta > 0 ? `+${delta}` : delta} vs. hace 8 sem.</small></span>
       <svg viewBox="0 0 120 32" preserveAspectRatio="none" role="img" aria-label={`${label}: de ${first} a ${last} en 8 semanas`}>
-        <polyline points={points} fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        {/* non-scaling-stroke: con preserveAspectRatio="none" el trazo se deformaba según el ancho de la tarjeta. */}
+        <polyline points={points} fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
       </svg>
     </div>
   );
@@ -83,8 +85,9 @@ const ACTION_LABEL: Record<AccountAction, string> = {
 };
 
 function Table({ caption, children, className }: { caption: string; children: React.ReactNode; className?: string }) {
+  // Región enfocable: quien navega con teclado no puede desplazar un contenedor con scroll que no recibe foco.
   return (
-    <div className={'tbl' + (className ? ' ' + className : '')}>
+    <div className={'tbl' + (className ? ' ' + className : '')} role="region" aria-label={caption} tabIndex={0}>
       <table><caption className="sr-only">{caption}</caption>{children}</table>
     </div>
   );
@@ -96,10 +99,12 @@ function Table({ caption, children, className }: { caption: string; children: Re
  * (`admin_*`) comprueba el rol en la base, esta página solo pinta lo que ellas devuelven.
  * Ya NO es «solo agregados»: usuarios, proyectos abandonados y los historiales identifican individuos a
  * propósito (aprobado explícitamente, ver README § Historial de cambios). */
-export default async function AdminPage({ searchParams }: { searchParams: Promise<{ tab?: string; filtro?: string }> }) {
+export default async function AdminPage({ searchParams }: { searchParams: Promise<{ tab?: string; filtro?: string; limite?: string }> }) {
   const sp = await searchParams;
   const tab: AdminTab = ADMIN_TABS.some((t) => t.id === sp.tab) ? (sp.tab as AdminTab) : 'resumen';
-  const filtro: UserFilter = (['suspendidas', 'pausadas', 'sin_confirmar', 'sin_login', 'inactivos'] as const).find((f) => f === sp.filtro) ?? 'todos';
+  const filtro: UserFilter = USER_FILTERS.find((f) => f === sp.filtro) ?? 'todos';
+  // Registro de acciones: 50 por defecto, hasta 200 (el máximo que acepta admin_account_events).
+  const eventLimit = sp.limite === '200' ? 200 : 50;
 
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -108,29 +113,59 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   // admin_users_activity no registra accesos y siempre hace falta (insignias de las pestañas): es también la
   // puerta de entrada. admin_stats SÍ registra un acceso cada vez, así que solo se llama en las pestañas que lo usan.
   const needStats = tab === 'resumen' || tab === 'proyectos' || tab === 'seguridad';
+  // El registro de acciones también sirve en «Usuarios»: de ahí sale el motivo de cada suspensión vigente.
+  const needEvents = tab === 'seguridad' || tab === 'usuarios';
   const [usersRes, statsRes, ahpRes, eventsRes] = await Promise.all([
     supabase.rpc('admin_users_activity'),
     needStats ? supabase.rpc('admin_stats') : Promise.resolve({ data: null, error: null }),
     tab === 'proyectos' ? supabase.rpc('admin_ahp_raw') : Promise.resolve({ data: null, error: null }),
-    tab === 'seguridad' ? supabase.rpc('admin_account_events', { p_limit: 50 }) : Promise.resolve({ data: null, error: null }),
+    needEvents ? supabase.rpc('admin_account_events', { p_limit: tab === 'seguridad' ? eventLimit : 200 }) : Promise.resolve({ data: null, error: null }),
   ]);
-  if (usersRes.error || !usersRes.data) redirect('/dashboard');
-  if (needStats && (statsRes.error || !statsRes.data)) redirect('/dashboard');
+  if (usersRes.error || !usersRes.data) {
+    // Quien no es admin (con o sin sesión válida) termina en /dashboard sin pistas: esa es la puerta. Pero a un admin
+    // legítimo NO se le manda al dashboard cuando la consulta falla (red, base caída): se le dice qué pasó.
+    // El rol se lee de su propia fila de profiles; la autorización real sigue en cada RPC admin_*.
+    const { data: me } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
+    if (me?.role !== 'admin') redirect('/dashboard');
+    console.error('[admin] admin_users_activity falló', usersRes.error);
+    return (
+      <div className="wrap">
+        <Topbar badge="ADMIN" subtitle="Backoffice" loggedIn userEmail={user.email} showNav={false} />
+        <div className="panel admin-scope">
+          <header><h1 style={{ fontSize: 30 }}>Backoffice</h1></header>
+          <LoadError what="las cuentas" tab={tab} />
+        </div>
+      </div>
+    );
+  }
 
   const users = usersRes.data as AdminUserActivity[];
-  const s = statsRes.data as AdminStats | null;
+  // A partir de aquí ya sabemos que es admin (admin_users_activity lo exige): un fallo es un fallo, no una puerta.
+  const statsFailed = needStats && (statsRes.error || !statsRes.data);
+  if (statsFailed) console.error('[admin] admin_stats falló', statsRes.error);
+  const s = statsFailed ? null : (statsRes.data as AdminStats | null);
+  const eventsFailed = needEvents && !!eventsRes.error;
   const events = (eventsRes.data ?? []) as AdminAccountEvent[];
+  const ahpFailed = tab === 'proyectos' && !!ahpRes.error;
   const ahp = computeAhpConsistency(ahpRes.error || !ahpRes.data ? [] : (ahpRes.data as AdminAhpRawProject[]));
+
+  // Motivo de la última suspensión de cada correo (los eventos vienen del más reciente al más antiguo).
+  const suspensionReasons: Record<string, string> = {};
+  for (const e of events) {
+    if (e.accion === 'suspend' && e.motivo && e.usuario_email) suspensionReasons[e.usuario_email.toLowerCase()] ??= e.motivo;
+  }
 
   const now = Date.now();
   const suspendidas = users.filter((u) => u.estado === 'suspendida').length;
   const activos7d = users.filter((u) => u.ultimo_acceso && now - new Date(u.ultimo_acceso).getTime() < 7 * 86_400_000).length;
   const sinLogin = users.filter((u) => !u.ultimo_acceso).length;
+  const sinConfirmar = users.filter((u) => !u.correo_confirmado).length;
+  const sinProyectos = users.filter((u) => u.proyectos === 0 && u.rol !== 'admin').length;
 
   return (
     <div className="wrap">
       <Topbar badge="ADMIN" subtitle="Backoffice" loggedIn userEmail={user.email} showNav={false} />
-      <div className="panel">
+      <div className="panel admin-scope">
         <header>
           <h1 style={{ fontSize: 30 }}>Backoffice</h1>
           <p>Vista de toda la plataforma. Las cifras son agregados; usuarios, historiales y proyectos abandonados
@@ -139,7 +174,8 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
 
         <AdminTabs active={tab} badges={{ usuarios: { n: suspendidas, label: 'cuentas suspendidas' } }} />
 
-        {tab === 'resumen' && s && <Resumen s={s} activos7d={activos7d} sinLogin={sinLogin} suspendidas={suspendidas} totalUsers={users.length} />}
+        {statsFailed && <LoadError what="las cifras" tab={tab} />}
+        {tab === 'resumen' && s && <Resumen s={s} activos7d={activos7d} sinLogin={sinLogin} suspendidas={suspendidas} totalUsers={users.length} sinConfirmar={sinConfirmar} sinProyectos={sinProyectos} />}
         {tab === 'usuarios' && (
           <section className="stat-group" aria-labelledby="h-usuarios">
             <h2 id="h-usuarios">Usuarios</h2>
@@ -147,18 +183,28 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
               «Último login» es la última vez que la persona <b>inició sesión</b>, no su última actividad: quien mantiene la
               sesión abierta días puede verse antiguo aunque use la plataforma.
             </p>
-            <AdminUsers users={users} currentUserId={user.id} initialFilter={filtro} />
+            <AdminUsers users={users} currentUserId={user.id} initialFilter={filtro} suspensionReasons={suspensionReasons} />
           </section>
         )}
-        {tab === 'proyectos' && s && <Proyectos s={s} ahp={ahp} />}
-        {tab === 'seguridad' && s && <Seguridad s={s} events={events} suspendidas={suspendidas} />}
+        {tab === 'proyectos' && s && <Proyectos s={s} ahp={ahp} ahpFailed={ahpFailed} />}
+        {tab === 'seguridad' && s && <Seguridad s={s} events={events} eventsFailed={eventsFailed} eventLimit={eventLimit} suspendidas={suspendidas} />}
         {tab === 'mapas' && <GeoAdmin />}
       </div>
     </div>
   );
 }
 
-function Resumen({ s, activos7d, sinLogin, suspendidas, totalUsers }: { s: AdminStats; activos7d: number; sinLogin: number; suspendidas: number; totalUsers: number }) {
+/** Fallo al cargar datos del backoffice (no confundir con «no tienes acceso»): dice qué falló y deja reintentar. */
+function LoadError({ what, tab }: { what: string; tab: AdminTab }) {
+  return (
+    <div className="banner" role="alert">
+      <span><b>No se pudieron cargar {what}.</b> Puede ser un corte de conexión con la base de datos; tus datos no se tocaron.</span>
+      <a className="btn sm" href={`/admin?tab=${tab}`}>Reintentar</a>
+    </div>
+  );
+}
+
+function Resumen({ s, activos7d, sinLogin, suspendidas, totalUsers, sinConfirmar, sinProyectos }: { s: AdminStats; activos7d: number; sinLogin: number; suspendidas: number; totalUsers: number; sinConfirmar: number; sinProyectos: number }) {
   const metodoCount = Object.fromEntries(s.metodos.map((m) => [m.metodo, m.total])) as Record<string, number>;
   const metodoMax = Math.max(1, ...METHODS.map((m) => metodoCount[m] ?? 0));
   const ponderacionCount = Object.fromEntries(s.ponderacion.map((p) => [p.metodo, p.total])) as Record<string, number>;
@@ -168,6 +214,9 @@ function Resumen({ s, activos7d, sinLogin, suspendidas, totalUsers }: { s: Admin
   // Lo que pide una acción, con enlace directo. Si no hay nada, se dice: «todo en orden» también es información.
   const atencion: { n: number; texto: string; href: string }[] = [
     { n: suspendidas, texto: suspendidas === 1 ? 'cuenta suspendida' : 'cuentas suspendidas', href: '/admin?tab=usuarios&filtro=suspendidas' },
+    // Sin confirmar = no pueden entrar hasta que abran el enlace del correo (o tú lo confirmes): es lo primero que
+    // pregunta un estudiante que «no puede entrar».
+    { n: sinConfirmar, texto: sinConfirmar === 1 ? 'cuenta con el correo sin confirmar (no puede entrar)' : 'cuentas con el correo sin confirmar (no pueden entrar)', href: '/admin?tab=usuarios&filtro=sin_confirmar' },
     { n: s.proyectos_abandonados.length, texto: `${s.proyectos_abandonados.length === 1 ? 'proyecto abandonado' : 'proyectos abandonados'} (+14 días sin tocar, sin expertos que hayan enviado)`, href: '/admin?tab=proyectos' },
     { n: cerca, texto: `${cerca === 1 ? 'función' : 'funciones'} cerca del límite de frecuencia`, href: '/admin?tab=seguridad' },
   ].filter((a) => a.n > 0);
@@ -177,7 +226,7 @@ function Resumen({ s, activos7d, sinLogin, suspendidas, totalUsers }: { s: Admin
       <section className="stat-group" aria-labelledby="h-atencion">
         <h2 id="h-atencion">Atención</h2>
         {atencion.length === 0 ? (
-          <div className="card ok-card"><p><b>Todo en orden.</b> <span className="muted">Sin cuentas suspendidas, proyectos abandonados ni límites de frecuencia cerca de saturarse.</span></p></div>
+          <div className="card ok-card"><p><b>Todo en orden.</b> <span className="muted">Sin cuentas suspendidas ni con el correo sin confirmar, proyectos abandonados ni límites de frecuencia cerca de saturarse.</span></p></div>
         ) : (
           <ul className="attn card">
             {atencion.map((a) => (
@@ -190,7 +239,7 @@ function Resumen({ s, activos7d, sinLogin, suspendidas, totalUsers }: { s: Admin
       <section className="stat-group" aria-labelledby="h-cifras">
         <h2 id="h-cifras">Cifras</h2>
         <div className="stat-grid">
-          <div className="stat"><span className="n">{totalUsers}</span><span className="l">Cuentas</span></div>
+          <div className="stat"><span className="n">{totalUsers}</span><span className="l">Cuentas</span>{sinProyectos > 0 && <span className="sub"><a href="/admin?tab=usuarios&filtro=sin_proyectos">{sinProyectos} sin ningún proyecto</a></span>}</div>
           <div className="stat"><span className="n">{activos7d}</span><span className="l">Con login en 7 días</span>{sinLogin > 0 && <span className="sub">{sinLogin} nunca han entrado</span>}</div>
           <div className="stat"><span className="n">{s.proyectos_total}</span><span className="l">Proyectos</span><span className="sub">{s.proyectos_publicos} públicos · {s.proyectos_privados} privados</span></div>
           <div className="stat"><span className="n">{s.expertos_total}</span><span className="l">Expertos</span><span className="sub">{s.expertos_submitted} ya enviaron</span></div>
@@ -225,7 +274,7 @@ function Resumen({ s, activos7d, sinLogin, suspendidas, totalUsers }: { s: Admin
   );
 }
 
-function Proyectos({ s, ahp }: { s: AdminStats; ahp: ReturnType<typeof computeAhpConsistency> }) {
+function Proyectos({ s, ahp, ahpFailed }: { s: AdminStats; ahp: ReturnType<typeof computeAhpConsistency>; ahpFailed: boolean }) {
   const filledByCount = Object.fromEntries(s.expertos_filled_by.map((f) => [f.quien, f.total])) as Record<string, number>;
   const embudoMax = Math.max(1, s.embudo_expertos.invitados);
   return (
@@ -285,6 +334,7 @@ function Proyectos({ s, ahp }: { s: AdminStats; ahp: ReturnType<typeof computeAh
                 { name: 'Inconsistentes', value: ahp.inconsistentes, color: 'var(--warn)' },
               ]}
             />
+            {ahpFailed && <p className="err" role="alert" style={{ fontSize: 13 }}>No se pudieron leer los juicios: las cifras de consistencia de arriba están en cero por el fallo, no porque no haya matrices. Recarga la página.</p>}
             <p className="muted" style={{ fontSize: 12.5 }}>La consistencia usa la misma matemática de <code>ahp.ts</code> (eigenvector + CR) que ya corre en vivo para los expertos, no una reimplementación en SQL.</p>
           </div>
         </section>
@@ -308,7 +358,7 @@ function Proyectos({ s, ahp }: { s: AdminStats; ahp: ReturnType<typeof computeAh
   );
 }
 
-function Seguridad({ s, events, suspendidas }: { s: AdminStats; events: AdminAccountEvent[]; suspendidas: number }) {
+function Seguridad({ s, events, eventsFailed, eventLimit, suspendidas }: { s: AdminStats; events: AdminAccountEvent[]; eventsFailed: boolean; eventLimit: number; suspendidas: number }) {
   const accesos = collapseAccesses(s.accesos_recientes);
   return (
     <>
@@ -318,15 +368,17 @@ function Seguridad({ s, events, suspendidas }: { s: AdminStats; events: AdminAcc
           Registro de suspensiones, reactivaciones, confirmaciones de correo, desactivaciones y eliminaciones{suspendidas > 0 ? ` (${suspendidas} ${suspendidas === 1 ? 'cuenta suspendida' : 'cuentas suspendidas'} ahora)` : ''}.
           Para suspender o reactivar, ve a <a href="/admin?tab=usuarios">Usuarios</a>.
         </p>
-        {events.length === 0 ? (
+        {eventsFailed ? (
+          <LoadError what="el registro de acciones" tab="seguridad" />
+        ) : events.length === 0 ? (
           <p className="muted">Todavía no hay acciones registradas.</p>
         ) : (
-          <Table caption="Últimas acciones sobre cuentas">
+          <Table caption={`Últimas ${events.length} acciones sobre cuentas`}>
             <thead><tr><th scope="col">Fecha</th><th scope="col">Acción</th><th scope="col">Cuenta</th><th scope="col">Por</th><th scope="col">Motivo</th></tr></thead>
             <tbody>
               {events.map((e, i) => (
-                <tr key={i}>
-                  <td className="mono">{fmtDate(e.fecha)} <span className="muted">{e.fecha.slice(11, 16)}</span></td>
+                <tr key={`${e.fecha}-${i}`}>
+                  <td className="mono">{fmtDateTime(e.fecha)}</td>
                   <td><span className={'pill' + (e.accion === 'suspend' || (e.accion === 'delete' && !e.autoservicio) ? ' warn' : e.accion === 'reactivate' || e.accion === 'resume' || e.accion === 'confirm_email' ? '' : ' neutral')}>{ACTION_LABEL[e.accion]}{e.accion === 'delete' ? (e.autoservicio ? ' por su dueño' : ' por un admin') : ''}</span></td>
                   <td>{e.usuario_email ?? <span className="muted">cuenta eliminada</span>}</td>
                   <td>{e.autoservicio ? <span className="muted">el propio usuario</span> : (e.actor_email ?? '—')}</td>
@@ -336,6 +388,12 @@ function Seguridad({ s, events, suspendidas }: { s: AdminStats; events: AdminAcc
             </tbody>
           </Table>
         )}
+        {!eventsFailed && events.length >= eventLimit && (
+          <p className="muted" style={{ fontSize: 13 }}>
+            Se muestran las últimas {eventLimit} acciones.{eventLimit < 200 && <> <a href="/admin?tab=seguridad&limite=200">Ver hasta 200</a>.</>}
+          </p>
+        )}
+        <p className="muted" style={{ fontSize: 12.5 }}>Fechas y horas en hora de Colombia (Bogotá).</p>
         <div className="banner info" style={{ fontSize: 13.5 }}>
           <span><b>Lo que esto no cubre:</b> suspender bloquea la <i>cuenta</i>, no a la persona; podría registrarse con otro correo.
             Para frenar registros masivos activa CAPTCHA en Supabase → Authentication → Attack Protection. Los enlaces anónimos
@@ -364,9 +422,10 @@ function Seguridad({ s, events, suspendidas }: { s: AdminStats; events: AdminAcc
         <section className="stat-group" aria-labelledby="h-acc">
           <h2 id="h-acc">Accesos recientes al backoffice</h2>
           <div className="card">
+            {accesos.length === 0 && <p className="muted">Sin accesos registrados todavía.</p>}
             <ul className="acc-list">
               {accesos.map((a, i) => (
-                <li key={i}><span>{a.email}{a.veces > 1 && <span className="muted"> · {a.veces} visitas</span>}</span><span className="muted mono">{fmtDate(a.fecha)} {a.fecha.slice(11, 16)} · {ago(a.fecha)}</span></li>
+                <li key={i}><span>{a.email}{a.veces > 1 && <span className="muted"> · {a.veces} visitas</span>}</span><span className="muted mono">{fmtDateTime(a.fecha)} · {ago(a.fecha)}</span></li>
               ))}
             </ul>
           </div>

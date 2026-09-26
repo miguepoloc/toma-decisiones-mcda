@@ -29,6 +29,14 @@ export default function ConfirmDialog({
   const box = useRef<HTMLDivElement>(null);
   const busyRef = useRef(busy);
   busyRef.current = busy;
+  // El cierre vigente en cada tecla (el efecto de abajo se monta una sola vez: sin esto usaría el `onClose` del
+  // primer render, con el estado de entonces).
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+
+  // Al empezar a trabajar, «Cancelar» y «Confirmar» pasan a estar deshabilitados y el foco caería al <body>
+  // (el Tab dejaría de quedar atrapado y un lector de pantalla pierde el lugar): se ancla en el diálogo.
+  useEffect(() => { if (busy) box.current?.focus(); }, [busy]);
 
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
@@ -38,27 +46,28 @@ export default function ConfirmDialog({
     (box.current?.querySelector<HTMLElement>('input, textarea') ?? nodes?.[0])?.focus();
 
     function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape' && !busyRef.current) { e.preventDefault(); onClose(); return; }
+      if (e.key === 'Escape' && !busyRef.current) { e.preventDefault(); closeRef.current(); return; }
       if (e.key !== 'Tab' || !box.current) return;
       const f = Array.from(box.current.querySelectorAll<HTMLElement>(FOCUSABLE));
       if (!f.length) return;
       const first = f[0], last = f[f.length - 1];
-      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      const at = document.activeElement;
+      // `at === box.current`: el diálogo mismo tiene el foco (mientras trabaja); Tab entra al primer control.
+      if (e.shiftKey && (at === first || at === box.current)) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && (at === last || at === box.current)) { e.preventDefault(); first.focus(); }
     }
     document.addEventListener('keydown', onKey);
     return () => {
       document.removeEventListener('keydown', onKey);
       document.body.style.overflow = overflow;
-      previous?.focus?.();
+      // Si el botón que abrió el diálogo ya no existe (p. ej. la fila cambió tras la acción), no se deja el foco en el aire.
+      if (previous?.isConnected) previous.focus?.();
     };
-    // Se monta una sola vez por apertura: `onClose` se lee del cierre vigente en cada tecla.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
     <div className="modal-overlay">
-      <div className="modal" ref={box} role="alertdialog" aria-modal="true" aria-labelledby={`${id}-t`} aria-describedby={description ? `${id}-d` : undefined}>
+      <div className="modal" ref={box} role="alertdialog" aria-modal="true" aria-busy={busy || undefined} tabIndex={-1} aria-labelledby={`${id}-t`} aria-describedby={description ? `${id}-d` : undefined}>
         <div className={'warn-icon' + (tone === 'neutral' ? ' neutral' : '')} aria-hidden="true">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             {tone === 'danger'

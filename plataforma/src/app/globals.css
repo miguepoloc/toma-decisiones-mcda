@@ -789,3 +789,68 @@ th[aria-sort="ascending"] .thsort,th[aria-sort="descending"] .thsort{color:var(-
 .gv-lic{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);gap:8px;align-items:center;font-size:12px}
 .gv-lic span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .gv-lic input{min-height:30px;padding:3px 8px;font-size:12px}
+
+/* ==== Backoffice, «Mi cuenta» y diálogos de confirmación: revisión de UX/accesibilidad (25 sep 2026) ====
+   (1) Contraste: --warn (ámbar) sirve de fondo/borde, pero como TEXTO da ~2:1 sobre blanco. --warn-text es el ámbar
+       oscuro para texto en claro (≥ 5.7:1) y el ámbar de siempre en oscuro. Solo se aplica dentro de .admin-scope,
+       .modal y .acct-zone: el resto de la app no cambia.
+   (2) Tabla de usuarios como tarjetas en ≤ 720 px (antes: 900 px de ancho mínimo con scroll horizontal).
+   (3) Objetivos táctiles de 44 px, foco visible en campos, diálogos que caben en pantallas bajas. */
+:root{--warn-text:#92400E;--on-warn-text:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--warn-text:var(--warn);--on-warn-text:#1a1200}}
+:root[data-theme="dark"]{--warn-text:var(--warn);--on-warn-text:#1a1200}
+
+.admin-scope .err,.modal .err{color:var(--warn-text)}
+.admin-scope .attn b,.admin-scope .banner b{color:var(--warn-text)}
+.admin-scope .pill.warn{color:var(--warn-text);border-color:var(--warn-text)}
+.admin-scope .btn.danger,.modal .btn.danger,.acct-zone .btn.danger{color:var(--warn-text);border-color:var(--warn-text)}
+.admin-scope .btn.danger:not(:disabled):hover,.modal .btn.danger:not(:disabled):hover,.acct-zone .btn.danger:not(:disabled):hover{background:var(--warn-text);color:var(--on-warn-text)}
+.modal .warn-icon:not(.neutral){color:var(--warn-text)}
+.acct-zone.danger{border-color:var(--warn-text)}
+.row-susp{box-shadow:inset 3px 0 0 var(--warn-text)}
+.stat .sub a,.unotice a{color:inherit;text-decoration:underline}
+
+/* diálogos */
+.modal{max-width:460px;max-height:calc(100dvh - 40px);overflow-y:auto;overscroll-behavior:contain}
+.modal:focus{outline:none}
+.modal input:focus-visible,.modal textarea:focus-visible,.usearch input:focus-visible,.usort select:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.modal .btn,.acct-zone .btn{min-height:40px}
+@media (pointer:coarse){.modal .btn,.acct-zone .btn,.umore .btn,.utools .btn,.unotice .btn,.admin-scope .uact .btn{min-height:44px}}
+@media (prefers-reduced-motion:reduce){.utable .btn,.modal .btn,.acct-zone .btn{transition:none}.utable .btn:hover,.modal .btn:hover,.acct-zone .btn:hover{transform:none}}
+
+/* tabla de usuarios: herramientas, avisos, paginación */
+.utools{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;justify-content:space-between}
+.usort{display:inline-flex;align-items:center;gap:8px;font-size:13px}
+.usort select{width:auto;max-width:100%;min-height:40px;padding:6px 10px}
+.unotice{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin:0;padding:10px 14px;border:1px solid var(--pass);background:var(--pass-soft);border-radius:10px;color:var(--ink);font-size:13.5px}
+.umore{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+.uemail{overflow-wrap:anywhere}
+.ureason{max-width:34ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.utable-wrap:focus-visible,.tbl[role="region"]:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* «Mi cuenta» */
+.acct-dl dd{min-width:0;overflow-wrap:anywhere}
+
+/* Geovisor (admin) */
+.gv-msg{margin:0;padding:8px 12px;border-left:3px solid var(--pass);background:var(--pass-soft);border-radius:6px;color:var(--ink)}
+.gv-over{color:var(--warn-text)}
+.gv-field small.bad{color:var(--warn-text);font-weight:600}
+.gv-field small{font-size:11.5px}
+
+@media (max-width:720px){
+  .utable-wrap{overflow:visible}
+  .utable{min-width:0;display:block}
+  /* El encabezado sigue en el árbol de accesibilidad (roles ARIA en la tabla); el orden se elige con «Ordenar». */
+  .utable thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
+  .utable tbody{display:grid;gap:10px}
+  .utable tr{display:grid;gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+  .utable th.ucell,.utable td{display:block;padding:0;border:0}
+  .utable th:first-child,.utable td:first-child{position:static;background:transparent}
+  .utable td[data-label]{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;text-align:right}
+  .utable td[data-label]::before{content:attr(data-label);flex:none;padding-top:2px;text-align:left;font:500 11px var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+  .utable td[data-label] > div{display:grid;justify-items:end}
+  .utable td.uact{text-align:left;white-space:normal;padding-top:8px;border-top:1px solid var(--line)}
+  .utable .uact-btns{display:flex;justify-content:flex-start}
+  .ureason{white-space:normal;max-width:none}
+  .row-susp{box-shadow:none;border-color:var(--warn-text)!important}
+}
