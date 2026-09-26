@@ -1,6 +1,6 @@
 import { LINGUISTIC_ALT, LINGUISTIC_LABELS } from '@/lib/fuzzy_topsis';
 
-/** Escala lingüística de Fuzzy TOPSIS (Chen, 2000): cinco funciones de pertenencia triangulares (l, m, u) sobre el eje 0–10.
+/** Escala lingüística de Fuzzy TOPSIS (versión de 5 niveles adaptada de Chen, 2000; Chen usa una escala más fina): cinco funciones de pertenencia triangulares (l, m, u) sobre el eje 0–10.
  * Cada triángulo lleva su etiqueta y su terna escritas sobre el pico (alternando dos alturas para que no choquen) y un trazo
  * distinto (continuo, rayas, puntos…), así que no depende solo del color. Las etiquetas presentes en la matriz de decisión
  * (`used`) se dibujan con trazo grueso y «●» en la leyenda. Colores por variables CSS (--s1..--s5, --ink, --muted, --line,
@@ -20,12 +20,12 @@ export default function LinguisticScaleChart({ used }: { used?: string[] }) {
   const H = hasUsed ? 336 : 318;
   const items = LINGUISTIC_LABELS.map((label, i) => ({ label, i, tfn: LINGUISTIC_ALT[label] }));
   const tfnText = (t: number[]) => `(${t.join(', ')})`;
-  const summary = 'Escala lingüística (Chen, 2000): cada etiqueta es un número difuso triangular (l, m, u) sobre un eje de 0 a 10. '
+  const summary = 'Escala lingüística de la plataforma (5 niveles, adaptada de Chen, 2000): cada etiqueta es un número difuso triangular (l, m, u) sobre un eje de 0 a 10. '
     + items.map(({ label, tfn }) => `${label} ${NAMES[label]} ${tfnText(tfn)}`).join('; ') + '.'
     + (hasUsed ? ` Etiquetas usadas en la matriz de decisión: ${items.filter((it) => usedSet.has(it.label)).map((it) => it.label).join(', ')}.` : '');
   return (
     <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={summary} style={{ width: '100%', maxWidth: 720, display: 'block', margin: '0 auto' }}>
-      <text x={8} y={16} fontSize="12" fill="var(--muted)">Escala lingüística (Chen, 2000): cada etiqueta es un número difuso triangular (l, m, u)</text>
+      <text x={8} y={16} fontSize="12" fill="var(--muted)">Escala lingüística (5 niveles, adaptada de Chen, 2000): cada etiqueta es un TFN (l, m, u)</text>
 
       {/* rejilla de pertenencia 0 / 0.5 / 1 */}
       {[0, 0.5, 1].map((m) => {

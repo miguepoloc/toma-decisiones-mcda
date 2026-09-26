@@ -7,7 +7,19 @@ export default function VikorSensitivityChart({ names, ends, v, breaks, solidLab
   solidLabels?: boolean;
 }) {
   const colorOf = (i: number) => `var(--s${(i % 5) + 1})`;
-  const W = 640, H = 300, L = 46, R = 130, T = 18, B = 42;
+  // Además del color, cada serie lleva un trazo y una forma de marcador propios: en blanco y negro (informe impreso) las rectas
+  // de una misma alternativa se siguen por su trazo, y al final de la línea el marcador dice de quién es.
+  const DASH = [undefined, '8 4', '2 4', '10 3 2 3', '5 2 1 2'];
+  const marker = (i: number, cx: number, cy: number, r: number, stroke: string) => {
+    const f = colorOf(i), k = i % 5;
+    const common = { fill: f, stroke, strokeWidth: 1.5 } as const;
+    if (k === 0) return <circle cx={cx} cy={cy} r={r} {...common} />;
+    if (k === 1) return <rect x={cx - r} y={cy - r} width={2 * r} height={2 * r} {...common} />;
+    if (k === 2) return <path d={`M${cx},${cy - r - 1} L${cx + r + 1},${cy + r} L${cx - r - 1},${cy + r} Z`} {...common} />;
+    if (k === 3) return <path d={`M${cx},${cy - r - 1} L${cx + r + 1},${cy} L${cx},${cy + r + 1} L${cx - r - 1},${cy} Z`} {...common} />;
+    return <path d={`M${cx - r},${cy - r} L${cx + r},${cy + r} M${cx + r},${cy - r} L${cx - r},${cy + r}`} fill="none" stroke={f} strokeWidth={3} />;
+  };
+  const W = 640, H = 300, L = 46, R = 150, T = 18, B = 42;
   const x = (val: number) => L + val * (W - L - R);
   const y = (q: number) => T + (1 - q) * (H - T - B);
   const q0 = ends[0].q, q1 = ends[1].q;
@@ -38,9 +50,12 @@ export default function VikorSensitivityChart({ names, ends, v, breaks, solidLab
       <text x={x(v)} y={T - 5} textAnchor="middle" fontSize="11.5" fontWeight="700" fill="var(--accent)">v = {v.toFixed(2)}</text>
       {names.map((n, i) => (
         <g key={n + i}>
-          <line x1={x(0)} y1={y(q0[i])} x2={x(1)} y2={y(q1[i])} stroke={colorOf(i)} strokeWidth="2.6" strokeLinecap="round" />
-          <circle cx={x(v)} cy={y(at(i, v))} r="4.5" fill={colorOf(i)} stroke="var(--surface)" strokeWidth="1.5" />
-          <text x={x(1) + 8} y={ly[i] + 4} fontSize="12.5" fontWeight="700" fill={solidLabels ? 'var(--ink)' : colorOf(i)}>{n.length > 16 ? n.slice(0, 15) + '…' : n}</text>
+          <line x1={x(0)} y1={y(q0[i])} x2={x(1)} y2={y(q1[i])} stroke={colorOf(i)} strokeWidth="2.6" strokeLinecap={DASH[i % 5] ? 'butt' : 'round'} strokeDasharray={DASH[i % 5]} />
+          {marker(i, x(v), y(at(i, v)), 4.5, 'var(--surface)')}
+          {/* marcador y nombre al final de la línea, en la altura de su Q (separados si dos terminan casi juntos) */}
+          <line x1={x(1)} x2={x(1) + 9} y1={y(q1[i])} y2={ly[i]} stroke="var(--muted)" strokeWidth="0.8" />
+          {marker(i, x(1) + 17, ly[i], 4.5, 'var(--ink)')}
+          <text x={x(1) + 27} y={ly[i] + 4} fontSize="12.5" fontWeight="700" fill={solidLabels ? 'var(--ink)' : colorOf(i)}>{n.length > 14 ? n.slice(0, 13) + '…' : n}</text>
         </g>
       ))}
       {breaks.map((b) => {
