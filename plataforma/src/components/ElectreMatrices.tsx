@@ -1,4 +1,5 @@
 import { EPS, type ElectreResult } from '@/lib/electre';
+import ElectrePairTable from './ElectrePairTable';
 
 const mark = (ok: boolean) => (ok ? '✓' : '✗');
 
@@ -53,6 +54,11 @@ export default function ElectreMatrices({ names, result }: { names: string[]; re
           title: outranks[i][k] ? `${names[i]} supera a ${names[k]}` : `${names[i]} no supera a ${names[k]}: no cumple ${failed.map((f) => (f === 'c' ? 'la concordancia' : 'la discordancia')).join(' ni ')}`,
         };
       }} />
+
+      <details style={{ marginTop: 14 }}>
+        <summary>Ver la misma información par por par (como en clase)</summary>
+        <ElectrePairTable names={names} result={result} />
+      </details>
     </>
   );
 }

@@ -4,6 +4,8 @@ import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { Criterion, Alternative, DecisionMatrix, WeightingMethod } from '@/lib/types';
 import ElectreGraph from './ElectreGraph';
+import ElectrePairTable from './ElectrePairTable';
+import type { ElectreResult } from '@/lib/electre';
 import MethodCharts, { type MethodChartData } from './MethodCharts';
 import WeightBars from './WeightBars';
 import VikorSensitivityChart from './VikorSensitivityChart';
@@ -25,6 +27,11 @@ const REPORT_VARS = {
   '--m-topsis': '#0891B2', '--m-vikor': '#059669', '--m-electre': '#B45309', '--m-promethee': '#E11D48', '--m-saw': '#EA580C',
   '--m-fuzzy': '#0F766E', '--m-ahp': '#7C3AED',
 } as CSSProperties;
+
+/** El informe recibe los datos de ELECTRE sueltos; la tabla por pares espera el mismo objeto que devuelve electre(). */
+const electreResultShape = (e: { outranks: boolean[][]; concordance: number[][]; discordance: number[][]; cStar: number; dStar: number; names: string[] }): ElectreResult => ({
+  n: e.names.length, outranks: e.outranks, concordance: e.concordance, discordance: e.discordance, cStar: e.cStar, dStar: e.dStar, weights: [], ranges: [], g: [],
+});
 
 /** Consistencia de UNA hoja de comparaciones por pares (criterios, o las alternativas bajo un criterio). */
 export type ReportSheetCr = {
@@ -679,26 +686,16 @@ export default function ExecutiveReportModal({
               <div className="rpt-fig" style={{ breakInside: 'avoid' }}>
                 <ElectreGraph names={electre.names} outranks={electre.outranks} concordance={electre.concordance} discordance={electre.discordance} cStar={electre.cStar} dStar={electre.dStar} />
               </div>
-              <table className="rpt-table rpt-keep" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, marginTop: 12 }}>
-                <thead>
-                  <tr style={THEAD_TR}>
-                    <th style={TH}>Relación</th>
-                    <th style={THR}>Concordancia (≥ c* {electre.cStar.toFixed(2)})</th>
-                    <th style={THR}>Discordancia (≤ d* {electre.dStar.toFixed(2)})</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {el.rels.length === 0 ? (
-                    <tr><td colSpan={3} style={{ padding: '8px 10px', color: '#475569' }}>Ninguna alternativa supera a otra con estos umbrales.</td></tr>
-                  ) : el.rels.map(({ i, k }) => (
-                    <tr key={`${i}-${k}`} style={{ borderBottom: '1px solid #CBD5E1' }}>
-                      <td style={{ padding: '8px 10px' }}><b>{electre.names[i]}</b> supera a <b>{electre.names[k]}</b></td>
-                      <td style={{ padding: '8px 10px', textAlign: 'right', ...MONO }}>{electre.concordance[i][k].toFixed(2)}</td>
-                      <td style={{ padding: '8px 10px', textAlign: 'right', ...MONO }}>{electre.discordance[i][k].toFixed(2)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <div className="rpt-fig" style={{ marginTop: 12 }}>
+                <ElectrePairTable
+                  names={electre.names}
+                  result={{ ...electreResultShape(electre) }}
+                  onlyOutranking={electre.names.length > 6}
+                />
+                {electre.names.length > 6 && (
+                  <p className="rpt-note" style={NOTE_P}>Con {electre.names.length} alternativas la lista completa tiene {electre.names.length * (electre.names.length - 1)} pares; aquí solo se muestran los pares donde la primera supera a la segunda. La plataforma muestra la lista completa.</p>
+                )}
+              </div>
               {el.incomparable.length > 0 && (
                 <p style={{ fontSize: 12.5, color: '#475569', margin: '10px 0 0' }}>
                   <b>Incomparables (ninguna supera a la otra):</b> {el.incomparable.map(([a, b]) => `${electre.names[a]} y ${electre.names[b]}`).join('; ')}. No es una falla del método: con estos umbrales los datos no alcanzan para preferir una sobre la otra.
