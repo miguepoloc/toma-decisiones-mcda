@@ -8,7 +8,7 @@ import {
   type WeightMethod,
 } from '@/lib/ahp';
 import { getCell, getKind, getTarget, missingTargets, normalizeMatrix, resolveTargets, targetDistance, topsisSynthesis } from '@/lib/topsis';
-import { vikorSynthesis, vikorV } from '@/lib/vikor';
+import { vikorFirstPlaceChanges, vikorInputs, vikorSensitivity, vikorSynthesis, vikorV } from '@/lib/vikor';
 import VikorPanel from './VikorPanel';
 import { prometheeSynthesis } from '@/lib/promethee';
 import { electreCStar, electreDStar, electreSynthesis } from '@/lib/electre';
@@ -233,6 +233,17 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
     const winner = hasData && elecSyn.relations.length > 0 && kernel.length === 1 ? kernel[0] : null;
     return { hasData, out, inn, winner };
   }, [alternatives, criteria, dm, elecSyn]);
+  // Datos de la gráfica Q vs v para el informe ejecutivo (VikorPanel calcula lo mismo para su propia gráfica, pero vive solo
+  // en la pestaña VIKOR). Se usa `dm` (matriz efectiva, con los criterios objetivo ya convertidos), no `dmRaw`.
+  const vikorReportChart = useMemo(() => {
+    if (method !== 'vikor' || vikSyn.tie) return undefined;
+    const { matrix, types } = vikorInputs(criteria, alternatives, dm);
+    return {
+      names: alternatives.map((a) => a.name),
+      ends: vikorSensitivity(matrix, critWeights, types, [0, 1]),
+      breaks: vikorFirstPlaceChanges(matrix, critWeights, types).map((b) => ({ v: b.v, from: alternatives[b.from].name, to: alternatives[b.to].name })),
+    };
+  }, [method, vikSyn.tie, criteria, alternatives, dm, critWeights]);
   const totalMethods = decidableViews.length + (electreCompare.hasData ? 1 : 0);
   // Alternativa que más veces queda #1 entre los métodos con datos suficientes; null si hay empate en el conteo.
   const topWinner = useMemo(() => {
@@ -788,11 +799,16 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
           alternatives={alternatives}
           decisionMatrix={dmRaw}
           weights={critWeights}
+          // ELECTRE no da ranking total: quant.rows caería en la rama de PROMETHEE y el informe mostraría flujos φ ajenos.
+          // Su informe se arma con la relación de superación (`electre`).
           rankingRows={
-            method === 'ahp'
-              ? syn.rows.map((r) => ({ name: r.name, score: r.g, rank: r.rank }))
-              : quant.rows.map((r) => ({ name: r.name, score: r.value, rank: r.rank }))
+            method === 'electre' ? []
+              : method === 'ahp'
+                ? syn.rows.map((r) => ({ name: r.name, score: r.g, rank: r.rank }))
+                : quant.rows.map((r) => ({ name: r.name, score: r.value, rank: r.rank }))
           }
+          electre={method === 'electre' ? { names: elecSyn.names, outranks: elecSyn.result.outranks, concordance: elecSyn.result.concordance, discordance: elecSyn.result.discordance, cStar: elecSyn.result.cStar, dStar: elecSyn.result.dStar } : undefined}
+          vikorChart={vikorReportChart}
           vikorV={method === 'vikor' ? vEff : undefined}
           compromiseSet={method === 'vikor' && vikSyn.verdict && vikSyn.verdict.kind !== 'unique' ? vikSyn.verdict.set.map((i) => vikSyn.rows[i].name) : undefined}
           onClose={() => setShowReportModal(false)}

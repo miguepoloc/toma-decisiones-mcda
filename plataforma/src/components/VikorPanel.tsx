@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react';
 import type { Alternative, Criterion, DecisionMatrix } from '@/lib/types';
+import VikorSensitivityChart from './VikorSensitivityChart';
 import { vikorFirstPlaceChanges, vikorInputs, vikorSensitivity, type VikorSynth } from '@/lib/vikor';
 
 /**
@@ -21,7 +22,6 @@ const PRESETS: { v: number; label: string; hint: string }[] = [
 ];
 
 const same = (a: number, b: number) => Math.abs(a - b) < 1e-6;
-const colorOf = (i: number) => `var(--s${(i % 5) + 1})`;
 
 type Props = {
   criteria: Criterion[];
@@ -161,56 +161,9 @@ export default function VikorPanel({ criteria, alternatives, dm, weights, synth,
           </div>
           <p className="muted" style={{ fontSize: 12, margin: '6px 0 0' }}>◀ v actual · ⇄ v donde cambia el 1er lugar · en verde, el Q más bajo (el 1º) de cada fila.</p>
 
-          <QvsV names={names} ends={ends} v={v} breaks={firstChanges.map((c) => c.v)} />
+          <VikorSensitivityChart names={names} ends={ends} v={v} breaks={firstChanges.map((c) => c.v)} />
         </div>
       )}
     </>
   );
 }
-
-/** Gráfica de Q según v: una recta por alternativa (Q es lineal en v), en SVG puro sin librerías. */
-function QvsV({ names, ends, v, breaks }: { names: string[]; ends: { q: number[] }[]; v: number; breaks: number[] }) {
-  const W = 640, H = 300, L = 46, R = 130, T = 18, B = 42;
-  const x = (val: number) => L + val * (W - L - R);
-  const y = (q: number) => T + (1 - q) * (H - T - B);
-  const q0 = ends[0].q, q1 = ends[1].q;
-  const at = (i: number, val: number) => q0[i] + (q1[i] - q0[i]) * val;
-  // rótulos directos al final de cada línea, de arriba hacia abajo y separados para que no se pisen
-  const top = [...names.keys()].sort((a, b) => y(q1[a]) - y(q1[b]));
-  const ly: number[] = [];
-  top.forEach((i, k) => { ly[i] = k === 0 ? y(q1[i]) : Math.max(y(q1[i]), ly[top[k - 1]] + 15); });
-  const summary = `Q de cada alternativa según v de 0 a 1. ${names.map((n, i) => `${n}: ${q0[i].toFixed(2)} con v=0 y ${q1[i].toFixed(2)} con v=1`).join('; ')}.`;
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={summary} style={{ width: '100%', maxWidth: 720, marginTop: 14, display: 'block' }}>
-      {[0, 0.25, 0.5, 0.75, 1].map((t) => (
-        <g key={'gy' + t}>
-          <line x1={L} x2={W - R} y1={y(t)} y2={y(t)} stroke="var(--line)" strokeDasharray="3 4" />
-          <text x={L - 8} y={y(t) + 4} textAnchor="end" fontSize="11" fill="var(--muted)">{t.toFixed(2)}</text>
-        </g>
-      ))}
-      {[0, 0.25, 0.5, 0.75, 1].map((t) => (
-        <g key={'gx' + t}>
-          <line x1={x(t)} x2={x(t)} y1={y(1)} y2={y(0)} stroke="var(--line)" strokeDasharray="3 4" />
-          <text x={x(t)} y={H - B + 16} textAnchor="middle" fontSize="11" fill="var(--muted)">{t.toFixed(2)}</text>
-        </g>
-      ))}
-      <text x={(L + W - R) / 2} y={H - 6} textAnchor="middle" fontSize="12" fill="var(--muted)">v (peso de S; 1 − v = peso de R)</text>
-      <text x={12} y={(T + H - B) / 2} textAnchor="middle" fontSize="12" fill="var(--muted)" transform={`rotate(-90 12 ${(T + H - B) / 2})`}>Q (menor es mejor)</text>
-      {/* v actual */}
-      <line x1={x(v)} x2={x(v)} y1={y(1)} y2={y(0)} stroke="var(--accent)" strokeWidth="1.6" strokeDasharray="5 4" />
-      <text x={x(v)} y={T - 5} textAnchor="middle" fontSize="11.5" fontWeight="700" fill="var(--accent)">v = {v.toFixed(2)}</text>
-      {names.map((n, i) => (
-        <g key={n + i}>
-          <line x1={x(0)} y1={y(q0[i])} x2={x(1)} y2={y(q1[i])} stroke={colorOf(i)} strokeWidth="2.6" strokeLinecap="round" />
-          <circle cx={x(v)} cy={y(at(i, v))} r="4.5" fill={colorOf(i)} stroke="var(--surface)" strokeWidth="1.5" />
-          <text x={x(1) + 8} y={ly[i] + 4} fontSize="12.5" fontWeight="700" fill={colorOf(i)}>{n.length > 16 ? n.slice(0, 15) + '…' : n}</text>
-        </g>
-      ))}
-      {breaks.map((b) => {
-        const qv = Math.min(...names.map((_, i) => at(i, b)));
-        return <circle key={b} cx={x(b)} cy={y(qv)} r="8" fill="none" stroke="var(--ink)" strokeWidth="2" />;
-      })}
-    </svg>
-  );
-}
-
