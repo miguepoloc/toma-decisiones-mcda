@@ -110,8 +110,9 @@ label.lbl,legend.lbl{font:600 12px var(--f-mono);letter-spacing:.05em;text-trans
 .form{display:grid;gap:16px}
 .fgrp{display:grid;gap:10px}
 .lrow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}
-.lrow.h{grid-template-columns:minmax(0,1fr) minmax(0,1.6fr) auto}
-@media(max-width:600px){.lrow.h{grid-template-columns:minmax(0,1fr) auto}.lrow.h input:nth-child(2){grid-column:1}}
+.lrow.h{grid-template-columns:minmax(0,1fr) minmax(0,1.6fr) minmax(0,.7fr) auto}
+.lrow.h .unit-in{min-width:0}
+@media(max-width:600px){.lrow.h{grid-template-columns:minmax(0,1fr) auto}.lrow.h input:nth-child(2),.lrow.h input:nth-child(3){grid-column:1}}
 .nav{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
 .count{font:500 13px var(--f-mono);color:var(--muted)}
 
@@ -1180,3 +1181,8 @@ table.cmp{min-width:900px;font-size:13px}
 .lhero>*,.lgeo>*{min-width:0}
 /* tutorial en móvil: la tabla del mini-tutorial (min-width 520px) ensanchaba toda la guía hasta 578px; ahora se desplaza dentro de su caja */
 .tlayout>*{min-width:0}
+
+/* ---- unidad de cada criterio (matriz de decisión) ---- */
+.mx .unit-in{display:block;width:100%;min-width:0;margin:0 0 8px;padding:5px 8px;font-size:12.5px;text-align:center}
+.mx .unit-in.missing{border-color:var(--warn);border-style:dashed}
+.mx .unit-in.missing::placeholder{color:var(--warn-t,var(--warn))}

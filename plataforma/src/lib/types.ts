@@ -1,6 +1,7 @@
 import type { PrioState } from './prio.ts';
 
-export type Criterion = { id: string; name: string; hint: string; src?: string | null };
+/** `unit`: unidad de los valores de este criterio en la matriz de decisión (km, años, USD, «escala 1–5»…). Vive en el JSON de `criteria`, sin migración. */
+export type Criterion = { id: string; name: string; hint: string; src?: string | null; unit?: string };
 export type Alternative = { id: string; name: string };
 export type ExpertStatus = 'pending' | 'in_progress' | 'submitted';
 /** 'ahp' = alternativas comparadas de a pares (como hasta ahora); los demás usan una matriz de

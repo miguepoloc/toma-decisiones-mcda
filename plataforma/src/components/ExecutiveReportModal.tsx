@@ -488,7 +488,7 @@ export default function ExecutiveReportModal({
                   const w = weights[i] ?? 0;
                   return (
                     <tr key={c.id} style={{ borderBottom: '1px solid #CBD5E1' }}>
-                      <td style={{ padding: '8px 10px', fontWeight: 600 }}>{c.name}</td>
+                      <td style={{ padding: '8px 10px', fontWeight: 600 }}>{c.name}{!isAhp && c.unit?.trim() ? <span style={{ fontWeight: 400, color: '#475569' }}> ({c.unit.trim()})</span> : null}</td>
                       {showMatrix && (
                         <td style={{ padding: '8px 10px', color: '#475569' }}>{ruleText(c.id)}</td>
                       )}
@@ -645,6 +645,7 @@ export default function ExecutiveReportModal({
                       {criteria.map((c) => (
                         <th key={c.id} style={{ padding: '6px 8px', textAlign: 'right' }}>
                           {c.name}
+                          {c.unit?.trim() && <div style={{ fontWeight: 400, color: '#475569' }}>({c.unit.trim()})</div>}
                         </th>
                       ))}
                     </tr>

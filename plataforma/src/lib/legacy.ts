@@ -94,7 +94,7 @@ export function fromLegacy(s: LegacyState): Imported {
   }
   return {
     objective: s.obj ?? '',
-    criteria: s.crit.map((c) => ({ id: c.id, name: c.name, hint: c.hint ?? '', src: c.src ?? null })),
+    criteria: s.crit.map((c) => ({ id: c.id, name: c.name, hint: c.hint ?? '', src: c.src ?? null, ...(c.unit ? { unit: c.unit } : {}) })),
     alternatives: s.alt.map((a) => ({ id: a.id, name: a.name })),
     prio: normalizePrio(s.A) ?? blankPrio(),
     experts: s.experts.map((e, i) => ({ legacyId: e.id, name: 'Experto ' + (i + 1), role_desc: e.name })),

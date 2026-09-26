@@ -2,6 +2,7 @@
 
 import { useMemo, useState, type CSSProperties } from 'react';
 import ElectreGraph from './ElectreGraph';
+import { withUnit } from '@/lib/units';
 import MethodCharts, { type MethodChartData } from './MethodCharts';
 import type { Alternative, Criterion, DecisionMatrix, JudgmentRow, Method, WeightingMethod } from '@/lib/types';
 import {
@@ -654,7 +655,7 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
                 <h4>{objective ? `Peso de cada criterio (${WEIGHTING_SHORT[weighting]}, calculado de esta matriz)` : 'Peso de cada criterio (de la hoja Criterios)'}</h4>
                 <div className="tbl" style={{ marginTop: 8 }}>
                   <table>
-                    <thead><tr><th></th>{criteria.map((c) => <th key={c.id} className="n">{c.name}</th>)}</tr></thead>
+                    <thead><tr><th></th>{criteria.map((c) => <th key={c.id} className="n">{withUnit(c)}</th>)}</tr></thead>
                     <tbody><tr><td className="muted">Peso</td>{critWeights.map((w, i) => <td key={i} className="n">{w.toFixed(4)}</td>)}</tr></tbody>
                   </table>
                 </div>
@@ -663,7 +664,7 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
                   <table>
                     <thead><tr><th></th>{criteria.map((c) => {
                       const k = getKind(dmRaw, c.id), t = getTarget(dmRaw, c.id);
-                      return <th key={c.id} className="n">{c.name} · {k === 'max' ? 'beneficio' : k === 'min' ? 'costo' : t ? `objetivo ${t.value}${t.tol ? ` ± ${t.tol}` : ''}` : 'objetivo (falta el valor)'}</th>;
+                      return <th key={c.id} className="n">{withUnit(c)} · {k === 'max' ? 'beneficio' : k === 'min' ? 'costo' : t ? `objetivo ${t.value}${t.tol ? ` ± ${t.tol}` : ''}` : 'objetivo (falta el valor)'}</th>;
                     })}</tr></thead>
                     <tbody>
                       {alternatives.map((a) => (

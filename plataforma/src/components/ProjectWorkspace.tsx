@@ -9,6 +9,7 @@ import { downloadExcel, downloadPrioExcel } from '@/lib/excel';
 import { friendlyError } from '@/lib/errors';
 import { normalizeMatrix, resolveTargets, setCell as setMatrixCell, setTarget as setMatrixTarget, setType as setMatrixType, type MatrixKind, type TargetSpec } from '@/lib/topsis';
 import { criticWeights, entropyWeights } from '@/lib/weights';
+import { UNIT_SUGGESTIONS } from '@/lib/units';
 import { defuzzifyMatrix } from '@/lib/fuzzy_topsis';
 import { WEIGHTING_SHORT, effectiveWeighting, expertsWithJudgments, isObjectiveFor } from '@/lib/weightingMode';
 import JudgmentEditor from './JudgmentEditor';
@@ -462,11 +463,15 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
           </div>
           <div className="card form">
             <div className="fgrp">
-              <label className="lbl">Criterios ({project.criteria.length}) y su regla de lectura</label>
+              <label className="lbl">Criterios ({project.criteria.length}), su regla de lectura{project.method !== 'ahp' ? ' y su unidad' : ''}</label>
+              <datalist id="unit-suggestions">{UNIT_SUGGESTIONS.map((u) => <option key={u} value={u} />)}</datalist>
               {project.criteria.map((c, i) => (
                 <div className="lrow h" key={c.id}>
                   <input type="text" value={c.name} aria-label={`Criterio ${i + 1}`} onChange={(e) => patch({ criteria: project.criteria.map((x) => (x.id === c.id ? { ...x, name: e.target.value } : x)) })} />
                   <input type="text" value={c.hint} placeholder="Regla: ¿qué es mejor?" aria-label={`Regla ${i + 1}`} onChange={(e) => patch({ criteria: project.criteria.map((x) => (x.id === c.id ? { ...x, hint: e.target.value } : x)) })} />
+                  {project.method !== 'ahp' && (
+                    <input type="text" className="unit-in" list="unit-suggestions" value={c.unit ?? ''} placeholder="Unidad (km, USD…)" aria-label={`Unidad de ${c.name || 'criterio ' + (i + 1)}`} onChange={(e) => patch({ criteria: project.criteria.map((x) => (x.id === c.id ? { ...x, unit: e.target.value } : x)) })} />
+                  )}
                   {project.criteria.length > 2 && <button type="button" className={'btn icon sm' + (pendDel === 'c' + c.id ? ' danger' : '')} onClick={() => twoClick('c' + c.id, () => removeCriterion(c.id))}>{pendDel === 'c' + c.id ? '¿Seguro?' : '✕'}</button>}
                 </div>
               ))}
@@ -615,6 +620,7 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
           liveWeights={liveWeights}
           weightingLabel={WEIGHTING_SHORT[weighting]}
           noExpertWeights={weighting === 'ahp' && weightExperts === 0}
+          onSetUnit={(critId, unit) => patch({ criteria: project.criteria.map((x) => (x.id === critId ? { ...x, unit } : x)) })}
           onGoExperts={() => goTab('Expertos')}
         />
       )}

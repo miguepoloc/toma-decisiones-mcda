@@ -193,7 +193,7 @@ export function matrixSheet(criteria: Criterion[], alternatives: Alternative[], 
   put(1, 0, title, { s: stl.title });
   put(1, 1, note, { s: stl.note });
   put(rHead, 0, 'Alternativa', { s: stl.hdrL });
-  criteria.forEach((c, j) => put(rHead, 1 + j, c.name, { s: stl.hdr }));
+  criteria.forEach((c, j) => put(rHead, 1 + j, c.unit?.trim() ? `${c.name} (${c.unit.trim()})` : c.name, { s: stl.hdr }));
   put(rTypeRaw, 0, hasTarget ? 'Tipo (beneficio/costo/objetivo)' : 'Tipo (beneficio/costo)', { s: stl.b });
   const kindLabel = (id: string) => { const k = getKind(dm, id); return k === 'target' ? 'Objetivo' : k === 'min' ? 'Costo' : 'Beneficio'; };
   criteria.forEach((c, j) => put(rTypeRaw, 1 + j, kindLabel(c.id), { s: stl.c }));

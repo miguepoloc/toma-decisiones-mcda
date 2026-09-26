@@ -1,6 +1,7 @@
 'use client';
 
 import WeightBars from './WeightBars';
+import { missingUnits, UNIT_SUGGESTIONS, withUnit } from '@/lib/units';
 import type { Alternative, Criterion, DecisionMatrix, MatrixKind, TargetSpec } from '@/lib/types';
 import { getCell, getKind, getTarget, targetDistance } from '@/lib/topsis';
 import { LINGUISTIC_LABELS, type LinguisticLabel } from '@/lib/fuzzy_topsis';
@@ -40,9 +41,11 @@ type Props = {
   /** Con pesos AHP: ningún experto ha pesado todavía los criterios, así que Resultados no calcula nada. */
   noExpertWeights?: boolean;
   onGoExperts?: () => void;
+  /** Guarda la unidad de un criterio (km, USD, «escala 1–5»…). */
+  onSetUnit?: (critId: string, unit: string) => void;
 };
 
-export default function DecisionMatrixEditor({ criteria, alternatives, matrix, method, onSetCell, onSetFuzzyCell, onSetType, onSetTarget, objective, onEditObjective, liveWeights, weightingLabel, noExpertWeights, onGoExperts }: Props) {
+export default function DecisionMatrixEditor({ criteria, alternatives, matrix, method, onSetCell, onSetFuzzyCell, onSetType, onSetTarget, objective, onEditObjective, liveWeights, weightingLabel, noExpertWeights, onGoExperts, onSetUnit }: Props) {
   const isFuzzy = method === 'fuzzy_topsis';
   const targetCrit = isFuzzy ? [] : criteria.filter((c) => getKind(matrix, c.id) === 'target');
   const sinObjetivo = targetCrit.filter((c) => !getTarget(matrix, c.id));
@@ -68,6 +71,12 @@ export default function DecisionMatrixEditor({ criteria, alternatives, matrix, m
           ? 'Para cada alternativa, selecciona la variable lingüística que mejor describe su desempeño en cada criterio: desde Muy mala (VP) hasta Muy buena (VG). Marca si el criterio es de beneficio (MÁS es mejor) o costo (MENOS es mejor).'
           : 'Para cada alternativa, escribe el valor real que tiene en cada criterio — un dato (precio, kilómetros, años, una métrica técnica), no un juicio de 1 a 9 como en AHP. Marca el tipo de cada criterio: Beneficio (MÁS es mejor), Costo (MENOS es mejor) u Objetivo (lo mejor es un valor específico, por ejemplo un voltaje de 110 V: ni más ni menos es mejor).'}
       </p>
+      {!isFuzzy && onSetUnit && <datalist id="mx-unit-suggestions">{UNIT_SUGGESTIONS.map((u) => <option key={u} value={u} />)}</datalist>}
+      {!isFuzzy && onSetUnit && missingUnits(criteria).length > 0 && (
+        <div className="banner" role="status" style={{ marginBottom: 12 }}>
+          <span><b>¿En qué unidad está cada criterio?</b> Falta la unidad de: {missingUnits(criteria).map((c) => c.name).join(', ')}. Escríbela debajo del nombre del criterio (km, años, USD, «escala 1–5»…): un «10» no significa nada sin saber si son km o metros, y la unidad aparece en resultados, informe y Excel. Si el valor es un puntaje sin unidad, escribe «escala 1–5» o «sin unidad».</span>
+        </div>
+      )}
       {sinObjetivo.length > 0 && (
         <div className="banner" role="alert" style={{ marginBottom: 12 }}>
           <span><b>Falta el valor objetivo</b> de: {sinObjetivo.map((c) => c.name).join(', ')}. Escríbelo en la fila «Valor objetivo»; mientras tanto ese criterio no distingue entre alternativas.</span>
@@ -83,6 +92,10 @@ export default function DecisionMatrixEditor({ criteria, alternatives, matrix, m
                 {criteria.map((c) => (
                   <th key={c.id} scope="col">
                     <span className="crit-name">{c.name}</span>
+                    {!isFuzzy && onSetUnit && (
+                      <input type="text" className={'unit-in' + (c.unit?.trim() ? '' : ' missing')} list="mx-unit-suggestions" value={c.unit ?? ''} placeholder="¿Unidad? (km, USD…)"
+                        aria-label={`Unidad de ${c.name}`} onChange={(e) => onSetUnit(c.id, e.target.value)} />
+                    )}
                     <div className="seg" role="group" aria-label={`Tipo de ${c.name}`}>
                       <button type="button" aria-pressed={getKind(matrix, c.id) === 'max'} onClick={() => onSetType(c.id, 'max')}>Beneficio</button>
                       <button type="button" className="d" aria-pressed={getKind(matrix, c.id) === 'min'} onClick={() => onSetType(c.id, 'min')}>Costo</button>
@@ -142,7 +155,7 @@ export default function DecisionMatrixEditor({ criteria, alternatives, matrix, m
                       <td key={c.id}>
                         {isFuzzy ? (
                           <select
-                            aria-label={`${a.name}, ${c.name}`}
+                            aria-label={`${a.name}, ${withUnit(c)}`}
                             value={getFuzzyCell(matrix, a.id, c.id)}
                             onChange={(e) => onSetFuzzyCell?.(a.id, c.id, e.target.value as LinguisticLabel)}
                           >
@@ -156,7 +169,7 @@ export default function DecisionMatrixEditor({ criteria, alternatives, matrix, m
                               type="number"
                               inputMode="decimal"
                               step="any"
-                              aria-label={`${a.name}, ${c.name}`}
+                              aria-label={`${a.name}, ${withUnit(c)}`}
                               value={x ?? ''}
                               onChange={(e) => onSetCell(a.id, c.id, e.target.value === '' ? null : Number(e.target.value))}
                             />
