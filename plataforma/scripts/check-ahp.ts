@@ -1,5 +1,6 @@
 // Prueba de humo de la matemática AHP. Compara contra valores obtenidos con la herramienta HTML / el Excel del ejercicio.
 import { effectiveWeighting, expertsWithJudgments, isObjectiveFor, resultsGate, usesExpertJudgments } from '../src/lib/weightingMode.ts';
+import { moveItem } from '../src/lib/reorder.ts';
 import { CRIT_SHEET, altSheet, analyze, expertMatrix, indexJudgments, pairsOf, synthesis, sheetResult } from '../src/lib/ahp.ts';
 
 let fallos = 0;
@@ -78,6 +79,21 @@ const cerca = (a: number, b: number, tol = 5e-4) => Math.abs(a - b) <= tol;
   ok(g('single', 'ahp', 'critic', true, 0) === 'no-judgments' && g('single', 'ahp', 'ahp', false, 1) === null, 'AHP como método: bloquea sin juicios');
   ok(g('compare', 'topsis', 'critic', true, 0, 5) === null && g('compare', 'topsis', 'critic', false, 0, 0) === 'compare-nothing', 'Comparativa con CRITIC: depende solo de la matriz');
   ok(g('compare', 'topsis', 'ahp', true, 0, 5) === 'no-weight-judgments', 'Comparativa con AHP y sin juicios: no compara con pesos iguales');
+}
+// 6) Reordenar criterios/alternativas: los pesos y la síntesis de AHP no deben cambiar (solo el orden en que se muestran)
+{
+  const items = [{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }, { id: 'c', name: 'C' }];
+  const juicios = { 'a-b': -2, 'a-c': -4, 'b-c': -1 }; // A gana a B y a C; B gana a C
+  const w1 = analyze(expertMatrix(items, juicios)).w;
+  const orden = moveItem(items, 0, 2); // B, C, A: las claves guardadas quedan «al revés» respecto del nuevo orden
+  const w2 = analyze(expertMatrix(orden, juicios)).w;
+  const porId = (its: typeof items, w: number[]) => Object.fromEntries(its.map((x, i) => [x.id, w[i]]));
+  const a = porId(items, w1), b = porId(orden, w2);
+  ok(['a', 'b', 'c'].every((k) => cerca(a[k], b[k], 1e-9)), 'reordenar los elementos no cambia el peso de ninguno (getV acepta la clave invertida)');
+  ok(moveItem([1, 2, 3, 4], 0, 2).join() === '2,3,1,4' && moveItem([1, 2, 3, 4], 3, 0).join() === '4,1,2,3', 'moveItem mueve hacia adelante y hacia atrás');
+  ok(moveItem([1, 2, 3], 1, 1).join() === '1,2,3' && moveItem([1, 2, 3], -1, 2).join() === '1,2,3' && moveItem([1, 2, 3], 0, 9).join() === '1,2,3', 'moveItem deja igual lo que está fuera de rango o no se mueve');
+  const orig = [1, 2, 3]; moveItem(orig, 0, 2);
+  ok(orig.join() === '1,2,3', 'moveItem no modifica el arreglo original');
 }
 console.log(fallos ? `\n${fallos} prueba(s) fallaron` : '\nTodas las pruebas pasaron');
 process.exit(fallos ? 1 : 0);

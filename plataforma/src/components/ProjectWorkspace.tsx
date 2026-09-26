@@ -14,6 +14,8 @@ import { WEIGHTING_SHORT, effectiveWeighting, expertsWithJudgments, isObjectiveF
 import JudgmentEditor from './JudgmentEditor';
 import PrioritizationEditor from './PrioritizationEditor';
 import DecisionMatrixEditor from './DecisionMatrixEditor';
+import ReorderList from './ReorderList';
+import { moveItem } from '@/lib/reorder';
 import dynamic from 'next/dynamic';
 
 const GeoVisor = dynamic(() => import('./GeoVisor'), { ssr: false, loading: () => <p className="muted">Cargando el geovisor…</p> });
@@ -463,8 +465,12 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
           <div className="card form">
             <div className="fgrp">
               <label className="lbl">Criterios ({project.criteria.length}), su regla de lectura{project.method !== 'ahp' ? ' y su unidad' : ''}</label>
-              {project.criteria.map((c, i) => (
-                <div className="lrow h" key={c.id}>
+              <ReorderList
+                items={project.criteria} getKey={(c) => c.id} getLabel={(c) => c.name} label="criterios"
+                onMove={(from, to) => patch({ criteria: moveItem(project.criteria, from, to) })}
+                renderItem={(c, i, handle) => (
+                  <div className="lrow h ro">
+                  {handle}
                   <input type="text" value={c.name} aria-label={`Criterio ${i + 1}`} onChange={(e) => patch({ criteria: project.criteria.map((x) => (x.id === c.id ? { ...x, name: e.target.value } : x)) })} />
                   <input type="text" value={c.hint} placeholder="Regla: ¿qué es mejor?" aria-label={`Regla ${i + 1}`} onChange={(e) => patch({ criteria: project.criteria.map((x) => (x.id === c.id ? { ...x, hint: e.target.value } : x)) })} />
                   {project.method !== 'ahp' && (
@@ -472,7 +478,8 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
                   )}
                   {project.criteria.length > 2 && <button type="button" className={'btn icon sm' + (pendDel === 'c' + c.id ? ' danger' : '')} onClick={() => twoClick('c' + c.id, () => removeCriterion(c.id))}>{pendDel === 'c' + c.id ? '¿Seguro?' : '✕'}</button>}
                 </div>
-              ))}
+                )}
+              />
               <div className="acts"><button type="button" className="btn sm" onClick={() => patch({ criteria: [...project.criteria, { id: uid('k'), name: 'Nuevo criterio', hint: '', src: null } as Criterion] }, true)}>+ Agregar criterio</button></div>
               <p className="muted" style={{ fontSize: 13 }}>Ojo con los criterios donde menos es mejor (por ejemplo costo o riesgo): la regla te recuerda comparar en la dirección correcta. Al quitar un criterio se borran los juicios que lo usan.</p>
             </div>
@@ -495,12 +502,17 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
             ) : (
               <div className="fgrp">
                 <label className="lbl">Alternativas ({project.alternatives.length})</label>
-                {project.alternatives.map((a, i) => (
-                  <div className="lrow" key={a.id}>
+                <ReorderList
+                  items={project.alternatives} getKey={(a) => a.id} getLabel={(a) => a.name} label="alternativas"
+                  onMove={(from, to) => patch({ alternatives: moveItem(project.alternatives, from, to) })}
+                  renderItem={(a, i, handle) => (
+                    <div className="lrow ro">
+                    {handle}
                     <input type="text" value={a.name} aria-label={`Alternativa ${i + 1}`} onChange={(e) => patch({ alternatives: project.alternatives.map((x) => (x.id === a.id ? { ...x, name: e.target.value } : x)) })} />
                     {project.alternatives.length > 2 && <button type="button" className={'btn icon sm' + (pendDel === 'a' + a.id ? ' danger' : '')} onClick={() => twoClick('a' + a.id, () => removeAlternative(a.id))}>{pendDel === 'a' + a.id ? '¿Seguro?' : '✕'}</button>}
                   </div>
-                ))}
+                  )}
+                />
                 <div className="acts"><button type="button" className="btn sm" onClick={() => patch({ alternatives: [...project.alternatives, { id: uid('a'), name: 'Nueva alternativa' } as Alternative] }, true)}>+ Agregar alternativa</button></div>
               </div>
             )}
@@ -618,6 +630,7 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
           liveWeights={liveWeights}
           weightingLabel={WEIGHTING_SHORT[weighting]}
           noExpertWeights={weighting === 'ahp' && weightExperts === 0}
+          onReorder={(kind, from, to) => patch(kind === 'criteria' ? { criteria: moveItem(project.criteria, from, to) } : { alternatives: moveItem(project.alternatives, from, to) })}
           onSetUnit={(critId, unit) => patch({ criteria: project.criteria.map((x) => (x.id === critId ? { ...x, unit } : x)) })}
           onGoExperts={() => goTab('Expertos')}
         />

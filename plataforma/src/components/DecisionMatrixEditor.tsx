@@ -1,7 +1,9 @@
 'use client';
 
 import WeightBars from './WeightBars';
+import { useState } from 'react';
 import { missingUnits, withUnit } from '@/lib/units';
+import ReorderList from './ReorderList';
 import type { Alternative, Criterion, DecisionMatrix, MatrixKind, TargetSpec } from '@/lib/types';
 import { getCell, getKind, getTarget, targetDistance } from '@/lib/topsis';
 import { LINGUISTIC_LABELS, type LinguisticLabel } from '@/lib/fuzzy_topsis';
@@ -43,13 +45,17 @@ type Props = {
   onGoExperts?: () => void;
   /** Guarda la unidad de un criterio (km, USD, «escala 1–5»…). */
   onSetUnit?: (critId: string, unit: string) => void;
+  /** Mueve un criterio o una alternativa de la posición `from` a la `to`: para que la tabla quede en el mismo orden que tu Excel. */
+  onReorder?: (kind: 'criteria' | 'alternatives', from: number, to: number) => void;
 };
 
 /** Unidad como sufijo dentro de la celda solo si es corta («km», «USD»); las largas («escala 1–5») quedan en la cabecera. */
 const cellUnit = (u?: string): string => { const t = u?.trim() ?? ''; return t.length > 0 && t.length <= 6 ? t : ''; };
 
-export default function DecisionMatrixEditor({ criteria, alternatives, matrix, method, onSetCell, onSetFuzzyCell, onSetType, onSetTarget, objective, onEditObjective, liveWeights, weightingLabel, noExpertWeights, onGoExperts, onSetUnit }: Props) {
+export default function DecisionMatrixEditor({ criteria, alternatives, matrix, method, onSetCell, onSetFuzzyCell, onSetType, onSetTarget, objective, onEditObjective, liveWeights, weightingLabel, noExpertWeights, onGoExperts, onSetUnit, onReorder }: Props) {
   const isFuzzy = method === 'fuzzy_topsis';
+  const [ordering, setOrdering] = useState(false);
+  const [scrolled, setScrolled] = useState(false); // la sombra de la columna fija solo aparece cuando hay algo debajo
   const targetCrit = isFuzzy ? [] : criteria.filter((c) => getKind(matrix, c.id) === 'target');
   const sinObjetivo = targetCrit.filter((c) => !getTarget(matrix, c.id));
   // ancho mínimo por columna: los 3 botones (Beneficio · Costo · Objetivo) caben sin apretarse y la tabla
@@ -84,8 +90,54 @@ export default function DecisionMatrixEditor({ criteria, alternatives, matrix, m
           <span><b>Falta el valor objetivo</b> de: {sinObjetivo.map((c) => c.name).join(', ')}. Escríbelo en la fila «Valor objetivo»; mientras tanto ese criterio no distingue entre alternativas.</span>
         </div>
       )}
-      <div className="card mx">
-        <div className="tbl">
+      {onReorder && (criteria.length > 1 || alternatives.length > 1) && (
+        <div style={{ marginBottom: 12 }}>
+          <button type="button" className="btn sm" aria-expanded={ordering} onClick={() => setOrdering((v) => !v)}>
+            {ordering ? 'Listo, cerrar el orden' : '⇅ Cambiar el orden de filas y columnas'}
+          </button>
+          {ordering && (
+            <div className="card" style={{ marginTop: 10 }}>
+              <p className="muted" style={{ margin: '0 0 12px', fontSize: 13.5, maxWidth: '78ch' }}>
+                Arrastra <b>⠿</b> (o enfócalo y usa las flechas ↑ ↓) para dejar las <b>alternativas</b> (filas) y los <b>criterios</b> (columnas) en el mismo orden que tu Excel. Los datos que ya escribiste se mueven con su fila y su columna: no se pierde nada.
+              </p>
+              <div className="rord">
+                <div>
+                  <h4>Alternativas (filas)</h4>
+                  <ReorderList
+                    items={alternatives} getKey={(a) => a.id} getLabel={(a) => a.name} label="alternativas"
+                    onMove={(from, to) => onReorder('alternatives', from, to)}
+                    renderItem={(a, i, handle) => (
+                      <>
+                        {handle}
+                        <span className="nm">{a.name}</span>
+                        <button type="button" className="btn icon sm mv" aria-label={`Subir «${a.name}»`} disabled={i === 0} onClick={() => onReorder('alternatives', i, i - 1)}>↑</button>
+                        <button type="button" className="btn icon sm mv" aria-label={`Bajar «${a.name}»`} disabled={i === alternatives.length - 1} onClick={() => onReorder('alternatives', i, i + 1)}>↓</button>
+                      </>
+                    )}
+                  />
+                </div>
+                <div>
+                  <h4>Criterios (columnas)</h4>
+                  <ReorderList
+                    items={criteria} getKey={(c) => c.id} getLabel={(c) => c.name} label="criterios"
+                    onMove={(from, to) => onReorder('criteria', from, to)}
+                    renderItem={(c, i, handle) => (
+                      <>
+                        {handle}
+                        <span className="nm">{c.name}{c.unit?.trim() ? <span className="un"> · {c.unit.trim()}</span> : null}</span>
+                        <button type="button" className="btn icon sm mv" aria-label={`Mover «${c.name}» a la izquierda`} disabled={i === 0} onClick={() => onReorder('criteria', i, i - 1)}>↑</button>
+                        <button type="button" className="btn icon sm mv" aria-label={`Mover «${c.name}» a la derecha`} disabled={i === criteria.length - 1} onClick={() => onReorder('criteria', i, i + 1)}>↓</button>
+                      </>
+                    )}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+      <div className={'card mx' + (scrolled ? ' scrolled' : '')}>
+        <div className="tbl" onScroll={(e) => setScrolled(e.currentTarget.scrollLeft > 2)}>
           <table style={{ minWidth }}>
             <caption className="sr-only">Matriz de decisión: valor de cada alternativa en cada criterio y tipo de criterio</caption>
             <thead>

@@ -56,7 +56,7 @@ export default function ElectreMatrices({ names, result }: { names: string[]; re
       }} />
 
       <details style={{ marginTop: 14 }}>
-        <summary>Ver la misma información par por par (como en clase)</summary>
+        <summary>Ver la misma información par por par</summary>
         <ElectrePairTable names={names} result={result} />
       </details>
     </>

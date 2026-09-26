@@ -1202,3 +1202,38 @@ table.cmp{min-width:900px;font-size:13px}
 .em .em-diag{color:var(--muted);background:var(--surface2)}
 .em-key{display:inline-flex;gap:8px;margin-left:10px;vertical-align:middle}
 .em-key span{padding:2px 10px;border-radius:99px;font:600 12px var(--f-body);border:1px solid var(--line)}
+
+/* ---- listas reordenables (criterios y alternativas): agarradera + arrastre en vivo ---- */
+.rl-handle{display:inline-flex;align-items:center;justify-content:center;width:32px;min-width:32px;height:36px;padding:0;color:var(--muted);background:transparent;border:1px solid transparent;border-radius:8px;cursor:grab;touch-action:none;user-select:none}
+.rl-handle:hover{color:var(--ink);background:var(--surface2);border-color:var(--line)}
+.rl-handle:focus-visible{outline:2px solid var(--accent);outline-offset:1px;color:var(--ink)}
+.rl-handle:active{cursor:grabbing}
+.rl-item{border-radius:10px;transition:background .15s ease,box-shadow .15s ease}
+.rl-item.dragging{background:var(--surface);box-shadow:0 8px 24px rgba(0,0,0,.28),0 0 0 2px var(--accent);position:relative;z-index:5}
+.rl-item.dragging .rl-handle{cursor:grabbing;color:var(--accent)}
+@media (pointer:coarse){.rl-handle{width:44px;min-width:44px;height:44px}}
+@media (prefers-reduced-motion:reduce){.rl-item{transition:none}}
+/* fila de criterio/alternativa con agarradera a la izquierda */
+.lrow.ro{grid-template-columns:auto minmax(0,1fr) auto}
+.lrow.h.ro{grid-template-columns:auto minmax(0,1fr) minmax(0,1.6fr) minmax(0,.7fr) auto}
+@media(max-width:600px){
+  .lrow.h.ro{grid-template-columns:auto minmax(0,1fr) auto}
+  .lrow.h.ro>input:nth-of-type(1){grid-column:2;grid-row:1}
+  .lrow.h.ro>input:nth-of-type(2),.lrow.h.ro>input:nth-of-type(3){grid-column:2 / -1}
+  .lrow.h.ro>.btn{grid-column:3;grid-row:1}
+}
+/* panel «Reordenar» de la matriz */
+.rord{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin-bottom:12px}
+.rord h4{margin:0 0 6px;font:600 12px var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.rord .rl-item{display:flex;align-items:center;gap:6px;padding:4px 6px;border:1px solid var(--line);background:var(--surface2);margin-bottom:6px}
+.rord .rl-item .nm{flex:1;min-width:0;overflow-wrap:anywhere;font-weight:600;font-size:13.5px}
+.rord .rl-item .un{font:500 11.5px var(--f-mono);color:var(--muted)}
+.rord .mv{min-width:34px;height:34px;padding:0}
+
+/* ---- matriz de decisión: la columna de alternativas se queda fija al desplazar en horizontal, para saber a qué fila se le escribe cada valor ---- */
+.mx thead th:first-child,.mx tbody tr:not(.obj) th[scope=row]{position:sticky;left:0;z-index:2;background:var(--surface)}
+.mx tr.obj>th[scope=row]{position:sticky;left:0;z-index:2}
+.mx thead th:first-child{z-index:3}
+.mx thead th:first-child::after,.mx th[scope=row]::after{content:"";position:absolute;top:0;right:-9px;bottom:0;width:9px;pointer-events:none;background:linear-gradient(to right,rgba(0,0,0,.18),transparent);opacity:0;transition:opacity .15s ease}
+.mx.scrolled thead th:first-child::after,.mx.scrolled th[scope=row]::after{opacity:1}
+@media (max-width:600px){.mx thead th:first-child,.mx th[scope=row]{width:112px;min-width:112px;font-size:12.5px}}
