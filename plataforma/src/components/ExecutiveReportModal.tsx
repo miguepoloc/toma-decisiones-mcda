@@ -3,7 +3,8 @@
 import { useEffect, useRef, type CSSProperties } from 'react';
 import type { Criterion, Alternative, DecisionMatrix, WeightingMethod } from '@/lib/types';
 import ElectreGraph from './ElectreGraph';
-import ClosenessBars from './ClosenessBars';
+import MethodCharts, { type MethodChartData } from './MethodCharts';
+import WeightBars from './WeightBars';
 import VikorSensitivityChart from './VikorSensitivityChart';
 import { METHOD_SPECS, type MethodKey } from './ScientificMethodModal';
 import { getCell, getKind, getTarget } from '@/lib/topsis';
@@ -106,6 +107,8 @@ interface ExecutiveReportModalProps {
   /** Solo VIKOR: datos de la gráfica Q vs v (rectas en v = 0 y v = 1) y los v donde cambia el 1er lugar. Sin él no se dibuja. */
   vikorChart?: { names: string[]; ends: { q: number[] }[]; breaks: { v: number; from: string; to: string }[] };
   /** Solo ELECTRE: relación de superación. ELECTRE no da ranking total, así que en vez de `rankingRows` el informe usa esto. */
+  /** Datos de las gráficas propias del método (ver MethodCharts). */
+  charts?: MethodChartData;
   electre?: { names: string[]; outranks: boolean[][]; concordance: number[][]; discordance: number[][]; cStar: number; dStar: number };
   onClose: () => void;
 }
@@ -124,6 +127,7 @@ export default function ExecutiveReportModal({
   vikorV,
   compromiseSet,
   vikorChart,
+  charts,
   electre,
   onClose,
 }: ExecutiveReportModalProps) {
@@ -488,6 +492,12 @@ export default function ExecutiveReportModal({
               Expertos con CR ≥ 0.10 en la comparación de criterios: {ahp.criteriaSheet.perExpert.filter((e) => !e.ok).map((e) => `${e.label} (${e.cr.toFixed(3)})`).join(', ')}. La matriz agregada puede verse consistente aunque un experto no lo sea.
             </p>
           )}
+          {charts && charts.weights.length > 0 && (
+            <figure style={{ margin: '14px 0 0', breakInside: 'avoid' }}>
+              <figcaption style={{ fontSize: 12.5, fontWeight: 700, color: '#475569', marginBottom: 4 }}>Peso de cada criterio</figcaption>
+              <WeightBars rows={charts.weights} />
+            </figure>
+          )}
         </div>
 
         {/* AHP: consistencia de los juicios (CR), lo que en los métodos de matriz no existe */}
@@ -712,13 +722,8 @@ export default function ExecutiveReportModal({
           </table>
 
           {/* Gráfico propio del método, el mismo que ve quien usa la plataforma (sin interacción: el informe se imprime) */}
-          {method === 'topsis' && rankingRows.length > 0 && (
-            <figure style={{ margin: '14px 0 0', breakInside: 'avoid' }}>
-              <figcaption style={{ fontSize: 12.5, fontWeight: 700, color: '#475569', marginBottom: 4 }}>
-                Cercanía relativa C de TOPSIS por alternativa (0 a 1, mayor es mejor)
-              </figcaption>
-              <ClosenessBars rows={rankingRows.map((r) => ({ name: r.name, value: r.score, rank: r.rank }))} />
-            </figure>
+          {charts && rankingRows.length > 0 && (
+            <MethodCharts method={method} data={charts} showWeights={false} showCloseness />
           )}
           {method === 'vikor' && vikorChart && (
             <figure style={{ margin: '14px 0 0', breakInside: 'avoid' }}>

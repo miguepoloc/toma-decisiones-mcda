@@ -2,17 +2,18 @@
 
 import { Fragment, useMemo, useState, type CSSProperties } from 'react';
 import ElectreGraph from './ElectreGraph';
+import MethodCharts, { type MethodChartData } from './MethodCharts';
 import type { Alternative, Criterion, DecisionMatrix, JudgmentRow, Method, WeightingMethod } from '@/lib/types';
 import {
   CRIT_SHEET, DEFAULT_WEIGHT_METHOD, altSheet, aggMatrix, fmt, getV, indexJudgments, pairsOf, phrase, sheetItems, sheetResult, synthesis,
   type WeightMethod,
 } from '@/lib/ahp';
-import { getCell, getKind, getTarget, missingTargets, normalizeMatrix, resolveTargets, targetDistance, topsisSynthesis } from '@/lib/topsis';
+import { getCell, getKind, getTarget, getType, missingTargets, normalizeMatrix, resolveTargets, targetDistance, topsis, topsisSynthesis } from '@/lib/topsis';
 import { vikorFirstPlaceChanges, vikorInputs, vikorSensitivity, vikorSynthesis, vikorV } from '@/lib/vikor';
 import VikorPanel from './VikorPanel';
-import { prometheeSynthesis } from '@/lib/promethee';
+import { promethee, prometheeSynthesis } from '@/lib/promethee';
 import { electreCStar, electreDStar, electreSynthesis } from '@/lib/electre';
-import { sawSynthesis } from '@/lib/saw';
+import { saw, sawSynthesis } from '@/lib/saw';
 import { fuzzyTopsisSynthesis } from '@/lib/fuzzy_topsis';
 import { criticWeights, entropyWeights } from '@/lib/weights';
 import SensitivitySimulator from './SensitivitySimulator';
@@ -296,6 +297,34 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
       local: method === 'ahp' ? syn.rows.map((r) => r.loc) : [],
     };
   }, [method, weightingMethod, criteria, alternatives, used, idx, wm, experts, syn]);
+
+  // Datos de las gráficas propias de cada método (aporte por criterio, flujos, distancias al ideal, escala difusa, pesos). Se
+  // arman una vez y los usan por igual la pestaña de resultados y el informe ejecutivo.
+  const methodCharts = useMemo<MethodChartData>(() => {
+    const data: MethodChartData = { weights: criteria.map((c, i) => ({ name: c.name, weight: critWeights[i] ?? 0 })) };
+    const names = criteria.map((c) => c.name);
+    const matrix = alternatives.map((a) => criteria.map((c) => getCell(dm, a.id, c.id) ?? 0));
+    const types = criteria.map((c) => getType(dm, c.id));
+    if (method === 'ahp') {
+      data.contribution = { criteria: names, unit: 'prioridad global', rows: syn.rows.map((r) => ({ name: r.name, parts: r.contrib, total: r.g, rank: r.rank })) };
+    } else if (method === 'saw') {
+      const r = saw(matrix, critWeights, types);
+      data.contribution = {
+        criteria: names, unit: 'puntaje SAW',
+        rows: alternatives.map((a, i) => ({ name: a.name, parts: (r.normalized[i] ?? []).map((v, j) => (r.weights[j] ?? 0) * v), total: r.scores[i] ?? 0, rank: sawSyn.rows[i].rank })),
+      };
+    } else if (method === 'promethee') {
+      const r = promethee(matrix, critWeights, types);
+      data.flows = alternatives.map((a, i) => ({ name: a.name, plus: r.phiPlus[i] ?? 0, minus: r.phiMinus[i] ?? 0, net: r.phi[i] ?? 0, rank: promSyn.rows[i].rank }));
+    } else if (method === 'topsis') {
+      const r = topsis(matrix, critWeights, types);
+      data.distances = { label: 'C', rows: alternatives.map((a, i) => ({ name: a.name, dPlus: r.distPlus[i] ?? 0, dMinus: r.distMinus[i] ?? 0, closeness: r.closeness[i] ?? 0, rank: topSyn.rows[i].rank })) };
+    } else if (method === 'fuzzy_topsis') {
+      data.distances = { label: 'CC', rows: alternatives.map((a, i) => ({ name: a.name, dPlus: fuzzyTopSyn.detail.dPlus[i] ?? 0, dMinus: fuzzyTopSyn.detail.dMinus[i] ?? 0, closeness: fuzzyTopSyn.rows[i].value, rank: fuzzyTopSyn.rows[i].rank })) };
+      data.usedLabels = [...new Set(alternatives.flatMap((a) => criteria.map((c) => dm.values[a.id]?.[c.id]).filter((v): v is string => typeof v === 'string')))];
+    }
+    return data;
+  }, [method, criteria, alternatives, dm, critWeights, syn, sawSyn, promSyn, topSyn, fuzzyTopSyn]);
 
   const blocked = mode === 'single' ? (method !== 'ahp' ? !dmFilled : !withData.length) : decidableViews.length === 0;
   if (blocked) {
@@ -600,6 +629,10 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
                 </div>
               </details>
             </div>
+            <div className="card">
+              <h3 style={{ marginBottom: 4 }}>Gráficas del método</h3>
+              <MethodCharts method={method} data={methodCharts} />
+            </div>
             {method === 'vikor' && (
               <VikorPanel criteria={criteria} alternatives={alternatives} dm={dm} weights={critWeights} synth={vikSyn} v={vEff} onChangeV={changeV} persisted={!!onChangeV} />
             )}
@@ -835,6 +868,7 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
           }
           electre={method === 'electre' ? { names: elecSyn.names, outranks: elecSyn.result.outranks, concordance: elecSyn.result.concordance, discordance: elecSyn.result.discordance, cStar: elecSyn.result.cStar, dStar: elecSyn.result.dStar } : undefined}
           vikorChart={vikorReportChart}
+          charts={methodCharts}
           vikorV={method === 'vikor' ? vEff : undefined}
           compromiseSet={method === 'vikor' && vikSyn.verdict && vikSyn.verdict.kind !== 'unique' ? vikSyn.verdict.set.map((i) => vikSyn.rows[i].name) : undefined}
           onClose={() => setShowReportModal(false)}
