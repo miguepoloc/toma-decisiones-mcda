@@ -1,6 +1,7 @@
 'use client';
 
 import { useId } from 'react';
+import { electreKernel } from '@/lib/electre';
 
 type Props = {
   names: string[];
@@ -48,10 +49,12 @@ export default function ElectreGraph({ names, outranks, concordance, discordance
     return { x: CX + Rx * Math.cos(t), y: CY + Ry * Math.sin(t) };
   });
   const beats = (i: number, k: number) => !!outranks[i]?.[k];
-  const inDeg = names.map((_, k) => names.filter((__, i) => i !== k && beats(i, k)).length);
   const outDeg = names.map((_, i) => names.filter((__, k) => i !== k && beats(i, k)).length);
   const hasRelations = outDeg.some((d) => d > 0);
-  const kernelCount = inDeg.filter((d) => d === 0).length;
+  // Núcleo real de ELECTRE I (los ciclos cuentan como un bloque): «nadie la supera» no basta, una alternativa aislada o un ciclo lo falsean.
+  const kernel = electreKernel(outranks);
+  const inKernel = new Set(hasRelations ? kernel.members : []);
+  const isolated = new Set(kernel.isolated);
 
   type Edge = { i: number; k: number; kind: 'one' | 'both' | 'none' };
   const edges: Edge[] = [];
@@ -119,13 +122,14 @@ export default function ElectreGraph({ names, outranks, concordance, discordance
 
         {names.map((nm, i) => {
           const p = pos[i];
-          const k = hasRelations && inDeg[i] === 0 && kernelCount === 1;
+          const k = kernel.winner === i;
+          const kin = inKernel.has(i);
           const ls = lines(nm, big ? 13 : 10);
           const fs = big ? 13.5 : 11.5;
           return (
             <g key={i}>
               <title>{nm}</title>
-              <circle cx={p.x} cy={p.y} r={NODE} fill="var(--m-electre)" fillOpacity={0.28} stroke={k ? 'var(--pass)' : 'var(--m-electre)'} strokeWidth={k ? 4 : 2.5} />
+              <circle cx={p.x} cy={p.y} r={NODE} fill="var(--m-electre)" fillOpacity={0.28} stroke={kin ? 'var(--pass)' : 'var(--m-electre)'} strokeWidth={kin ? 4 : 2.5} strokeDasharray={isolated.has(i) ? '6 4' : undefined} />
               {ls.map((l, j) => (
                 <text key={j} x={p.x} y={p.y + 4.5 + (j - (ls.length - 1) / 2) * (fs + 2)} textAnchor="middle" fontSize={fs} fontWeight={700} fill="var(--ink)">{l}</text>
               ))}
@@ -145,7 +149,9 @@ export default function ElectreGraph({ names, outranks, concordance, discordance
       </svg>
 
       <p className="muted" style={{ fontSize: 12.5, margin: '6px 0 0', textAlign: 'center' }}>
-        <b style={{ color: 'var(--m-electre)' }}>A → B</b> = A supera a B (con su concordancia c y discordancia d) · <b style={{ color: 'var(--m-electre)' }}>A ↔ B</b> = se superan mutuamente · <b>línea punteada</b> = incomparables (verificado: ninguna supera a la otra){hasRelations && kernelCount === 1 ? ' · ✓ = nadie la supera' : ''}
+        <b style={{ color: 'var(--m-electre)' }}>A → B</b> = A supera a B (con su concordancia c y discordancia d) · <b style={{ color: 'var(--m-electre)' }}>A ↔ B</b> = se superan mutuamente · <b>línea punteada</b> = incomparables (verificado: ninguna supera a la otra){hasRelations && (kernel.winner != null
+          ? ' · ✓ = única alternativa del núcleo (nadie la supera y supera a las demás)'
+          : ' · aro verde = núcleo (varios: no hay ganador único)' + (kernel.isolated.length ? ', punteado = aislada (no se relaciona con nadie)' : ''))}
       </p>
     </div>
   );

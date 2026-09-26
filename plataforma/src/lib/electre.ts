@@ -92,6 +92,8 @@ export type ElectreSynth = {
   incomparable: [string, string][]; // pares sin relación en ningún sentido (i,j con i<j)
   /** cuántas alternativas supera cada una netamente (para una intuición de "quién va mejor", no un ranking real) */
   netOutdegree: number[];
+  /** núcleo de la relación (ver electreKernel): de aquí sale el «ganador» de ELECTRE, si lo hay */
+  kernel: ElectreKernel;
 };
 
 export function electreSynthesis(criteria: Criterion[], alternatives: Alternative[], dm: DecisionMatrix, weights: number[], cStar: number = electreCStar(dm), dStar: number = electreDStar(dm)): ElectreSynth {
@@ -119,5 +121,98 @@ export function electreSynthesis(criteria: Criterion[], alternatives: Alternativ
     const inn = result.outranks.filter((row) => row[i]).length;
     return out - inn;
   });
-  return { names, result, relations, incomparable, netOutdegree };
+  return { names, result, relations, incomparable, netOutdegree, kernel: electreKernel(result.outranks) };
+}
+
+/** Núcleo (kernel) de la relación de superación, en el sentido de ELECTRE I (Roy): conjunto N tal que ninguna alternativa de N
+ * supera a otra de N (estabilidad interna) y toda alternativa fuera de N es superada por alguna de N (estabilidad externa).
+ * Los ciclos (A supera a B y B supera a A, directa o por una cadena) se tratan como un solo bloque, como en Roy: dentro de
+ * un bloque no se puede decir cuál va primero.
+ *
+ * NO es «las que nadie supera»: una alternativa que se supera mutuamente con otra queda superada aunque sea de las mejores, y una
+ * alternativa aislada (ni supera ni es superada) entra al núcleo sin haber ganado nada. Por eso el núcleo puede tener varios
+ * bloques, y solo hay un ganador cuando es una única alternativa. */
+export type ElectreKernel = {
+  /** Bloques del núcleo; cada bloque es una alternativa, o varias que se superan en ciclo. */
+  blocks: number[][];
+  /** Todas las alternativas del núcleo (los bloques aplanados). */
+  members: number[];
+  /** Alternativas sin ninguna relación (ni superan ni son superadas) mientras el resto sí tiene: están en el núcleo solo por eso. */
+  isolated: number[];
+  /** Bloques con varias alternativas que se superan en ciclo (estén o no en el núcleo). */
+  cycles: number[][];
+  /** Índice de la única alternativa del núcleo; null si el núcleo tiene varios bloques, un bloque cíclico o no hay relaciones. */
+  winner: number | null;
+};
+
+export function electreKernel(outranks: boolean[][]): ElectreKernel {
+  const n = outranks.length;
+  const beats = (i: number, k: number) => i !== k && !!outranks[i]?.[k];
+  // alcanzabilidad (cierre transitivo) para hallar los ciclos; n es pequeño
+  const reach = Array.from({ length: n }, (_, i) => Array.from({ length: n }, (_, k) => beats(i, k)));
+  for (let m = 0; m < n; m++) for (let i = 0; i < n; i++) if (reach[i][m]) for (let k = 0; k < n; k++) if (reach[m][k]) reach[i][k] = true;
+  const compOf: number[] = Array(n).fill(-1);
+  const comps: number[][] = [];
+  for (let i = 0; i < n; i++) {
+    if (compOf[i] >= 0) continue;
+    const members = [i];
+    for (let k = i + 1; k < n; k++) if (compOf[k] < 0 && reach[i][k] && reach[k][i]) members.push(k);
+    members.forEach((k) => { compOf[k] = comps.length; });
+    comps.push(members);
+  }
+  // en el grafo condensado (acíclico): un bloque entra al núcleo si ningún bloque del núcleo lo supera
+  const preds = comps.map((c, ci) => {
+    const set = new Set<number>();
+    c.forEach((k) => { for (let i = 0; i < n; i++) if (beats(i, k) && compOf[i] !== ci) set.add(compOf[i]); });
+    return [...set];
+  });
+  const memo: (boolean | undefined)[] = Array(comps.length).fill(undefined);
+  const inKernel = (ci: number): boolean => {
+    const cached = memo[ci];
+    if (cached !== undefined) return cached;
+    const res = !preds[ci].some(inKernel);
+    memo[ci] = res;
+    return res;
+  };
+  const blocks = comps.filter((_, ci) => inKernel(ci));
+  const members = blocks.flat().sort((a, b) => a - b);
+  const anyRelation = outranks.some((row, i) => row.some((_, k) => beats(i, k)));
+  const isolated = anyRelation
+    ? Array.from({ length: n }, (_, i) => i).filter((i) => !outranks[i].some((_, k) => beats(i, k)) && !outranks.some((_, j) => beats(j, i)))
+    : [];
+  const cycles = comps.filter((c) => c.length > 1);
+  const winner = anyRelation && blocks.length === 1 && blocks[0].length === 1 ? blocks[0][0] : null;
+  return { blocks, members, isolated, cycles, winner };
+}
+
+/** Texto explicativo del núcleo para la pantalla, la comparación y el informe (una sola redacción para los tres). */
+export function electreKernelText(names: string[], kernel: ElectreKernel, hasRelations: boolean): { summary: string; reasons: string[] } {
+  const list = (ix: number[]) => ix.map((i) => names[i]).join(', ');
+  const blockLabel = (b: number[]) => (b.length === 1 ? names[b[0]] : `{${list(b)}}`);
+  const reasons: string[] = [];
+  if (!hasRelations) {
+    return {
+      summary: 'Ninguna alternativa supera a otra con estos umbrales, así que todas quedan en el núcleo y no hay ganador.',
+      reasons: ['Sube d* o baja c* si esperabas más relaciones de superación.'],
+    };
+  }
+  if (kernel.winner != null) {
+    return {
+      summary: `${names[kernel.winner]} es la única alternativa del núcleo: nadie la supera y las demás quedan superadas por ella (directa o por una cadena).`,
+      reasons: ['ELECTRE no da un puntaje: esto es «no superada», no «la de mayor valor».'],
+    };
+  }
+  const blocks = kernel.blocks.map(blockLabel);
+  const single = kernel.blocks.length === 1;
+  const summary = single
+    ? `El núcleo es un solo bloque, ${blocks[0]}, cuyas alternativas se superan entre sí: no hay ganador único.`
+    : `El núcleo tiene ${kernel.blocks.length} bloques: ${blocks.join(' y ')}. ELECTRE no puede decidir entre ellos, así que no hay ganador único.`;
+  kernel.isolated.forEach((i) => reasons.push(
+    `${names[i]} está en el núcleo solo porque no se relaciona con ninguna: no supera a nadie y nadie la supera (contra cada una falla la concordancia c* o la discordancia d*). Que nadie la supere no significa que sea la mejor.`,
+  ));
+  kernel.cycles.forEach((c) => reasons.push(
+    `${list(c)} se superan entre sí (ciclo): se tratan como un solo bloque, porque con estos umbrales el método no dice cuál de ellas va primero.`,
+  ));
+  reasons.push('Núcleo = conjunto de alternativas que ninguna otra del núcleo supera y que, juntas, superan a todas las demás. Puede tener varios elementos: pertenecer al núcleo no es ganar.');
+  return { summary, reasons };
 }

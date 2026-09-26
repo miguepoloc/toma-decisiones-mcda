@@ -70,7 +70,7 @@ export const METHOD_GUIDE: Record<Method, MethodGuide> = {
     input: 'Matriz de decisión numérica y los umbrales de concordancia (c*) y discordancia (d*).',
     when: 'No quieres que un buen valor compense uno inaceptable: si una alternativa pierde por mucho en un criterio (discordancia alta), no puede superar a la otra.',
     watch: 'No entrega un ranking: entrega un grafo de superación con posibles incomparables. Los umbrales los eliges tú.',
-    result: 'Grafo de superación y núcleo de alternativas no superadas.',
+    result: 'Grafo de superación y núcleo (puede tener varias alternativas: no siempre hay un ganador único).',
   },
   saw: {
     key: 'saw', label: 'SAW', family: 'saw',

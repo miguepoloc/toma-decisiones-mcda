@@ -280,7 +280,7 @@ export const METHOD_SPECS: Record<MethodKey, MethodDoc> = {
       {
         title: '3. Relación de superación y núcleo',
         formula: 'i S k  ⇔  C_ik ≥ c*  y  D_ik ≤ d*',
-        desc: 'El grafo une con flecha a quien supera y con línea punteada a las alternativas incomparables. El núcleo son las alternativas que ninguna otra supera.',
+        desc: 'El grafo une con flecha a quien supera y con línea punteada a las alternativas incomparables. El núcleo (Roy, 1991) es el conjunto de alternativas que ninguna otra del núcleo supera y que, juntas, superan a todas las demás; las que se superan en ciclo cuentan como un bloque. Puede tener varios elementos: una alternativa aislada (ni supera ni es superada) entra al núcleo sin ganar nada, y solo hay ganador cuando el núcleo es una única alternativa.',
       },
     ],
     citationApa: 'Roy, B. (1991). The outranking approach and the foundations of ELECTRE methods. Theory and Decision, 31(1), 49–73. https://doi.org/10.1007/BF00134132',

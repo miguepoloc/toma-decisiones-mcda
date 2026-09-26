@@ -14,7 +14,7 @@ import { getCell, getKind, getTarget, getType, missingTargets, normalizeMatrix, 
 import { vikorFirstPlaceChanges, vikorInputs, vikorSensitivity, vikorSynthesis, vikorV } from '@/lib/vikor';
 import VikorPanel from './VikorPanel';
 import { promethee, prometheeSynthesis } from '@/lib/promethee';
-import { electreCStar, electreDStar, electreSynthesis } from '@/lib/electre';
+import { electreCStar, electreDStar, electreKernelText, electreSynthesis } from '@/lib/electre';
 import { saw, sawSynthesis } from '@/lib/saw';
 import { defuzzifyMatrix, fuzzyTopsisSynthesis } from '@/lib/fuzzy_topsis';
 import { criticWeights, entropyWeights } from '@/lib/weights';
@@ -240,15 +240,18 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
   }, [objective, syn, topSyn, vikSyn, promSyn, sawSyn, fuzzyTopSyn]);
   const decidableViews = compareViews.filter((m) => !m.tie);
   // ELECTRE no da un ranking total, así que va en su propia columna: cuántas alternativas supera cada
-  // una y por cuántas es superada. Su "primer lugar" solo existe si hay relaciones y una única alternativa
-  // que nadie supera (el núcleo); si no, participa en la tabla pero no suma al consenso (como VIKOR sin ganador único).
+  // una y por cuántas es superada. Su "primer lugar" solo existe si el NÚCLEO (kernel, ver electreKernel) es una única
+  // alternativa: «que nadie la supere» no basta (una alternativa aislada o un ciclo A↔B lo falsean). Si no, participa en la
+  // tabla pero no suma al consenso (como VIKOR sin ganador único).
   const electreCompare = useMemo(() => {
     const hasData = alternatives.length > 1 && alternatives.some((a) => criteria.some((c) => getCell(dm, a.id, c.id) != null));
     const out = alternatives.map((_, i) => elecSyn.result.outranks[i]?.filter(Boolean).length ?? 0);
     const inn = alternatives.map((_, i) => elecSyn.result.outranks.filter((row) => row[i]).length);
-    const kernel = alternatives.filter((_, i) => inn[i] === 0).map((a) => a.name);
-    const winner = hasData && elecSyn.relations.length > 0 && kernel.length === 1 ? kernel[0] : null;
-    return { hasData, out, inn, winner };
+    const kernel = elecSyn.kernel;
+    const winner = hasData && kernel.winner != null ? alternatives[kernel.winner].name : null;
+    const inKernel = hasData && elecSyn.relations.length > 0 ? alternatives.map((_, i) => kernel.members.includes(i)) : alternatives.map(() => false);
+    const isolated = alternatives.map((_, i) => kernel.isolated.includes(i));
+    return { hasData, out, inn, winner, inKernel, isolated, kernel };
   }, [alternatives, criteria, dm, elecSyn]);
   // Datos de la gráfica Q vs v para el informe ejecutivo (VikorPanel calcula lo mismo para su propia gráfica, pero vive solo
   // en la pestaña VIKOR). Se usa `dm` (matriz efectiva, con los criterios objetivo ya convertidos), no `dmRaw`.
@@ -382,6 +385,7 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
   // Panel de ELECTRE: se usa tanto en la vista "Método elegido" (si method === 'electre') como,
   // sin condición, dentro de "Comparar los 6 métodos" — ELECTRE no pasa por quantViewFor (no da
   // un ranking total), así que se muestra siempre aparte con sus relaciones/incomparables.
+  const kernelNote = electreKernelText(elecSyn.names, elecSyn.kernel, elecSyn.relations.length > 0);
   const electrePanel = (
     <>
       <div className="card win">
@@ -443,6 +447,13 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
             <p className="muted" style={{ fontSize: 13, marginTop: 6 }}>No es una falla del método: significa que los datos no alcanzan para preferir una sobre la otra con estos umbrales.</p>
           </>
         )}
+      </div>
+      <div className="card">
+        <h3 style={{ marginBottom: 6 }}>Núcleo: ¿hay una alternativa ganadora?</h3>
+        <p style={{ fontSize: 14, margin: '0 0 6px' }}>{kernelNote.summary}</p>
+        <ul style={{ paddingLeft: 18, fontSize: 13.5, display: 'grid', gap: 4, margin: 0 }}>
+          {kernelNote.reasons.map((r) => <li key={r}>{r}</li>)}
+        </ul>
       </div>
       <div className="card res">
         <h3>Cómo se decide quién supera a quién</h3>
@@ -740,7 +751,7 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
                           })}
                           <td className="n">
                             {electreCompare.hasData
-                              ? <span className="mono" style={{ fontWeight: elecFirst ? 700 : 500, color: elecFirst ? 'var(--pass)' : 'var(--ink)' }} title={`Supera a ${electreCompare.out[ai]} y es superada por ${electreCompare.inn[ai]}${elecFirst ? ' — única alternativa que nadie supera' : ''}`}>{elecFirst ? '✓ ' : ''}{electreCompare.out[ai]}↑ {electreCompare.inn[ai]}↓</span>
+                              ? <span className="mono" style={{ fontWeight: elecFirst ? 700 : 500, color: elecFirst ? 'var(--pass)' : 'var(--ink)' }} title={`Supera a ${electreCompare.out[ai]} y es superada por ${electreCompare.inn[ai]}${elecFirst ? ' — única alternativa del núcleo' : electreCompare.isolated[ai] ? ' — aislada: en el núcleo solo porque no se relaciona con nadie, no porque gane' : electreCompare.inKernel[ai] ? ' — en el núcleo, pero hay más de un bloque: sin ganador único' : ''}`}>{elecFirst ? '✓ ' : electreCompare.inKernel[ai] ? '○ ' : ''}{electreCompare.out[ai]}↑ {electreCompare.inn[ai]}↓</span>
                               : <span className="muted mono">—</span>}
                           </td>
                           <td className="n muted" style={{ fontSize: 12.5 }}><b className="mono" style={{ color: 'var(--ink)' }}>{firsts}/{totalMethods}</b> en 1er lugar</td>
@@ -752,7 +763,7 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
               </div>
               {electreCompare.hasData && (
                 <p className="muted" style={{ fontSize: 12.5, margin: '8px 0 0' }}>
-                  <b style={{ color: 'var(--ink)' }}>ELECTRE no da posiciones (#1, #2…)</b>, da relaciones entre pares: <b className="mono" style={{ color: 'var(--ink)' }}>2↑ 0↓</b> = supera a 2 alternativas y es superada por 0 (c* = {cEff.toFixed(2)}, d* = {dEff.toFixed(2)}); ✓ = nadie la supera. Suma al consenso solo si una única alternativa no es superada por ninguna{electreCompare.winner ? '' : '; con estos umbrales no ocurre'}. El detalle está más abajo.
+                  <b style={{ color: 'var(--ink)' }}>ELECTRE no da posiciones (#1, #2…)</b>, da relaciones entre pares: <b className="mono" style={{ color: 'var(--ink)' }}>2↑ 0↓</b> = supera a 2 alternativas y es superada por 0 (c* = {cEff.toFixed(2)}, d* = {dEff.toFixed(2)}); ○ = está en el núcleo de ELECTRE (no la supera nadie del núcleo), ✓ = es la única del núcleo. Suma al consenso solo si el núcleo es una única alternativa{electreCompare.winner ? '' : '; con estos umbrales no ocurre, y una alternativa que nadie supera pero que tampoco supera a nadie no cuenta como ganadora'}. El detalle está más abajo.
                 </p>
               )}
               {compareViews.find((m) => m.key === 'vikor')?.soft && (

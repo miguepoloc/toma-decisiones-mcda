@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import type { Criterion, Alternative, DecisionMatrix, WeightingMethod } from '@/lib/types';
 import ElectreGraph from './ElectreGraph';
 import ElectrePairTable from './ElectrePairTable';
-import type { ElectreResult } from '@/lib/electre';
+import { electreKernel, electreKernelText, type ElectreResult } from '@/lib/electre';
 import MethodCharts, { type MethodChartData } from './MethodCharts';
 import WeightBars from './WeightBars';
 import VikorSensitivityChart from './VikorSensitivityChart';
@@ -243,7 +243,8 @@ export default function ExecutiveReportModal({
       .sort((a, b) => a.localeCompare(b, 'es'));
   })();
 
-  // ELECTRE: pares con relación, incomparables y núcleo (las que nadie supera). Se derivan de la misma matriz `outranks` del grafo.
+  // ELECTRE: pares con relación, incomparables y núcleo (kernel de ELECTRE I, los ciclos como un bloque; NO «las que nadie supera»,
+  // que daba por ganadora a una alternativa aislada). Se derivan de la misma matriz `outranks` del grafo.
   const el = electre && (() => {
     const n = electre.names.length;
     const rels: { i: number; k: number }[] = [];
@@ -252,8 +253,8 @@ export default function ExecutiveReportModal({
       for (let k = 0; k < n; k++) if (i !== k && electre.outranks[i]?.[k]) rels.push({ i, k });
       for (let k = i + 1; k < n; k++) if (!electre.outranks[i]?.[k] && !electre.outranks[k]?.[i]) incomparable.push([i, k]);
     }
-    const kernel = electre.names.filter((_, k) => !rels.some((r) => r.k === k));
-    return { rels, incomparable, kernel };
+    const kernel = electreKernel(electre.outranks);
+    return { rels, incomparable, kernel, note: electreKernelText(electre.names, kernel, rels.length > 0) };
   })();
 
   useEffect(() => {
@@ -401,30 +402,33 @@ export default function ExecutiveReportModal({
 
           {/* Dictamen: resultado del modelo, en los términos del método */}
           {el && electre ? (
-            el.rels.length > 0 && el.kernel.length === 1 ? (
+            el.kernel.winner != null ? (
               <div className="rpt-box" style={box('#F0FDF4', '#86EFAC', '#16A34A')}>
                 <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', color: '#15803D', letterSpacing: '0.06em' }}>
                   Alternativa no superada (núcleo de la relación)
                 </div>
                 <div style={{ marginTop: 4 }}>
-                  <span style={{ fontSize: 20, fontWeight: 800, color: '#14532D' }}>{el.kernel[0]}</span>
+                  <span style={{ fontSize: 20, fontWeight: 800, color: '#14532D' }}>{electre.names[el.kernel.winner]}</span>
                 </div>
                 <p style={{ fontSize: 13, color: '#166534', margin: '6px 0 0' }}>
-                  Con c* = {electre.cStar.toFixed(2)} y d* = {electre.dStar.toFixed(2)}, ninguna otra alternativa supera a esta según <b>{methodDoc.name}</b>. No es un puntaje: ELECTRE no produce un orden total, solo una relación de superación.
+                  Con c* = {electre.cStar.toFixed(2)} y d* = {electre.dStar.toFixed(2)}, ninguna otra alternativa supera a esta según <b>{methodDoc.name}</b>, y las demás quedan superadas por ella. No es un puntaje: ELECTRE no produce un orden total, solo una relación de superación.
                 </p>
               </div>
             ) : (
               <div className="rpt-box" style={box('#FFFBEB', '#FCD34D', '#D97706')}>
                 <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', color: '#B45309', letterSpacing: '0.06em' }}>
-                  Sin alternativa única no superada
+                  Sin alternativa ganadora única
                 </div>
                 <p style={{ fontSize: 13, color: '#92400E', margin: '6px 0 0' }}>
                   {el.rels.length === 0
                     ? <>Con c* = {electre.cStar.toFixed(2)} y d* = {electre.dStar.toFixed(2)} ninguna alternativa supera a otra: los datos no alcanzan para preferir una sobre otra con estos umbrales.</>
-                    : el.kernel.length > 1
-                      ? <>Con c* = {electre.cStar.toFixed(2)} y d* = {electre.dStar.toFixed(2)}, ninguna de estas alternativas es superada por otra: <b>{el.kernel.join(', ')}</b>. Son incomparables entre sí o se disputan el primer lugar.</>
-                      : <>Con c* = {electre.cStar.toFixed(2)} y d* = {electre.dStar.toFixed(2)} todas las alternativas son superadas por alguna otra (ciclo de superación), así que no hay una no superada.</>}
+                    : <>Con c* = {electre.cStar.toFixed(2)} y d* = {electre.dStar.toFixed(2)}: {el.note.summary}</>}
                 </p>
+                {el.rels.length > 0 && (
+                  <ul style={{ fontSize: 12.5, color: '#92400E', margin: '6px 0 0', paddingLeft: 18 }}>
+                    {el.note.reasons.map((r) => <li key={r}>{r}</li>)}
+                  </ul>
+                )}
               </div>
             )
           ) : winner && compromiseSet && compromiseSet.length > 1 ? (
@@ -700,6 +704,14 @@ export default function ExecutiveReportModal({
                 <p style={{ fontSize: 12.5, color: '#475569', margin: '10px 0 0' }}>
                   <b>Incomparables (ninguna supera a la otra):</b> {el.incomparable.map(([a, b]) => `${electre.names[a]} y ${electre.names[b]}`).join('; ')}. No es una falla del método: con estos umbrales los datos no alcanzan para preferir una sobre la otra.
                 </p>
+              )}
+              <p style={{ fontSize: 12.5, color: '#475569', margin: '10px 0 0' }}>
+                <b>Núcleo de la relación:</b> {el.kernel.members.map((i) => electre.names[i]).join(', ')}. {el.note.summary}
+              </p>
+              {el.kernel.winner == null && el.rels.length > 0 && (
+                <ul style={{ fontSize: 12.5, color: '#475569', margin: '4px 0 0', paddingLeft: 18 }}>
+                  {el.note.reasons.map((r) => <li key={r}>{r}</li>)}
+                </ul>
               )}
               <p className="rpt-note" style={NOTE_P}>
                 ELECTRE no produce un orden de mérito ni un puntaje: por eso este informe no incluye un ranking. La relación cambia con c* y d*.

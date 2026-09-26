@@ -254,6 +254,16 @@ del SQL (políticas + funciones `SECURITY DEFINER`) se ve correcta, pero eso no 
 
 ## Historial de cambios
 
+**26 sep 2026 (ELECTRE: núcleo real en vez de «nadie la supera»):** un estudiante preguntó por qué MLP «ganaba» si era
+incomparable con todas. Era un error de criterio (los cálculos de c/d y de superación estaban bien): el ✓, el «ganador» de
+la comparación entre métodos (y su voto al consenso) y el dictamen del informe usaban «alternativa con nadie que la supere»,
+lo que falla con (a) una alternativa **aislada** (no supera ni es superada: cumple «nadie la supera» sin haber ganado nada) y
+(b) **ciclos** (A↔B se superan, ambas quedan «superadas» aunque sean las mejores). Ahora `electreKernel()` en `electre.ts`
+calcula el núcleo de ELECTRE I (Roy): conjunto sin superaciones internas que supera a todo lo demás, con los ciclos como un
+bloque; hay ganador solo si es una única alternativa. Con varios bloques no hay ganador ni voto al consenso; la pantalla
+(tarjeta «Núcleo»), el grafo (aro verde = núcleo, punteado = aislada, ✓ = ganadora), la tabla de comparación (○/✓) y el informe
+explican la causa con `electreKernelText()`. Pruebas en `scripts/check-electre.ts` (el caso del estudiante incluido).
+
 **25 sep 2026 (bloquear atacantes, desactivar/eliminar cuenta, backoffice en pestañas):** el docente pidió poder
 bloquear a un usuario malicioso desde el admin y que cada usuario pueda desactivarse; y revisar la UX del admin.
 - **Hallazgo grave, corregido primero (migración `…14_profiles_lockdown.sql`, aplicable sola):** `profiles_self` era
