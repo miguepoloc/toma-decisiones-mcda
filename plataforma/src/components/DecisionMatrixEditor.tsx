@@ -29,9 +29,12 @@ type Props = {
   onSetType: (critId: string, type: MatrixKind) => void;
   /** Objetivo (valor y tolerancia) de un criterio de tipo «Objetivo». */
   onSetTarget: (critId: string, spec: TargetSpec) => void;
+  /** Objetivo de decisión del proyecto: se recuerda aquí porque al llenar la matriz es cuando más se necesita saber qué se busca. */
+  objective?: string;
+  onEditObjective?: () => void;
 };
 
-export default function DecisionMatrixEditor({ criteria, alternatives, matrix, method, onSetCell, onSetFuzzyCell, onSetType, onSetTarget }: Props) {
+export default function DecisionMatrixEditor({ criteria, alternatives, matrix, method, onSetCell, onSetFuzzyCell, onSetType, onSetTarget, objective, onEditObjective }: Props) {
   const isFuzzy = method === 'fuzzy_topsis';
   const targetCrit = isFuzzy ? [] : criteria.filter((c) => getKind(matrix, c.id) === 'target');
   const sinObjetivo = targetCrit.filter((c) => !getTarget(matrix, c.id));
@@ -41,6 +44,17 @@ export default function DecisionMatrixEditor({ criteria, alternatives, matrix, m
 
   return (
     <div className="panel">
+      <div className="card" style={{ marginBottom: 12, borderLeft: '3px solid var(--accent)' }}>
+        <div className="eyebrow">Lo que estás decidiendo</div>
+        {objective?.trim()
+          ? <p style={{ margin: '4px 0 0', fontSize: 15, fontWeight: 600, maxWidth: '110ch' }}>{objective}</p>
+          : (
+            <p className="muted" style={{ margin: '4px 0 0', maxWidth: '110ch' }}>
+              Aún no escribiste el objetivo de decisión.{' '}
+              {onEditObjective && <button type="button" className="btn" onClick={onEditObjective}>Escribirlo en Proyecto</button>}
+            </p>
+          )}
+      </div>
       <p className="muted" style={{ maxWidth: '110ch' }}>
         {isFuzzy
           ? 'Para cada alternativa, selecciona la variable lingüística que mejor describe su desempeño en cada criterio: desde Muy mala (VP) hasta Muy buena (VG). Marca si el criterio es de beneficio (MÁS es mejor) o costo (MENOS es mejor).'

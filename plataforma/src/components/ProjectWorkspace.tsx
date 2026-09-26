@@ -42,6 +42,9 @@ const WEIGHTING_OPTIONS: { key: WeightingMethod; label: string; desc: string; ci
   { key: 'entropy', label: 'Entropía de Shannon (objetivo)', desc: 'Pesos automáticos por dispersión de datos: menor entropía implica mayor variabilidad y mayor poder de decisión.', citation: 'Shannon, C. E. (1948)' },
 ];
 
+/** Ruta de cada pestaña en el hash de la URL (#resultados, #priorizacion-a…), para que recargar la página o compartir el enlace conserve dónde estabas. */
+const tabSlug = (t: string) => t.normalize('NFD').replaceAll(/[\u0300-\u036f]/g, '').toLowerCase().replaceAll(/[^a-z0-9]+/g, '-').replaceAll(/(^-|-$)/g, '');
+
 const expertLabel = (e: ExpertRow) => (e.role_desc ? `${e.name} · ${e.role_desc}` : e.name);
 const origin = () => (typeof window === 'undefined' ? '' : window.location.origin);
 
@@ -56,6 +59,23 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
   const [saveErr, setSaveErr] = useState('');
   const [showSciModal, setShowSciModal] = useState(false);
   const TABS = project.kind === 'spatial' ? TABS_SPATIAL : project.method === 'ahp' ? TABS_AHP : TABS_MATRIX;
+
+  // La pestaña activa vive en el hash de la URL. Se lee tras montar (no en el useState inicial) para que el HTML
+  // del servidor y el primer render del cliente coincidan; hashchange cubre atrás/adelante y enlaces con #pestaña.
+  useEffect(() => {
+    const fromHash = () => {
+      const h = window.location.hash.slice(1);
+      setTab(TABS.find((t) => tabSlug(t) === h) ?? TABS[0]);
+      setEditing(null);
+    };
+    fromHash();
+    window.addEventListener('hashchange', fromHash);
+    return () => window.removeEventListener('hashchange', fromHash);
+  }, [TABS]);
+  const goTab = (t: string) => {
+    setTab(t); setEditing(null); setMsg('');
+    if (window.location.hash.slice(1) !== tabSlug(t)) window.location.hash = tabSlug(t);
+  };
 
   // Respaldo de borrador local continuo
   useEffect(() => {
@@ -141,7 +161,7 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
         if (js) setJudgments(js as JudgmentRow[]);
       }
     }
-    setTab('Geovisor');
+    goTab('Geovisor');
   }
   const twoClick = (key: string, fn: () => void | Promise<void>) => {
     if (pendDel !== key) { setPendDel(key); setTimeout(() => setPendDel((p) => (p === key ? null : p)), 4000); return; }
@@ -280,7 +300,7 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
 
       <div className="tabsbar" role="tablist">
         {TABS.map((t) => (
-          <button key={t} role="tab" aria-selected={tab === t} onClick={() => { setTab(t); setEditing(null); setMsg(''); }}>
+          <button key={t} role="tab" aria-selected={tab === t} onClick={() => goTab(t)}>
             {t}
           </button>
         ))}
@@ -550,6 +570,8 @@ export default function ProjectWorkspace({ initialProject, initialExperts, initi
           onSetFuzzyCell={setDMFuzzyCell}
           onSetType={setDMType}
           onSetTarget={setDMTarget}
+          objective={project.objective}
+          onEditObjective={() => goTab('Proyecto')}
         />
       )}
 
