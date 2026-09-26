@@ -1183,6 +1183,13 @@ table.cmp{min-width:900px;font-size:13px}
 .tlayout>*{min-width:0}
 
 /* ---- unidad de cada criterio (matriz de decisión) ---- */
-.mx .unit-in{display:block;width:100%;min-width:0;margin:0 0 8px;padding:5px 8px;font-size:12.5px;text-align:center}
-.mx .unit-in.missing{border-color:var(--warn);border-style:dashed}
-.mx .unit-in.missing::placeholder{color:var(--warn-t,var(--warn))}
+/* En la cabecera: un texto discreto editable bajo el nombre (no una caja más); si falta, subrayado ámbar punteado. En cada celda: la unidad como sufijo. */
+.mx .unit-in{display:block;width:72%;max-width:150px;min-width:0;margin:-4px auto 10px;padding:2px 4px;min-height:0;background:transparent;border:0;border-bottom:1px dashed var(--line);border-radius:0;box-shadow:none;font:500 12px var(--f-mono);color:var(--muted);text-align:center}
+.mx .unit-in:hover{border-bottom-color:var(--muted)}
+.mx .unit-in:focus{outline:none;border-bottom:2px solid var(--accent);color:var(--ink)}
+.mx .unit-in.missing{border-bottom-color:var(--warn)}
+.mx .unit-in.missing::placeholder{color:var(--warn-t,var(--warn));opacity:1}
+.mx .mx-cell{position:relative;max-width:150px;margin:0 auto}
+.mx .mx-cell input[type=number]{max-width:none;padding-right:10px}
+.mx .mx-cell.has-u input[type=number]{padding-right:46px;text-align:right;padding-left:10px}
+.mx .mx-u{position:absolute;right:10px;top:50%;transform:translateY(-50%);max-width:36px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:500 11px var(--f-mono);color:var(--muted);pointer-events:none}

@@ -258,8 +258,9 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
       names: alternatives.map((a) => a.name),
       ends: vikorSensitivity(matrix, critWeights, types, [0, 1]),
       breaks: vikorFirstPlaceChanges(matrix, critWeights, types).map((b) => ({ v: b.v, from: alternatives[b.from].name, to: alternatives[b.to].name })),
+      srq: vikSyn.rows,
     };
-  }, [method, vikSyn.tie, criteria, alternatives, dm, critWeights]);
+  }, [method, vikSyn.tie, vikSyn.rows, criteria, alternatives, dm, critWeights]);
   const totalMethods = decidableViews.length + (electreCompare.hasData ? 1 : 0);
   // Alternativa que más veces queda #1 entre los métodos con datos suficientes; null si hay empate en el conteo.
   const topWinner = useMemo(() => {

@@ -45,6 +45,9 @@ type Props = {
   onSetUnit?: (critId: string, unit: string) => void;
 };
 
+/** Unidad como sufijo dentro de la celda solo si es corta («km», «USD»); las largas («escala 1–5») quedan en la cabecera. */
+const cellUnit = (u?: string): string => { const t = u?.trim() ?? ''; return t.length > 0 && t.length <= 6 ? t : ''; };
+
 export default function DecisionMatrixEditor({ criteria, alternatives, matrix, method, onSetCell, onSetFuzzyCell, onSetType, onSetTarget, objective, onEditObjective, liveWeights, weightingLabel, noExpertWeights, onGoExperts, onSetUnit }: Props) {
   const isFuzzy = method === 'fuzzy_topsis';
   const targetCrit = isFuzzy ? [] : criteria.filter((c) => getKind(matrix, c.id) === 'target');
@@ -74,7 +77,7 @@ export default function DecisionMatrixEditor({ criteria, alternatives, matrix, m
       {!isFuzzy && onSetUnit && <datalist id="mx-unit-suggestions">{UNIT_SUGGESTIONS.map((u) => <option key={u} value={u} />)}</datalist>}
       {!isFuzzy && onSetUnit && missingUnits(criteria).length > 0 && (
         <div className="banner" role="status" style={{ marginBottom: 12 }}>
-          <span><b>¿En qué unidad está cada criterio?</b> Falta la unidad de: {missingUnits(criteria).map((c) => c.name).join(', ')}. Escríbela debajo del nombre del criterio (km, años, USD, «escala 1–5»…): un «10» no significa nada sin saber si son km o metros, y la unidad aparece en resultados, informe y Excel. Si el valor es un puntaje sin unidad, escribe «escala 1–5» o «sin unidad».</span>
+          <span><b>Falta la unidad de:</b> {missingUnits(criteria).map((c) => c.name).join(', ')}. Escríbela bajo el nombre del criterio (km, años, USD, «escala 1–5»…); si es un puntaje, «escala 1–5» o «sin unidad».</span>
         </div>
       )}
       {sinObjetivo.length > 0 && (
@@ -93,7 +96,7 @@ export default function DecisionMatrixEditor({ criteria, alternatives, matrix, m
                   <th key={c.id} scope="col">
                     <span className="crit-name">{c.name}</span>
                     {!isFuzzy && onSetUnit && (
-                      <input type="text" className={'unit-in' + (c.unit?.trim() ? '' : ' missing')} list="mx-unit-suggestions" value={c.unit ?? ''} placeholder="¿Unidad? (km, USD…)"
+                      <input type="text" className={'unit-in' + (c.unit?.trim() ? '' : ' missing')} list="mx-unit-suggestions" value={c.unit ?? ''} placeholder="unidad…"
                         aria-label={`Unidad de ${c.name}`} onChange={(e) => onSetUnit(c.id, e.target.value)} />
                     )}
                     <div className="seg" role="group" aria-label={`Tipo de ${c.name}`}>
@@ -165,14 +168,17 @@ export default function DecisionMatrixEditor({ criteria, alternatives, matrix, m
                           </select>
                         ) : (
                           <>
-                            <input
-                              type="number"
-                              inputMode="decimal"
-                              step="any"
-                              aria-label={`${a.name}, ${withUnit(c)}`}
-                              value={x ?? ''}
-                              onChange={(e) => onSetCell(a.id, c.id, e.target.value === '' ? null : Number(e.target.value))}
-                            />
+                            <div className={'mx-cell' + (cellUnit(c.unit) ? ' has-u' : '')}>
+                              <input
+                                type="number"
+                                inputMode="decimal"
+                                step="any"
+                                aria-label={`${a.name}, ${withUnit(c)}`}
+                                value={x ?? ''}
+                                onChange={(e) => onSetCell(a.id, c.id, e.target.value === '' ? null : Number(e.target.value))}
+                              />
+                              {cellUnit(c.unit) && <span className="mx-u" aria-hidden="true" title={c.unit?.trim()}>{cellUnit(c.unit)}</span>}
+                            </div>
                             {getKind(matrix, c.id) === 'target' && t && x != null && (
                               <span className="mxh">distancia {Number(targetDistance(x, t.value, t.tol).toPrecision(6))}</span>
                             )}

@@ -3,6 +3,7 @@
 import { useMemo } from 'react';
 import type { Alternative, Criterion, DecisionMatrix } from '@/lib/types';
 import VikorSensitivityChart from './VikorSensitivityChart';
+import VikorSRQChart from './VikorSRQChart';
 import { vikorFirstPlaceChanges, vikorInputs, vikorSensitivity, type VikorSynth } from '@/lib/vikor';
 
 /**
@@ -113,6 +114,18 @@ export default function VikorPanel({ criteria, alternatives, dm, weights, synth,
           <p className="muted" style={{ fontSize: 12.5, margin: '8px 0 0' }}>
             Si falla solo la 2, se proponen el 1º y el 2º; si falla la 1, todas las alternativas cuyo Q quede a menos de DQ del 1º. Un conjunto grande no es un error: significa que los datos no separan a un ganador.
           </p>
+        </div>
+      )}
+
+      {/* ---------- S, R y Q por alternativa: para validar el veredicto (condiciones 1 y 2) viéndolo ---------- */}
+      {!synth.tie && (
+        <div className="card">
+          <div className="eyebrow">Cómo se comportan S, R y Q</div>
+          <h3 style={{ margin: '4px 0 6px' }}>Las tres medidas de VIKOR, alternativa por alternativa</h3>
+          <p className="muted" style={{ fontSize: 13, margin: '0 0 10px', maxWidth: '78ch' }}>
+            Mira si la mejor por Q (✓) también es la de menor S o la de menor R (★): es la condición de estabilidad. Y si la 2.ª por Q queda a la derecha de la línea punteada: es la ventaja aceptable.
+          </p>
+          <VikorSRQChart rows={synth.rows} v={v} dq={synth.rows.length > 1 ? 1 / (synth.rows.length - 1) : undefined} />
         </div>
       )}
 
