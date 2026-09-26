@@ -3,12 +3,12 @@
 /** Pestaña «Modelo» del geovisor: pesos del panel de expertos (o exploración libre), la regla de
  * idoneidad de cada criterio con vista previa, y los umbrales de las clases. */
 import { useMemo } from 'react';
-import { describeFn, suitability, type FnSpec } from '@/lib/geo/membership';
+import { describeFn, fnIssue, sortedFn, suitability, type FnSpec } from '@/lib/geo/membership';
 import type { LayerInfo } from '@/lib/geo/data';
 import type { Criterion, GeoConfig } from '@/lib/types';
 import type { Parcel } from '@/lib/geo/patches';
 import type { AreaStats } from '@/lib/geo/suitability';
-import { Num } from './GeoBits';
+import { fmtNum, Num } from './GeoBits';
 
 type Rule = GeoConfig['rules'][string];
 type Props = {
@@ -43,6 +43,12 @@ type Props = {
 
 const FN_LABEL: Record<FnSpec['type'], string> = { steps: 'Por rangos', trapezoid: 'Trapecio (óptimo en el medio)', target: 'Valor objetivo (± tolerancia)', up: 'Más es mejor', down: 'Menos es mejor', classes: 'Por clases' };
 
+/** Valores enteros que puede tomar una capa categórica (mín..máx), si el rango es pequeño; si no, [] (no parece categórica). */
+function classValues(min: number, max: number): number[] {
+  if (!Number.isInteger(min) || !Number.isInteger(max) || max < min || max - min > 40) return [];
+  return Array.from({ length: max - min + 1 }, (_, i) => min + i);
+}
+
 function defaultFn(type: FnSpec['type'], min: number, max: number): FnSpec {
   const span = max > min ? max - min : 1;
   const q = (f: number) => Math.round((min + span * f) * 1000) / 1000;
@@ -52,7 +58,7 @@ function defaultFn(type: FnSpec['type'], min: number, max: number): FnSpec {
     case 'target': return { type, value: q(0.5), tol: q(0.5 + 0.03) - q(0.5), falloff: q(0.5 + 0.25) - q(0.5) };
     case 'up': return { type, a: q(0), b: q(1) };
     case 'down': return { type, a: q(0), b: q(1) };
-    case 'classes': return { type, map: {} };
+    case 'classes': return { type, map: Object.fromEntries(classValues(min, max).map((v) => [String(v), 0.5])) };
   }
 }
 
@@ -80,7 +86,7 @@ function Preview({ fn, min, max }: { fn: FnSpec; min: number; max: number }) {
     return 'M' + pts.join(' L');
   }, [fn, min, max]);
   return (
-    <svg className="gv-prev" viewBox="0 0 100 32" preserveAspectRatio="none" aria-label="Vista previa de la regla">
+    <svg className="gv-prev" viewBox="0 0 100 32" preserveAspectRatio="none" role="img" aria-label={`Vista previa de la regla: ${describeFn(fn)}. Eje vertical: idoneidad de 0 a 1.`}>
       <line x1="0" y1="30" x2="100" y2="30" className="ax" /><line x1="0" y1="2" x2="100" y2="2" className="ax dash" />
       <path d={d} vectorEffect="non-scaling-stroke" />
     </svg>
@@ -111,6 +117,22 @@ function FnEditor({ fn, onChange, min, max }: { fn: FnSpec; onChange: (f: FnSpec
           {scores.length > 2 && <button type="button" className="btn sm" onClick={() => set(breaks.slice(0, -1), scores.slice(0, -1))}>− rango</button>}
           <button type="button" className="btn sm" onClick={() => set([...breaks].sort((a, b) => a - b), scores)}>Ordenar cortes</button>
         </div>
+      </div>
+    );
+  }
+  if (fn.type === 'classes') {
+    const vals = [...new Set([...classValues(min, max), ...Object.keys(fn.map).map(Number).filter(Number.isFinite)])].sort((a, b) => a - b);
+    return (
+      <div className="gv-steps">
+        {vals.length === 0 && <p className="gv-hint warn">Esta capa no parece categórica (sus valores no son pocos enteros). Elige otro tipo de regla.</p>}
+        {vals.map((v) => (
+          <div className="gv-step" key={v} style={{ gridTemplateColumns: 'minmax(0,1fr) auto' }}>
+            <span className="rng">Clase / valor <b className="mono">{v}</b> →</span>
+            <Num label={`Idoneidad del valor ${v}`} width={64} min={0} max={1} step="0.05" value={fn.map[String(v)] ?? 0}
+              onChange={(n) => onChange({ type: 'classes', map: { ...fn.map, [String(v)]: Math.max(0, Math.min(1, n)) } })} />
+          </div>
+        ))}
+        <p className="gv-hint">Idoneidad de 0 (mala) a 1 (óptima) de cada clase del mapa. Un valor que no esté en la lista vale 0.</p>
       </div>
     );
   }
@@ -147,6 +169,13 @@ export default function GeoModelPanel(p: Props) {
   const layerEntries = Object.entries(p.layers).filter(([, l]) => l.role === 'criterion');
   const w = p.exploring && p.exploreWeights ? p.exploreWeights : p.weights;
   const crBad = p.cr >= 0.1;
+  // Los pesos que de verdad se combinan son los de los criterios con mapa, reescalados a 1 (un criterio sin capa
+  // no entra al cálculo). Se muestran para que el peso «0.30» del panel no engañe cuando otros criterios faltan.
+  const readyIdx = p.criteria.map((c, i) => (p.rules[c.id] && p.layers[p.rules[c.id].layerKey] ? i : -1)).filter((i) => i >= 0);
+  const wReady = readyIdx.reduce((a, i) => a + (w[i] ?? 0), 0);
+  const partial = readyIdx.length > 0 && readyIdx.length < p.criteria.length;
+  const effective = (i: number) => (readyIdx.includes(i) && wReady > 0 ? (w[i] ?? 0) / wReady : 0);
+  const exploreSum = (p.exploreWeights ?? []).reduce((a, x) => a + x, 0);
   return (
     <div className="gv-sec-stack">
       <section className="gv-sec">
@@ -157,12 +186,18 @@ export default function GeoModelPanel(p: Props) {
             : <span className="gv-cr bad">sin juicios</span>}
         </header>
         {p.nExperts === 0 && <p className="gv-hint">Aún ningún experto ha comparado los criterios (pestaña «Expertos»). Mientras tanto se usan <b>pesos iguales</b>.</p>}
+        {p.nExperts > 0 && crBad && !p.exploring && (
+          <p className="gv-hint warn" role="alert"><b>Juicios inconsistentes (CR {p.cr.toFixed(3)} ≥ 0.10).</b> Los pesos del panel no son confiables: pide a los expertos que revisen sus comparaciones antes de reportar o publicar este mapa.</p>
+        )}
         {p.criteria.map((c, i) => (
           <div className="gv-wbar" key={c.id}>
-            <span className="nm" title={c.name}>{c.name}</span><span className="v">{(w[i] ?? 0).toFixed(3)}</span>
-            <span className="track"><span className="fill" style={{ width: `${(w[i] ?? 0) * 100}%` }} /></span>
+            <span className="nm" title={c.name}>{c.name}</span>
+            <span className="v">{(w[i] ?? 0).toFixed(3)}{partial ? (readyIdx.includes(i) ? ` → ${effective(i).toFixed(3)}` : ' · sin mapa') : ''}</span>
+            <span className="track"><span className="fill" style={{ width: `${(partial ? effective(i) : (w[i] ?? 0)) * 100}%` }} /></span>
           </div>
         ))}
+        {partial && <p className="gv-hint">Solo entran al cálculo los criterios con mapa: sus pesos se reescalan para sumar 1 (segundo número). Los criterios «sin mapa» no cuentan hasta que les asignes una capa.</p>}
+        {readyIdx.length > 0 && wReady <= 0 && <p className="gv-hint warn" role="alert">Los criterios con mapa tienen peso 0: el mapa no se puede calcular.</p>}
         <label className="gv-check">
           <input type="checkbox" checked={p.exploring} onChange={(e) => p.onExplore(e.target.checked, e.target.checked ? (p.exploreWeights ?? p.weights.slice()) : null)} /> Explorar otros pesos (no son los del panel)
         </label>
@@ -175,6 +210,7 @@ export default function GeoModelPanel(p: Props) {
                 <span className="mono">{(p.exploreWeights?.[i] ?? 0).toFixed(2)}</span>
               </label>
             ))}
+            {exploreSum <= 0 && <p className="gv-hint warn" role="alert">Todos los pesos están en 0: el mapa no se puede calcular. Sube al menos uno.</p>}
             <div className="gv-explore-banner"><span>Se renormalizan al calcular. El panel no cambia.</span><button type="button" onClick={() => p.onExplore(false, null)}>Volver a los del panel</button></div>
           </div>
         )}
@@ -221,12 +257,23 @@ export default function GeoModelPanel(p: Props) {
                   <>
                     <label className="gv-field"><span>Tipo de regla</span>
                       <select value={rule.fn.type} disabled={p.readOnlyRules} onChange={(e) => p.onRule(c.id, { ...rule, fn: defaultFn(e.target.value as FnSpec['type'], min, max) })}>
-                        {(Object.keys(FN_LABEL) as FnSpec['type'][]).filter((t) => t !== 'classes' || rule.fn.type === 'classes').map((t) => <option key={t} value={t}>{FN_LABEL[t]}</option>)}
+                        {(Object.keys(FN_LABEL) as FnSpec['type'][]).filter((t) => t !== 'classes' || rule.fn.type === 'classes' || classValues(min, max).length > 0).map((t) => <option key={t} value={t}>{FN_LABEL[t]}</option>)}
                       </select>
                     </label>
                     <FnEditor fn={rule.fn} min={min} max={max} onChange={(fn) => p.onRule(c.id, { ...rule, fn })} />
+                    {(() => {
+                      const issue = rule.fn.type === 'steps' ? null : fnIssue(rule.fn);
+                      if (!issue) return null;
+                      const fixable = rule.fn.type === 'trapezoid' || rule.fn.type === 'up' || rule.fn.type === 'down';
+                      return (
+                        <div className="gv-hint warn" role="alert">
+                          {issue} Con los valores así el mapa no es el que esperas.
+                          {fixable && <> <button type="button" className="btn sm" onClick={() => p.onRule(c.id, { ...rule, fn: sortedFn(rule.fn) })}>Ordenar valores</button></>}
+                        </div>
+                      );
+                    })()}
                     <Preview fn={rule.fn} min={min} max={max} />
-                    <div className="gv-prev-x mono"><span>{previewRange(rule.fn, min, max)[0].toFixed(0)}</span><span>{info?.unit || 'valor de la capa'}</span><span>{previewRange(rule.fn, min, max)[1].toFixed(0)}</span></div>
+                    <div className="gv-prev-x mono"><span>{fmtNum(previewRange(rule.fn, min, max)[0])}</span><span>{info?.unit || 'valor de la capa'}</span><span>{fmtNum(previewRange(rule.fn, min, max)[1])}</span></div>
                     <label className="gv-check">
                       <input type="checkbox" checked={!!rule.veto} onChange={(e) => p.onRule(c.id, { ...rule, veto: e.target.checked ? { op: '<', value: min } : undefined })} /> Veto (deja la idoneidad en 0, sin importar los demás criterios)
                     </label>
@@ -255,6 +302,7 @@ export default function GeoModelPanel(p: Props) {
           <Num label="Umbral alta" width={62} min={0} max={100} value={Math.round(p.thresholds.alta * 100)} onChange={(n) => p.onThresholds({ ...p.thresholds, alta: Math.max(0, Math.min(100, n)) / 100 })} /></div>
         <div className="gv-class-row"><i style={{ background: 'var(--geo-media)' }} /><span>Moderada desde (%)</span>
           <Num label="Umbral moderada" width={62} min={0} max={100} value={Math.round(p.thresholds.media * 100)} onChange={(n) => p.onThresholds({ ...p.thresholds, media: Math.max(0, Math.min(100, n)) / 100 })} /></div>
+        {p.thresholds.media > p.thresholds.alta && <p className="gv-hint warn" role="alert">«Moderada» debe empezar en un valor menor que «Alta»: con estos umbrales ninguna celda sería moderada.</p>}
         <div className="gv-class-row"><i style={{ background: 'var(--geo-noapta)' }} /><span>No apta / vetada</span><span /></div>
         <div className="gv-class-row"><i style={{ background: 'var(--geo-excl)' }} /><span>Exclusión</span><span /></div>
       </section>

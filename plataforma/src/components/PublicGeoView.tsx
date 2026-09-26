@@ -7,15 +7,21 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { lonLatToPixel, pixelToLonLat } from '@/lib/geo/crs';
 import { toUrl } from '@/lib/geo/canvas';
 import { buildOverlayMap } from '@/lib/geo/overlay';
-import { CLASS_HEX, CLASS_LABEL, paintResult } from '@/lib/geo/paint';
+import { CLASS_LABEL, PALETTES, classHex, paintResult } from '@/lib/geo/paint';
 import { decodePlanes, type PublishedMeta } from '@/lib/geo/publish';
 import { CLASS_ALTA, CLASS_EXCLUDED, CLASS_MODERADA, CLASS_NO_APTA, MASK_EXCLUDED, MASK_NODATA } from '@/lib/geo/suitability';
 import GeoMap, { type BasemapKey, type GeoMapHandle, type MapMarker, type RasterOverlay } from './GeoMap';
-import { BasemapChips, ResultLegend, StyleChips } from './GeoHud';
-import { Icon, ICONS } from './GeoBits';
+import { BasemapChips, PaletteChips, ResultLegend, StyleChips } from './GeoHud';
+import { Icon, ICONS, usePalette } from './GeoBits';
 import PublicAhp from './PublicAhp';
 
 export type PublicGeo = { status: 'ok'; title: string; objective: string; grid_b64: string; meta: PublishedMeta; updated_at: string };
+
+/** Variables CSS de clase según la paleta (recuadros de color de los paneles). */
+const paletteVars = (pal: keyof typeof PALETTES) => {
+  const h = classHex(pal);
+  return { '--geo-alta': h[CLASS_ALTA], '--geo-media': h[CLASS_MODERADA], '--geo-noapta': h[CLASS_NO_APTA], '--geo-excl': h[CLASS_EXCLUDED] } as React.CSSProperties;
+};
 
 export default function PublicGeoView({ data }: { data: PublicGeo }) {
   const { meta } = data;
@@ -23,6 +29,8 @@ export default function PublicGeoView({ data }: { data: PublicGeo }) {
   const [error, setError] = useState('');
   const [basemap, setBasemap] = useState<BasemapKey>('sat');
   const [style, setStyle] = useState<'continuous' | 'classes'>('continuous');
+  const [palette, setPalette] = usePalette();
+  const HEX = useMemo(() => classHex(palette), [palette]);
   const [sel, setSel] = useState<{ col: number; row: number } | null>(null);
   const mapRef = useRef<GeoMapHandle>(null);
   const coordRef = useRef<HTMLSpanElement>(null);
@@ -34,7 +42,7 @@ export default function PublicGeoView({ data }: { data: PublicGeo }) {
   }, [data.grid_b64, meta.grid.width, meta.grid.height]);
 
   const om = useMemo(() => buildOverlayMap(meta.grid, 'mercator'), [meta.grid]);
-  const rasters = useMemo<RasterOverlay[]>(() => (planes ? [{ id: 'result', url: toUrl(om, paintResult(planes.pct, planes.cls, planes.mask, style)), bounds: om.bounds, opacity: 0.9, visible: true, z: 20 }] : []), [planes, om, style]);
+  const rasters = useMemo<RasterOverlay[]>(() => (planes ? [{ id: 'result', url: toUrl(om, paintResult(planes.pct, planes.cls, planes.mask, style, palette)), bounds: om.bounds, opacity: 0.9, visible: true, z: 20 }] : []), [planes, om, style, palette]);
 
   const onClick = useCallback((lat: number, lon: number) => {
     const [c, r] = lonLatToPixel(lon, lat, meta.grid.transform, meta.grid.crs);
@@ -59,11 +67,11 @@ export default function PublicGeoView({ data }: { data: PublicGeo }) {
 
   return (
     <div className="gv-wrap gv-public">
-      <div className="gv-shell">
+      <div className="gv-shell" style={paletteVars(palette)}>
         <aside className="gv-side">
           <div className="gv-side-body">
             <section className="gv-sec">
-              <header><h4>Pesos de los criterios</h4>{meta.nExperts > 0 && <span className={'gv-cr' + (meta.cr >= 0.1 ? ' bad' : '')}>CR {meta.cr.toFixed(3)}</span>}</header>
+              <header><h4>Pesos de los criterios</h4>{meta.nExperts > 0 && <span className={'gv-cr' + (meta.cr >= 0.1 ? ' bad' : '')}>CR {meta.cr.toFixed(3)}{meta.cr >= 0.1 ? ' · inconsistente' : ''}</span>}</header>
               <p className="gv-hint">{meta.weightsOrigin}{meta.nExperts > 0 ? ` · ${meta.nExperts} experto(s)` : ''}</p>
               {meta.weights.map((w) => (
                 <div className="gv-wbar" key={w.name}>
@@ -80,7 +88,7 @@ export default function PublicGeoView({ data }: { data: PublicGeo }) {
                   {rows.map(([c, ha, pct]) => (
                     <div className="brow" key={c} style={{ gridTemplateColumns: '92px minmax(0,1fr) 92px' }}>
                       <span>{CLASS_LABEL[c]}</span>
-                      <span className="bar"><span className="bfill" style={{ width: `${pct}%`, background: CLASS_HEX[c] }} /></span>
+                      <span className="bar"><span className="bfill" style={{ width: `${pct}%`, background: HEX[c] }} /></span>
                       <span className="mono">{pct.toFixed(1)} %</span>
                       <span className="mono muted" style={{ gridColumn: '2 / -1', fontSize: 11 }}>{ha.toLocaleString('es-CO', { maximumFractionDigits: 0 })} ha</span>
                     </div>
@@ -90,7 +98,7 @@ export default function PublicGeoView({ data }: { data: PublicGeo }) {
               <p className="gv-hint">Área evaluada: {meta.evaluableHa.toLocaleString('es-CO', { maximumFractionDigits: 0 })} ha{meta.classes.excl > 0 ? ` · exclusión: ${meta.classes.excl.toLocaleString('es-CO', { maximumFractionDigits: 0 })} ha` : ''} · celdas de {meta.grid.resM} m.</p>
             </section>
             <section className="gv-sec">
-              <p className="gv-hint">Haz clic en el mapa para ver la idoneidad de un punto. Es un <b>índice de 0 a 100</b> (suma ponderada de criterios), <b>no una probabilidad</b>.</p>
+              <p className="gv-hint">Haz clic en el mapa (o, con el teclado, enfócalo, muévelo con las flechas y pulsa Intro) para ver la idoneidad de un punto. Es un <b>índice de 0 a 100</b> (suma ponderada de criterios), <b>no una probabilidad</b>.</p>
               <p className="gv-hint">Publicado el {new Date(data.updated_at).toLocaleString('es-CO', { dateStyle: 'long', timeStyle: 'short' })}{meta.attribution ? ` · Datos: ${meta.attribution}` : ''}</p>
             </section>
           </div>
@@ -102,17 +110,18 @@ export default function PublicGeoView({ data }: { data: PublicGeo }) {
             <div className="gv-hud gv-hud-tr">
               <BasemapChips value={basemap} onChange={setBasemap} />
               <StyleChips value={style} onChange={setStyle} />
+              <PaletteChips value={palette} onChange={setPalette} />
               <button type="button" className="gv-fit" onClick={() => mapRef.current?.fit(meta.bounds)}><Icon d={ICONS.fit} size={15} /> Área</button>
             </div>
             <div className="gv-coords mono"><span ref={coordRef}>—</span></div>
-            {!planes && <div className="gv-toast">Cargando el mapa…</div>}
-            {planes && <ResultLegend style={style} thresholds={meta.thresholds} />}
+            {!planes && <div className="gv-toast" role="status">Cargando el mapa…</div>}
+            {planes && <div className="gv-legends"><ResultLegend style={style} thresholds={meta.thresholds} palette={palette} /></div>}
             {point && (
               <div className="gv-point" role="status">
                 <button type="button" className="x" aria-label="Cerrar" onClick={() => setSel(null)}>×</button>
                 <div className="big">{point.pct === null ? '—' : `${point.pct}%`}</div>
-                <span className="cls-pill" style={{ background: `color-mix(in srgb, ${CLASS_HEX[point.cls]} 22%, transparent)`, color: CLASS_HEX[point.cls] }}>
-                  <span className="dot" style={{ background: CLASS_HEX[point.cls] }} />{point.label}
+                <span className="cls-pill" style={{ background: `color-mix(in srgb, ${HEX[point.cls]} 22%, transparent)`, borderColor: HEX[point.cls] }}>
+                  <span className="dot" style={{ background: HEX[point.cls] }} />{point.label}
                 </span>
                 <div className="coords mono">{point.lat.toFixed(5)}, {point.lon.toFixed(5)}</div>
                 <div className="disc">Índice de idoneidad 0–100, no una probabilidad.</div>

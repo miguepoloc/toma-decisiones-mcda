@@ -25,7 +25,28 @@ function utmExtent(b: Bounds, crs: string): { xmin: number; xmax: number; ymin: 
   return { xmin, xmax, ymin, ymax };
 }
 
+/** Mensaje en español si el rectángulo no sirve para una grilla, o `null`. UTM no está definido en los polos. */
+export function boundsIssue(b: Bounds): string | null {
+  if (![b.west, b.south, b.east, b.north].every(Number.isFinite)) return 'Faltan coordenadas del área de estudio.';
+  if (b.west < -180 || b.east > 180 || b.south < -84 || b.north > 84) return 'Las coordenadas deben estar entre -180° y 180° de longitud y entre -84° y 84° de latitud.';
+  if (b.east <= b.west || b.north <= b.south) return 'El rectángulo no es válido: el este debe ser mayor que el oeste y el norte mayor que el sur.';
+  if (b.east - b.west > 30) return 'El área abarca más de 30° de longitud: la proyección UTM de una sola zona distorsionaría distancias y áreas. Usa un área más pequeña.';
+  return null;
+}
+
+/** Aviso (no error) si el ancho en longitud hace que una sola zona UTM distorsione de forma apreciable. */
+export function boundsWarning(b: Bounds): string | null {
+  if (boundsIssue(b)) return null;
+  const w = b.east - b.west;
+  if (w <= 12) return null;
+  const k = 0.9996 * (1 + Math.pow((w / 2) * (Math.PI / 180) * Math.cos((Math.max(Math.abs(b.south), Math.abs(b.north)) * Math.PI) / 180), 2) / 2);
+  return `El área abarca ${w.toFixed(0)}° de longitud: en los bordes las distancias y áreas de la zona UTM se desvían ~${Math.abs((k - 1) * 100).toFixed(1)} %. Para un análisis fino usa un área más angosta.`;
+}
+
 export function gridFromBounds(b: Bounds, resM: number): GeoGrid {
+  const issue = boundsIssue(b);
+  if (issue) throw new Error(issue);
+  if (!(resM > 0)) throw new Error('La resolución debe ser mayor que 0 metros.');
   const crs = utmCrsFor((b.west + b.east) / 2, (b.south + b.north) / 2);
   const { xmin, xmax, ymin, ymax } = utmExtent(b, crs);
   const width = Math.max(1, Math.ceil((xmax - xmin) / resM));
@@ -36,6 +57,7 @@ export function gridFromBounds(b: Bounds, resM: number): GeoGrid {
 
 /** Píxeles que tendría la grilla con esa resolución (sin construirla). */
 export function estimatePixels(b: Bounds, resM: number): number {
+  if (boundsIssue(b) || !(resM > 0)) return 0;
   const crs = utmCrsFor((b.west + b.east) / 2, (b.south + b.north) / 2);
   const { xmin, xmax, ymin, ymax } = utmExtent(b, crs);
   return Math.ceil((xmax - xmin) / resM) * Math.ceil((ymax - ymin) / resM);
@@ -43,6 +65,7 @@ export function estimatePixels(b: Bounds, resM: number): number {
 
 /** La resolución "redonda" más fina que deja la grilla por debajo de `targetPx` píxeles. */
 export function suggestRes(b: Bounds, targetPx = 500_000): number {
+  if (boundsIssue(b)) return 250;
   for (const r of NICE_RES) if (estimatePixels(b, r) <= targetPx) return r;
   return NICE_RES[NICE_RES.length - 1];
 }

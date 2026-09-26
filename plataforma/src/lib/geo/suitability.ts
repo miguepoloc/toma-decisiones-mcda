@@ -53,13 +53,21 @@ export function evaluatePixel(
  * (deshecha la cuantización del paquete), `mask[i]` con los códigos de arriba. Devuelve dos planos
  * paralelos a `mask`: `pct` (0–100, 255 sin dato — mismo formato que `geo_results.grid_b64` del
  * plan) y `cls` (0–4). */
+/** Reglas cuya capa existe y tiene el tamaño de la grilla. Una capa ausente o de otro tamaño (p. ej. borrada
+ * mientras `useDeferredValue` aún sostiene las reglas anteriores, o una capa corrupta) no debe romper el
+ * cálculo: simplemente no vota. */
+export function usableRules(layers: Record<string, Float32Array>, n: number, rules: CriterionRule[]): CriterionRule[] {
+  return rules.filter((r) => layers[r.key] && layers[r.key].length === n);
+}
+
 export function evaluateGrid(
   layers: Record<string, Float32Array>,
   mask: Uint8Array,
-  rules: CriterionRule[],
+  allRules: CriterionRule[],
   thresholds: ClassThresholds,
 ): { pct: Uint8Array; cls: Uint8Array } {
   const n = mask.length;
+  const rules = usableRules(layers, n, allRules);
   const pct = new Uint8Array(n);
   const cls = new Uint8Array(n);
   const raw: Record<string, number> = {};
@@ -70,6 +78,26 @@ export function evaluateGrid(
     cls[i] = px.cls;
   }
   return { pct, cls };
+}
+
+/** Cobertura de datos: cuántas celdas evaluables (máscara válida) no tienen dato en TODOS los criterios.
+ * `evaluatePixel` no penaliza un criterio sin dato: lo omite y reescala los pesos de los demás. Eso es razonable
+ * en los bordes de una capa, pero puede inflar o desinflar la idoneidad allí, así que se cuenta y se avisa.
+ * `partial` = con al menos un criterio sin dato y al menos uno con dato; `none` = ninguno con dato. */
+export function coverageStats(layers: Record<string, Float32Array>, mask: Uint8Array, allRules: CriterionRule[]) {
+  const n = mask.length;
+  const rules = usableRules(layers, n, allRules);
+  let valid = 0, partial = 0, none = 0;
+  if (!rules.length) return { valid: 0, partial: 0, none: 0 };
+  for (let i = 0; i < n; i++) {
+    if (mask[i] !== MASK_VALID) continue;
+    valid++;
+    let missing = 0;
+    for (const r of rules) if (Number.isNaN(layers[r.key][i])) missing++;
+    if (missing === rules.length) none++;
+    else if (missing > 0) partial++;
+  }
+  return { valid, partial, none };
 }
 
 /** Hectáreas por clase (0–4) sobre un plano `cls` ya calculado. */

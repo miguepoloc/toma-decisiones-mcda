@@ -1,8 +1,8 @@
 /** Exportadores del mapa de aptitud: GeoTIFF georreferenciado, estilo QGIS (.qml), KML/KMZ, CSV y
  * zip. Solo bytes/strings — la descarga la hace la UI. Sin DOM (el PNG lo genera el navegador). */
 import { zipSync, strToU8 } from 'fflate';
-import { CLASS_HEX, CLASS_LABEL } from './paint.ts';
-import { MASK_NODATA } from './suitability.ts';
+import { CLASS_LABEL, PALETTES, classHex, type PaletteKey } from './paint.ts';
+import { MASK_EXCLUDED, MASK_NODATA } from './suitability.ts';
 import { pixelToLonLat } from './crs.ts';
 import type { Bounds } from './grid.ts';
 import type { GeoGrid } from '../types.ts';
@@ -31,18 +31,25 @@ export async function toGeoTiff(values: Float32Array | Uint8Array | Uint16Array,
   return new Uint8Array(buf as ArrayBuffer);
 }
 
-/** Resultado como GeoTIFF UInt8 (0–100, 255 = sin dato) o clases (0–4, 255 = fuera del área). */
+/** Resultado como GeoTIFF UInt8: idoneidad 0–100 (255 = sin dato: fuera del área, exclusión o sin dato en todos los
+ * criterios) o clases (0 = exclusión, 1–4 = clases, 255 = sin dato: fuera del área o sin dato en todos los criterios).
+ * Es el mismo criterio que `paintResult` (lo que ves en pantalla) y `areaStats` (las hectáreas que se reportan). */
 export function resultRaster(pct: Uint8Array, cls: Uint8Array, mask: Uint8Array, kind: 'pct' | 'classes'): Uint8Array {
   const out = new Uint8Array(pct.length);
-  for (let i = 0; i < out.length; i++) out[i] = mask[i] === MASK_NODATA ? 255 : kind === 'pct' ? pct[i] : cls[i];
+  for (let i = 0; i < out.length; i++) {
+    if (mask[i] === MASK_NODATA) out[i] = 255;
+    else if (kind === 'pct') out[i] = pct[i];
+    else out[i] = mask[i] !== MASK_EXCLUDED && pct[i] === 255 ? 255 : cls[i];
+  }
   return out;
 }
 
 const hexA = (hex: string) => hex.toLowerCase();
 
 /** Estilo de QGIS para el GeoTIFF de clases (Capa → Propiedades → Simbología → Estilo → Cargar). */
-export function qmlClasses(): string {
-  const entries = [0, 1, 2, 3, 4].map((k) => `        <paletteEntry value="${k}" color="${hexA(CLASS_HEX[k])}" label="${CLASS_LABEL[k]}" alpha="255"/>`).join('\n');
+export function qmlClasses(pal: PaletteKey = 'semaforo'): string {
+  const hex = classHex(pal);
+  const entries = [0, 1, 2, 3, 4].map((k) => `        <paletteEntry value="${k}" color="${hexA(hex[k])}" label="${CLASS_LABEL[k]}" alpha="255"/>`).join('\n');
   return `<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>
 <qgis version="3.28.0" styleCategories="Symbology">
   <pipe>
@@ -60,17 +67,18 @@ ${entries}
 `;
 }
 
-/** Estilo de QGIS para el GeoTIFF de idoneidad 0–100 (rampa roja→amarilla→verde). */
-export function qmlPct(): string {
+/** Estilo de QGIS para el GeoTIFF de idoneidad 0–100: la misma rampa de 3 paradas (0, 50, 100) que la leyenda de pantalla. */
+export function qmlPct(pal: PaletteKey = 'semaforo'): string {
+  const c = (i: number) => '#' + PALETTES[pal].stops[i][1].map((v) => v.toString(16).padStart(2, '0')).join('');
   return `<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>
 <qgis version="3.28.0" styleCategories="Symbology">
   <pipe>
     <rasterrenderer type="singlebandpseudocolor" band="1" opacity="1" alphaBand="-1" classificationMin="0" classificationMax="100">
       <rastershader>
         <colorrampshader colorRampType="INTERPOLATED" classificationMode="1" clip="0" minimumValue="0" maximumValue="100">
-          <item value="0" label="0" color="#d9534f" alpha="255"/>
-          <item value="50" label="50" color="#f0ad4e" alpha="255"/>
-          <item value="100" label="100" color="#2e7d32" alpha="255"/>
+          <item value="0" label="0" color="${c(0)}" alpha="255"/>
+          <item value="50" label="50" color="${c(1)}" alpha="255"/>
+          <item value="100" label="100" color="${c(2)}" alpha="255"/>
         </colorrampshader>
       </rastershader>
     </rasterrenderer>
@@ -126,6 +134,9 @@ export function parcelsCsv(parcels: { id: number; ha: number; meanPct: number; m
   }
   return lines.join('\n') + '\n';
 }
+
+/** Nombre de archivo seguro para meter dentro de un .zip (sin rutas, sin caracteres que rompen en Windows). */
+export const safeName = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^[._]+|[._]+$/g, '').slice(0, 60) || 'capa';
 
 export function zipFiles(files: Record<string, Uint8Array | string>): Uint8Array {
   const o: Record<string, Uint8Array> = {};

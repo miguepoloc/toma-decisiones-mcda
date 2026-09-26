@@ -3,7 +3,7 @@
 import { fromArrayBuffer } from 'geotiff';
 import { unzipSync, strFromU8 } from 'fflate';
 import { gridFromBounds } from '../src/lib/geo/grid.ts';
-import { kmz, pixelsCsv, qmlClasses, qmlPct, resultRaster, toGeoTiff, zipFiles, slug } from '../src/lib/geo/export.ts';
+import { kmz, pixelsCsv, qmlClasses, qmlPct, resultRaster, safeName, toGeoTiff, zipFiles, slug } from '../src/lib/geo/export.ts';
 import { buildOverlayMap, gather } from '../src/lib/geo/overlay.ts';
 import { describeFn, describeVeto } from '../src/lib/geo/membership.ts';
 
@@ -66,6 +66,22 @@ ok('overlay geográfico cubre las mismas coordenadas', Math.abs(og.bounds.west -
 
 ok('describeFn steps', describeFn({ type: 'steps', breaks: [70, 150], scores: [0, 0.5, 1] }) === 'Rangos: < 70 → 0 · 70–150 → 0.5 · ≥ 150 → 1');
 ok('describeVeto', describeVeto({ op: '<', value: 15 }) === 'Veto si valor < 15' && describeVeto(undefined) === '—');
+
+// --- clases: «sin dato» (celda válida sin dato en ningún criterio) no se disfraza de exclusión (0)
+{
+  const p2 = new Uint8Array([50, 255, 255, 80]), c2 = new Uint8Array([2, 0, 0, 3]), m2 = new Uint8Array([1, 1, 2, 0]);
+  const rc = resultRaster(p2, c2, m2, 'classes');
+  ok('clases: válida con dato = su clase', rc[0] === 2);
+  ok('clases: válida SIN dato = 255 (no 0)', rc[1] === 255);
+  ok('clases: exclusión legal = 0', rc[2] === 0);
+  ok('clases: fuera del área = 255', rc[3] === 255);
+  ok('pct: exclusión y sin dato = 255', resultRaster(p2, c2, m2, 'pct')[1] === 255 && resultRaster(p2, c2, m2, 'pct')[2] === 255);
+}
+// --- QML coherente con la paleta de pantalla (semáforo y daltonismo)
+ok('QML pct semáforo: paradas = rampa de pantalla', qmlPct('semaforo').includes('#d9534f') && qmlPct('semaforo').includes('#f0ad4e') && qmlPct('semaforo').includes('#2e7d32'));
+ok('QML pct daltonismo: viridis', qmlPct('daltonismo').includes('#440154') && qmlPct('daltonismo').includes('#fde725'));
+ok('QML clases daltonismo: alta = amarillo, no verde', qmlClasses('daltonismo').includes('value="3" color="#fde725"') && qmlClasses('semaforo').includes('value="3" color="#2e7d32"'));
+ok('safeName: sin rutas ni acentos', safeName('../Ecosistemas marinos ñ/x') === 'Ecosistemas_marinos_n_x' && safeName('***') === 'capa');
 
 console.log(fails === 0 ? '\nTodo OK (check-geo-export)' : `\n${fails} fallas`);
 process.exit(fails ? 1 : 0);

@@ -26,7 +26,7 @@ export function crsDef(crs: string): string | null {
   if (crs.startsWith('+')) return crs;
   if (DEFS[crs]) return DEFS[crs];
   const m = /^EPSG:(32[67])(\d\d)$/.exec(crs);
-  if (m) return `+proj=utm +zone=${Number(m[2])}${m[1] === '327' ? ' +south' : ''} +datum=WGS84 +units=m +no_defs`;
+  if (m && Number(m[2]) >= 1 && Number(m[2]) <= 60) return `+proj=utm +zone=${Number(m[2])}${m[1] === '327' ? ' +south' : ''} +datum=WGS84 +units=m +no_defs`;
   return null;
 }
 

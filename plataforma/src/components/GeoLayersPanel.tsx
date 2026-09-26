@@ -5,16 +5,19 @@
  * capas con visibilidad, opacidad y borrado. */
 import { useEffect, useMemo, useRef, useState, type Dispatch, type MutableRefObject, type SetStateAction } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { estimatePixels, gridBoundsLonLat, gridFromBounds, MAX_PIXELS, padBounds, suggestRes, unionBounds, type Bounds } from '@/lib/geo/grid';
+import { boundsIssue, boundsWarning, estimatePixels, gridBoundsLonLat, gridFromBounds, MAX_PIXELS, padBounds, suggestRes, unionBounds, type Bounds } from '@/lib/geo/grid';
 import { parseFile, type Parsed } from '@/lib/geo/parse';
-import { burn, distanceLayer, interpolateSurface, type FC } from '@/lib/geo/vector';
+import { burn, distanceLayerPadded, interpolateSurface, type FC } from '@/lib/geo/vector';
 import { layerRange, resampleToGrid } from '@/lib/geo/raster';
 import { isQuotaError, layerPath, removeLayers, uploadLayer, type Quota } from '@/lib/geo/store';
 import { slug } from '@/lib/geo/export';
 import type { GeoData } from '@/lib/geo/data';
 import type { FnSpec } from '@/lib/geo/membership';
+import { RAW_RAMP_CSS, rampCss, type PaletteKey } from '@/lib/geo/paint';
 import type { Criterion, GeoConfig, GeoGrid, GeoLayerMeta } from '@/lib/types';
 import { Icon, ICONS, Num } from './GeoBits';
+
+const kmFmt = (m: number) => (m >= 1000 ? `${(m / 1000).toFixed(m >= 10000 ? 0 : 1)} km` : `${Math.round(m)} m`);
 
 export type VecItem = { id: string; name: string; fc: FC; color: string };
 export type VisState = Record<string, { on: boolean; op: number }>;
@@ -55,6 +58,9 @@ type Props = {
   vecs: VecItem[]; setVecs: Dispatch<SetStateAction<VecItem[]>>;
   vis: VisState; setVis: Dispatch<SetStateAction<VisState>>;
   fit: (b: Bounds) => void;
+  /** Extensión que se ve en el mapa ahora (alternativa táctil a dibujar con el ratón). */
+  getView?: () => Bounds | null;
+  palette: PaletteKey;
   draft: Bounds | null; setDraft: (b: Bounds | null) => void;
   drawing: boolean; setDrawing: (d: boolean) => void;
   quota: Quota | null; onQuotaChange: () => void;
@@ -106,12 +112,15 @@ export default function GeoLayersPanel(p: Props) {
     setMsg('');
     const list = Array.from(files);
     const next: Pending[] = [];
+    const errs: string[] = [];
     for (const f of list) {
       try {
         const parsed = await parseFile(f);
         for (const x of parsed) next.push(makePending(x, p.uploadFor ?? ''));
-      } catch (e) { setMsg((e instanceof Error ? e.message : String(e))); }
+      } catch (e) { errs.push(e instanceof Error ? e.message : String(e)); }
     }
+    // Un lote con varios archivos malos debe mostrar TODOS los motivos, no solo el último.
+    if (errs.length) setMsg(errs.join('\n'));
     if (!next.length) return;
     setPending((cur) => [...cur, ...next]);
   }
@@ -120,9 +129,12 @@ export default function GeoLayersPanel(p: Props) {
 
   function createGrid(): GeoGrid | null {
     if (!bbox) return null;
+    const issue = boundsIssue(bbox);
+    if (issue) { setMsg(issue); return null; }
+    if (!(res > 0)) { setMsg('La resolución debe ser mayor que 0 metros.'); return null; }
     if (px > maxPx) { setMsg(`Con esa resolución la grilla tendría ${px.toLocaleString('es-CO')} píxeles (máximo ${maxPx.toLocaleString('es-CO')}). Usa una resolución más gruesa o un área más pequeña.`); return null; }
-    if (bbox.east <= bbox.west || bbox.north <= bbox.south) { setMsg('El rectángulo no es válido: el este debe ser mayor que el oeste y el norte mayor que el sur.'); return null; }
-    const g = gridFromBounds(bbox, res);
+    let g: GeoGrid;
+    try { g = gridFromBounds(bbox, res); } catch (e) { setMsg(e instanceof Error ? e.message : String(e)); return null; }
     p.commit((c) => ({ ...c, grid: g }));
     p.setDraft(null); setEditingArea(false); setMsg('');
     return g;
@@ -152,16 +164,23 @@ export default function GeoLayersPanel(p: Props) {
 
   async function addOne(pn: Pending, g: GeoGrid) {
     upd(pn.pid, { status: 'working', err: undefined });
+    // Deja pintar «Procesando…» antes de un cálculo largo y síncrono (distancias, interpolación de isolíneas): sin esto
+    // la pantalla parecía congelada sin explicación.
+    await new Promise((r) => setTimeout(r, 30));
     try {
       const ps = pn.parsed;
       let arr: Float32Array, origin: string;
       if (ps.kind === 'raster') {
         const src = await ps.read(g);
         if (!src) throw new Error('El ráster no toca el área de estudio.');
-        arr = resampleToGrid(src, g, pn.categorical ? 'nearest' : 'bilinear');
-        origin = pn.categorical ? 'Ráster remuestreado (vecino más cercano)' : 'Ráster remuestreado (bilineal)';
+        // Categóricos y máscaras (exclusión / área): nunca se interpolan (una franja de 0.3 «excluiría» todo el borde).
+        const discrete = pn.categorical || pn.role !== 'criterion';
+        arr = resampleToGrid(src, g, discrete ? 'nearest' : 'bilinear');
+        origin = discrete ? 'Ráster remuestreado (vecino más cercano; moda si es más fino que la grilla)' : 'Ráster remuestreado (bilineal; promedio si es más fino que la grilla)';
       } else if (pn.mode === 'distance') {
-        arr = distanceLayer(ps.fc, g); origin = 'Distancia euclidiana a los elementos';
+        const dl = distanceLayerPadded(ps.fc, g);
+        arr = dl.values;
+        origin = `Distancia euclidiana a los elementos${dl.padM > 0 ? ` (cuenta los que están hasta ${kmFmt(dl.padM)} fuera del área)` : ''}`;
       } else if (pn.mode === 'surface') {
         if (!pn.field) throw new Error('Elige el campo numérico (p. ej. la profundidad de cada isolínea).');
         const known = burn(ps.fc, g, { kind: 'attr', field: pn.field });
@@ -185,7 +204,7 @@ export default function GeoLayersPanel(p: Props) {
       }
       let key = slug(pn.label).slice(0, 18) || 'capa';
       // Las claves del paquete (temp, precip…) también están ocupadas: la capa propia no las pisa.
-      const taken = new Set([...Object.keys(layers), ...Object.keys(data?.info ?? {})]);
+      const taken = new Set([...Object.keys(layers), ...Object.keys(data?.info ?? {}), ...Object.keys(p.cache.current)]);
       for (let n = 2; taken.has(key); n++) key = `${slug(pn.label).slice(0, 15)}-${n}`;
 
       let path = '', bytes = arr.byteLength, warn = '';
@@ -262,7 +281,7 @@ export default function GeoLayersPanel(p: Props) {
             <div className="gv-bbox">
               {(['north', 'west', 'east', 'south'] as const).map((k) => (
                 <label key={k} className={'b-' + k}><span>{{ north: 'Norte', south: 'Sur', east: 'Este', west: 'Oeste' }[k]} °</span>
-                  <Num label={k} value={bbox?.[k] ?? NaN} step="0.001" onChange={(n) => { setTouched(true); const b = { ...(bbox ?? { west: NaN, south: NaN, east: NaN, north: NaN }), [k]: n }; setBbox(b); if ([b.west, b.south, b.east, b.north].every(Number.isFinite)) { p.setDraft(b); } }} />
+                  <Num label={`${{ north: 'Norte', south: 'Sur', east: 'Este', west: 'Oeste' }[k]} en grados`} value={bbox?.[k] ?? NaN} step="0.001" onChange={(n) => { setTouched(true); const b = { ...(bbox ?? { west: NaN, south: NaN, east: NaN, north: NaN }), [k]: n }; setBbox(b); if ([b.west, b.south, b.east, b.north].every(Number.isFinite)) { p.setDraft(b); } }} />
                 </label>
               ))}
             </div>
@@ -270,15 +289,18 @@ export default function GeoLayersPanel(p: Props) {
               <button type="button" className={'btn sm' + (p.drawing ? ' primary' : '')} onClick={() => { setTouched(true); p.setDrawing(!p.drawing); }}>
                 <Icon d={ICONS.square} size={13} /> {p.drawing ? 'Arrastra sobre el mapa…' : 'Dibujar en el mapa'}
               </button>
+              {p.getView && <button type="button" className="btn sm" title="Toma como área lo que se ve ahora en el mapa (útil en pantallas táctiles, donde no se puede arrastrar un rectángulo)" onClick={() => { const v = p.getView?.(); if (!v) return; setTouched(true); setBbox(v); setRes(suggestRes(v)); p.setDraft(v); }}>Usar la vista del mapa</button>}
               {pendingBounds && <button type="button" className="btn sm" onClick={() => { setTouched(false); const b = padBounds(pendingBounds, 0.05); setBbox(b); setRes(suggestRes(b)); p.setDraft(b); p.fit(b); }}>Usar el archivo</button>}
             </div>
             <label className="gv-field"><span>Resolución (metros por celda)</span>
               <div className="gv-res"><Num label="Resolución en metros" value={res} min={1} onChange={setRes} />
                 {bbox && <button type="button" className="btn sm" onClick={() => setRes(suggestRes(bbox))}>Sugerida</button>}</div>
             </label>
+            {bbox && boundsIssue(bbox) && [bbox.west, bbox.south, bbox.east, bbox.north].every(Number.isFinite) && <p className="gv-hint warn" role="alert">{boundsIssue(bbox)}</p>}
+            {bbox && boundsWarning(bbox) && <p className="gv-hint warn">{boundsWarning(bbox)}</p>}
             {bbox && <p className={'gv-hint' + (px > maxPx ? ' warn' : '')}>{px.toLocaleString('es-CO')} celdas{px > maxPx ? ` — demasiadas (máx. ${maxPx.toLocaleString('es-CO')})` : ' · ok'}. Más fino = más detalle, pero más lento y más pesado.</p>}
             <div className="gv-row-acts">
-              <button type="button" className="btn primary sm" disabled={!bbox || px > maxPx || px === 0} onClick={createGrid}>Crear área de estudio</button>
+              <button type="button" className="btn primary sm" disabled={!bbox || !!boundsIssue(bbox) || px > maxPx || !(px > 0) || !(res > 0)} onClick={createGrid}>Crear área de estudio</button>
               {editingArea && <button type="button" className="btn sm" onClick={() => { setEditingArea(false); p.setDraft(null); }}>Cancelar</button>}
             </div>
           </div>
@@ -290,7 +312,7 @@ export default function GeoLayersPanel(p: Props) {
           <header><h4>2 · Añadir mapas</h4></header>
           <ol className="gv-howto" aria-label="Cómo cargar tu mapa">
             <li className={targetGrid ? 'done' : ''}><i>{targetGrid ? '✓' : '1'}</i><span><b>Área de estudio</b> {targetGrid ? (isPack ? 'lista: la fija el paquete del curso.' : 'lista.') : 'pendiente: arriba, o se propone sola desde tu primer archivo.'}</span></li>
-            <li className={pending.length ? 'done' : ''}><i>{pending.length ? '✓' : '2'}</i><span><b>Sube tu archivo</b> aquí abajo (GeoTIFF, GeoJSON, shapefile .zip, KML o GPX).</span></li>
+            <li className={pending.length ? 'done' : ''}><i>{pending.length ? '✓' : '2'}</i><span><b>Sube tu archivo</b> aquí abajo (GeoTIFF, GeoJSON, shapefile .zip, KML/KMZ o GPX).</span></li>
             <li><i>3</i><span><b>Elige el criterio</b> al que alimenta (o «Exclusión» si marca zonas prohibidas) y pulsa «Añadir al proyecto».</span></li>
             <li><i>4</i><span><b>Ajusta su regla</b> en la pestaña «Modelo»: cómo el valor de tu mapa se vuelve idoneidad de 0 a 1.</span></li>
           </ol>
@@ -308,10 +330,10 @@ export default function GeoLayersPanel(p: Props) {
             <Icon d={ICONS.upload} size={22} />
             <b>Arrastra aquí tus archivos</b>
             <span>o haz clic para elegirlos</span>
-            <em>GeoTIFF (.tif) · GeoJSON · shapefile en .zip · KML · GPX</em>
-            <input ref={fileRef} type="file" multiple accept=".tif,.tiff,.geojson,.json,.zip,.kml,.gpx" onChange={(e) => { if (e.target.files) void onFiles(e.target.files); e.target.value = ''; }} />
+            <em>GeoTIFF (.tif) · GeoJSON · shapefile en .zip · KML/KMZ · GPX</em>
+            <input ref={fileRef} type="file" multiple accept=".tif,.tiff,.geojson,.json,.zip,.kml,.kmz,.gpx" onChange={(e) => { if (e.target.files) void onFiles(e.target.files); e.target.value = ''; }} />
           </label>
-          {msg && <p className="gv-hint warn" role="alert">{msg}</p>}
+          {msg && <p className="gv-hint warn gv-pre" role="alert">{msg}</p>}
 
           {pending.map((pn) => {
             const ps = pn.parsed;
@@ -320,6 +342,7 @@ export default function GeoLayersPanel(p: Props) {
               <div className="gv-pending" key={pn.pid}>
                 <div className="hd"><b title={ps.name}>{ps.name}</b><span className="mono">{ps.kind === 'raster' ? 'ráster' : 'vector'}</span></div>
                 <div className="meta mono">{rng}</div>
+                {ps.kind === 'raster' && ps.bands > 1 && <p className="gv-hint warn">Este archivo trae {ps.bands} bandas: solo se usa la primera. Si es una imagen a color (RGB) no sirve como mapa de valores.</p>}
                 {targetGrid && outside(ps.bounds) && <p className="gv-hint warn">Este archivo está fuera del área de estudio{isPack ? ' del paquete (no se podrá añadir)' : ''}.</p>}
                 <label className="gv-field"><span>Nombre de la capa</span><input type="text" value={pn.label} onChange={(e) => upd(pn.pid, { label: e.target.value })} /></label>
                 <label className="gv-field"><span>Qué es</span>
@@ -327,7 +350,7 @@ export default function GeoLayersPanel(p: Props) {
                     {(Object.keys(ROLE_LABEL) as Role[]).filter((r) => !(isPack && r === 'area')).map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
                   </select>
                 </label>
-                <p className="gv-hint">{ROLE_HINT[pn.role]}</p>
+                <p className="gv-hint">{ROLE_HINT[pn.role]}{ps.kind === 'raster' && pn.role !== 'criterion' ? ' En un ráster, cada celda con valor mayor que 0 cuenta como marcada.' : ''}</p>
                 {isPack && <p className="gv-hint">El «Área de estudio» no se ofrece aquí: la fija el paquete del curso.</p>}
                 {pn.role === 'criterion' && (
                   <label className="gv-field"><span>Criterio al que alimenta</span>
@@ -382,11 +405,11 @@ export default function GeoLayersPanel(p: Props) {
             {p.quota.used_bytes > p.quota.quota_bytes && <b>Sobre la cuota: no puedes subir más hasta borrar capas.</b>}
           </div>
         )}
-        <LayerRow id="result" label="Resultado (idoneidad)" role="resultado" vis={p.vis} setVis={p.setVis} swatch="linear-gradient(90deg,#D9534F,#F0AD4E,#2E7D32)" />
+        <LayerRow id="result" label="Resultado (idoneidad)" role="resultado" vis={p.vis} setVis={p.setVis} swatch={rampCss(p.palette)} />
         {p.virtual.map((x) => <LayerRow key={x.id} id={x.id} label={x.label} role={x.role} vis={p.vis} setVis={p.setVis} swatch={x.swatch} />)}
         {data && Object.entries(data.info).map(([k, l]) => (
           <LayerRow key={k} id={`l:${k}`} label={l.label} role={ROLE_LABEL[l.role].toLowerCase()} vis={p.vis} setVis={p.setVis}
-            swatch={l.role === 'exclusion' ? '#7F8C8D' : l.role === 'area' ? '#84CC16' : 'linear-gradient(90deg,#2166AC,#92C5DE,#FDDB80)'}
+            swatch={l.role === 'exclusion' ? '#7F8C8D' : l.role === 'area' ? '#84CC16' : Object.values(geo.rules).some((r) => r.layerKey === k) ? rampCss(p.palette) : RAW_RAMP_CSS}
             note={[l.origin ? `${l.origin}${layers[k] && !layers[k].path ? ' · sin guardar (solo esta sesión)' : ''}` : '', !layers[k] && isPack ? 'Del paquete del curso · solo lectura (no se puede borrar)' : '', l.license ? `Licencia: ${l.license}` : ''].filter(Boolean).join(' · ') || undefined}
             onDelete={layers[k] ? () => dropLayer(k) : undefined} />
         ))}

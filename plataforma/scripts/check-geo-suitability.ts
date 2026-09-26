@@ -4,7 +4,7 @@
 import { SNSM_CACAO_RULES } from '../src/lib/geo/membership.ts';
 import {
   CLASS_ALTA, CLASS_EXCLUDED, CLASS_MODERADA, CLASS_NO_APTA, CLASS_VETO,
-  evaluateGrid, evaluatePixel, hectaresByClass, MASK_EXCLUDED, MASK_NODATA, MASK_VALID,
+  coverageStats, evaluateGrid, evaluatePixel, hectaresByClass, usableRules, MASK_EXCLUDED, MASK_NODATA, MASK_VALID,
   type CriterionRule,
 } from '../src/lib/geo/suitability.ts';
 
@@ -82,6 +82,31 @@ for (const [nombre, p] of Object.entries(PUNTOS)) {
   const ha = hectaresByClass(cls, 6.25);
   ok(ha[CLASS_ALTA] === 6.25 && ha[CLASS_MODERADA] === 6.25 && ha[CLASS_NO_APTA] === 6.25 && ha[CLASS_VETO] === 6.25,
     `hectaresByClass: 6.25 ha por clase (${JSON.stringify(ha)})`);
+}
+
+// --- robustez: capa ausente / de otro tamaño no debe romper el cálculo, y la cobertura se cuenta
+{
+  const layers: Record<string, Float32Array> = {
+    a: new Float32Array([1, 1, NaN, NaN]),
+    b: new Float32Array([1, NaN, 1, NaN]),
+  };
+  const rules: CriterionRule[] = [
+    { key: 'a', weight: 0.5, fn: { type: 'up', a: 0, b: 1 } },
+    { key: 'b', weight: 0.5, fn: { type: 'up', a: 0, b: 1 } },
+    { key: 'borrada', weight: 0.9, fn: { type: 'up', a: 0, b: 1 } },      // capa que ya no existe (useDeferredValue sostiene reglas viejas)
+    { key: 'chica', weight: 0.9, fn: { type: 'up', a: 0, b: 1 } },        // capa de otro tamaño (corrupta)
+  ];
+  layers.chica = new Float32Array(3);
+  ok(usableRules(layers, 4, rules).length === 2, 'usableRules descarta capas ausentes o de otro tamaño');
+  let threw = false; let out: ReturnType<typeof evaluateGrid> | null = null;
+  try { out = evaluateGrid(layers, new Uint8Array(4).fill(MASK_VALID), rules, UMBRALES); } catch { threw = true; }
+  ok(!threw && out !== null, 'evaluateGrid no lanza con una capa ausente');
+  ok(out!.pct[0] === 100 && out!.pct[1] === 100 && out!.pct[2] === 100, 'con un criterio sin dato en la celda, los pesos se reescalan entre los que sí tienen dato');
+  ok(out!.pct[3] === 255, 'celda sin dato en TODOS los criterios = sin dato (255), no 0');
+  const cov = coverageStats(layers, new Uint8Array([MASK_VALID, MASK_VALID, MASK_VALID, MASK_VALID]), rules);
+  ok(cov.valid === 4 && cov.partial === 2 && cov.none === 1, `coverageStats: 4 evaluables, 2 parciales, 1 sin dato (${JSON.stringify(cov)})`);
+  const cov2 = coverageStats(layers, new Uint8Array([MASK_EXCLUDED, MASK_NODATA, MASK_VALID, MASK_VALID]), rules);
+  ok(cov2.valid === 2, 'coverageStats ignora exclusión y fuera del área');
 }
 
 console.log(fallos ? `\n${fallos} prueba(s) fallaron` : '\nTodas las pruebas pasaron');

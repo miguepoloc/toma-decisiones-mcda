@@ -25,6 +25,8 @@ export type MapMarker = { id: string; lat: number; lon: number; label?: string; 
 
 export type GeoMapHandle = {
   fit: (b: Bounds) => void;
+  /** Extensión lon/lat de lo que se ve ahora (alternativa táctil a dibujar el área con el ratón). */
+  getBounds: () => Bounds | null;
   flyTo: (lat: number, lon: number, zoom?: number) => void;
   /** Dibuja mapa base + capas visibles en un canvas (para el PNG). Lanza si el navegador bloquea las teselas. */
   capture: () => Promise<HTMLCanvasElement>;
@@ -46,6 +48,7 @@ type Props = {
 };
 
 const toLBounds = (L: typeof Lf, b: Bounds) => L.latLngBounds([b.south, b.west], [b.north, b.east]);
+const reducedMotion = () => typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
 const GeoMap = forwardRef<GeoMapHandle, Props>(function GeoMap(props, ref) {
   const host = useRef<HTMLDivElement>(null);
@@ -68,7 +71,9 @@ const GeoMap = forwardRef<GeoMapHandle, Props>(function GeoMap(props, ref) {
 
   useEffect(() => {
     if (!L || !host.current || map.current) return;
-    const m = L.map(host.current, { zoomControl: false, attributionControl: true, worldCopyJump: true, zoomSnap: 0.25, zoomDelta: 0.5, wheelPxPerZoomLevel: 90 });
+    // Con «reducir movimiento» del sistema, sin animaciones de zoom, fundido ni vuelo.
+    const calm = reducedMotion();
+    const m = L.map(host.current, { zoomControl: false, attributionControl: true, worldCopyJump: true, zoomSnap: 0.25, zoomDelta: 0.5, wheelPxPerZoomLevel: 90, zoomAnimation: !calm, fadeAnimation: !calm, markerZoomAnimation: !calm });
     m.attributionControl.setPrefix('<a href="https://leafletjs.com" target="_blank" rel="noreferrer">Leaflet</a>');
     L.control.zoom({ position: 'topleft', zoomInTitle: 'Acercar', zoomOutTitle: 'Alejar' }).addTo(m);
     L.control.scale({ position: 'bottomleft', imperial: false, maxWidth: 140 }).addTo(m);
@@ -79,11 +84,20 @@ const GeoMap = forwardRef<GeoMapHandle, Props>(function GeoMap(props, ref) {
     if (ib) m.fitBounds(toLBounds(L, ib), { padding: [30, 30] });
     else m.setView([8, -74], 5);
     m.on('click', (e) => cb.current.onClick(e.latlng.lat, e.latlng.lng));
+    // Sin ratón no hay «clic»: con el mapa enfocado, Intro consulta el punto del centro (las flechas lo desplazan).
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Enter' || e.target !== m.getContainer()) return;
+      e.preventDefault();
+      const c = m.getCenter();
+      cb.current.onClick(c.lat, c.lng);
+    };
+    m.getContainer().addEventListener('keydown', onKey);
     m.on('mousemove', (e) => cb.current.onMove(e.latlng.lat, e.latlng.lng));
     map.current = m;
     const ro = new ResizeObserver(() => m.invalidateSize());
     ro.observe(host.current);
-    return () => { ro.disconnect(); m.remove(); map.current = null; base.current = null; imgs.current.clear(); vecs.current.clear(); marks.current.clear(); draftRect.current = null; };
+    const el = m.getContainer();
+    return () => { ro.disconnect(); el.removeEventListener('keydown', onKey); m.remove(); map.current = null; base.current = null; imgs.current.clear(); vecs.current.clear(); marks.current.clear(); draftRect.current = null; };
   }, [L]);
 
   // mapa base
@@ -197,8 +211,16 @@ const GeoMap = forwardRef<GeoMapHandle, Props>(function GeoMap(props, ref) {
   }, [L, props.drawing]);
 
   useImperativeHandle(ref, () => ({
-    fit: (b) => { if (L && map.current) map.current.fitBounds(toLBounds(L, b), { padding: [30, 30] }); },
-    flyTo: (lat, lon, zoom) => { map.current?.flyTo([lat, lon], zoom ?? Math.max(map.current.getZoom(), 12), { duration: 0.8 }); },
+    fit: (b) => { if (L && map.current) map.current.fitBounds(toLBounds(L, b), { padding: [30, 30], animate: !reducedMotion() }); },
+    getBounds: () => {
+      const b = map.current?.getBounds();
+      return b ? { west: b.getWest(), south: b.getSouth(), east: b.getEast(), north: b.getNorth() } : null;
+    },
+    flyTo: (lat, lon, zoom) => {
+      const m = map.current; if (!m) return;
+      const z = zoom ?? Math.max(m.getZoom(), 12);
+      if (reducedMotion()) m.setView([lat, lon], z, { animate: false }); else m.flyTo([lat, lon], z, { duration: 0.8 });
+    },
     size: () => { const s = map.current?.getSize(); return { w: s?.x ?? 0, h: s?.y ?? 0 }; },
     capture: async () => {
       const m = map.current;
@@ -227,7 +249,7 @@ const GeoMap = forwardRef<GeoMapHandle, Props>(function GeoMap(props, ref) {
     },
   }), [L]);
 
-  return <div ref={host} className="gv-leaflet" role="application" aria-label="Mapa interactivo" />;
+  return <div ref={host} className="gv-leaflet" role="application" aria-label="Mapa interactivo. Con el mapa enfocado: flechas para moverte, más y menos para acercar, Intro para consultar la idoneidad del punto central." />;
 });
 
 export default GeoMap;

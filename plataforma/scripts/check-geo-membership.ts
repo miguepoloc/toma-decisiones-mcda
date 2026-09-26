@@ -2,7 +2,7 @@
 // data/ahp_sig_snsm/membership.py (el notebook 07) y contra los 4 puntos de ejemplo
 // (Palmor/San Pedro/Bonda/Guachaca) de idoneidad_biofisica_250m.npy, leídos directo del caché con
 // pyproj/rasterio (ver plataforma/docs/PLAN_geovisor_ahp_sig.md § 6.2 sobre `pend`).
-import { classes, down, suitability, trapezoid, up, vetoed } from '../src/lib/geo/membership.ts';
+import { classes, down, fnIssue, sortedFn, suitability, trapezoid, up, vetoed } from '../src/lib/geo/membership.ts';
 
 let fallos = 0;
 const ok = (cond: boolean, msg: string) => { console.log((cond ? 'OK   ' : 'FALLA') + ' ' + msg); if (!cond) fallos++; };
@@ -75,6 +75,22 @@ for (const [nombre, p] of Object.entries(PUNTOS)) {
   ok(cerca(sP, p.s_precip), `${nombre}: s_precip = ${sP.toFixed(5)} (esperado ${p.s_precip})`);
   ok(cerca(sH, p.s_ph), `${nombre}: s_ph = ${sH.toFixed(5)} (esperado ${p.s_ph})`);
   ok(cerca(sPe, p.s_pend), `${nombre}: s_pend = ${sPe.toFixed(5)} (esperado ${p.s_pend})`);
+}
+
+// --- coherencia de reglas (fnIssue / sortedFn): parámetros desordenados no deben pasar en silencio
+{
+  ok(fnIssue({ type: 'trapezoid', a: 15, b: 22, c: 30, d: 38 }) === null, 'fnIssue: trapecio ordenado = sin problema');
+  ok(fnIssue({ type: 'trapezoid', a: 22, b: 15, c: 30, d: 38 }) !== null, 'fnIssue: trapecio con b < a se avisa');
+  ok(fnIssue({ type: 'trapezoid', a: 1, b: 1, c: 1, d: 1 }) === null, 'fnIssue: trapecio degenerado (todo igual) es válido');
+  ok(fnIssue({ type: 'down', a: 45, b: 12 }) !== null && fnIssue({ type: 'down', a: 12, b: 45 }) === null, 'fnIssue: down con a > b se avisa');
+  ok(fnIssue({ type: 'up', a: NaN, b: 3 }) !== null, 'fnIssue: parámetro vacío (NaN) se avisa');
+  ok(fnIssue({ type: 'steps', breaks: [150, 70], scores: [0, 0.5, 1] }) !== null, 'fnIssue: cortes desordenados');
+  ok(fnIssue({ type: 'steps', breaks: [70, 150], scores: [0, 1] }) !== null, 'fnIssue: faltan puntajes');
+  ok(fnIssue({ type: 'classes', map: { '1': 1, '2': 1.5 } }) !== null, 'fnIssue: idoneidad de clase > 1');
+  const t = sortedFn({ type: 'trapezoid', a: 22, b: 15, c: 38, d: 30 });
+  ok(t.type === 'trapezoid' && t.a === 15 && t.b === 22 && t.c === 30 && t.d === 38 && fnIssue(t) === null, 'sortedFn ordena el trapecio');
+  const dn = sortedFn({ type: 'down', a: 45, b: 12 });
+  ok(dn.type === 'down' && dn.a === 12 && dn.b === 45, 'sortedFn intercambia a y b en up/down');
 }
 
 console.log(fallos ? `\n${fallos} prueba(s) fallaron` : '\nTodas las pruebas pasaron');

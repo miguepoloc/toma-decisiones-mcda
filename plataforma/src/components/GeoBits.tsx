@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import type { PaletteKey } from '@/lib/geo/paint';
 
 /** Input numérico que deja escribir "-", "1." o vacío sin pelear con el valor: solo confirma al
  * tener un número válido y re-sincroniza al perder el foco. */
@@ -40,3 +41,32 @@ export const ICONS = {
   square: 'M3 3h18v18H3z',
   download: 'M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3',
 };
+
+
+const PALETTE_KEY = 'mcda-gv-palette-v1';
+
+/** Paleta de color elegida (semáforo rojo–verde o apta para daltonismo). Preferencia por navegador, no por proyecto:
+ * es una necesidad de quien mira, no del mapa. Sin storage (ventana privada, bloqueado) se usa el semáforo. */
+export function usePalette(): [PaletteKey, (p: PaletteKey) => void] {
+  const [pal, setPal] = useState<PaletteKey>('semaforo');
+  useEffect(() => {
+    try { const v = localStorage.getItem(PALETTE_KEY); if (v === 'semaforo' || v === 'daltonismo') setPal(v); } catch { /* sin storage */ }
+  }, []);
+  const set = useCallback((p: PaletteKey) => {
+    setPal(p);
+    try { localStorage.setItem(PALETTE_KEY, p); } catch { /* sin storage */ }
+  }, []);
+  return [pal, set];
+}
+
+/** Número legible para una leyenda o un eje: sin decimales si es grande, 2 cifras significativas si es pequeño. */
+export function fmtNum(v: number): string {
+  if (!Number.isFinite(v)) return '—';
+  const a = Math.abs(v);
+  const f = (d: number) => v.toLocaleString('es-CO', { maximumFractionDigits: d });
+  if (a >= 100) return f(0);
+  if (a >= 10) return f(1);
+  if (a >= 1) return f(2);
+  if (a === 0) return '0';
+  return Number(v.toPrecision(2)).toLocaleString('es-CO', { maximumFractionDigits: 6 });
+}

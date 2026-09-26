@@ -84,6 +84,39 @@ export function suitability(x: number, fn: FnSpec): number {
   }
 }
 
+/** Problema de coherencia de una regla, en español, o `null` si está bien. Las funciones de arriba no lanzan con
+ * parámetros desordenados, pero devuelven un mapa distinto al que el usuario cree estar definiendo (p. ej. un
+ * trapecio con b < a nunca sube; un «menos es mejor» con a > b vale 1 hasta a y no baja nunca). */
+export function fnIssue(fn: FnSpec): string | null {
+  const finite = (...v: number[]) => v.every(Number.isFinite);
+  switch (fn.type) {
+    case 'trapezoid':
+      if (!finite(fn.a, fn.b, fn.c, fn.d)) return 'Falta algún parámetro del trapecio.';
+      return fn.a <= fn.b && fn.b <= fn.c && fn.c <= fn.d ? null : 'Los parámetros deben cumplir a ≤ b ≤ c ≤ d.';
+    case 'up': case 'down':
+      if (!finite(fn.a, fn.b)) return 'Falta algún parámetro.';
+      return fn.a <= fn.b ? null : 'El parámetro a debe ser menor o igual que b.';
+    case 'steps':
+      if (fn.scores.length !== fn.breaks.length + 1) return 'Debe haber un puntaje más que cortes.';
+      if (!fn.breaks.every(Number.isFinite)) return 'Falta algún corte.';
+      return fn.breaks.every((b, i) => i === 0 || b >= fn.breaks[i - 1]) ? null : 'Los cortes deben ir de menor a mayor.';
+    case 'target':
+      return finite(fn.value, fn.tol, fn.falloff) ? null : 'Falta algún parámetro.';
+    case 'classes':
+      return Object.values(fn.map).every((v) => Number.isFinite(v) && v >= 0 && v <= 1) ? null : 'Las idoneidades deben estar entre 0 y 1.';
+  }
+}
+
+/** Ordena los parámetros de una regla para que cumplan `fnIssue` (trapecio, up/down, cortes). Otros tipos no cambian. */
+export function sortedFn(fn: FnSpec): FnSpec {
+  switch (fn.type) {
+    case 'trapezoid': { const [a, b, c, d] = [fn.a, fn.b, fn.c, fn.d].sort((x, y) => x - y); return { type: 'trapezoid', a, b, c, d }; }
+    case 'up': case 'down': return fn.a <= fn.b ? fn : { type: fn.type, a: fn.b, b: fn.a };
+    case 'steps': return { type: 'steps', breaks: [...fn.breaks].sort((x, y) => x - y), scores: fn.scores };
+    default: return fn;
+  }
+}
+
 /** true si el veto se activa (idoneidad pasa a 0 sin importar los demás criterios). */
 export function vetoed(x: number, v: VetoSpec | undefined): boolean {
   if (!v || Number.isNaN(x)) return false;

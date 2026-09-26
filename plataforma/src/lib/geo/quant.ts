@@ -9,12 +9,13 @@
 
 export function quantize(v: number, lo: number, hi: number): number {
   if (Number.isNaN(v)) return 255;
+  if (!(hi > lo)) return 0; // capa constante: sin esto (v-lo)/0 daría NaN y Uint8 lo guardaría como 0 de forma accidental
   const t = Math.max(0, Math.min(1, (v - lo) / (hi - lo)));
   return Math.round(t * 254);
 }
 
 export function dequantize(q: number, lo: number, hi: number): number {
-  return q === 255 ? NaN : lo + (q / 254) * (hi - lo);
+  return q === 255 ? NaN : hi > lo ? lo + (q / 254) * (hi - lo) : lo;
 }
 
 /** Aplica `dequantize` a una capa completa. */

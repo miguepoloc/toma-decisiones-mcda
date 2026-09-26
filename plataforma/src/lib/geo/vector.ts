@@ -73,16 +73,27 @@ export function burn(fc: FC, grid: GeoGrid, mode: BurnMode): Float32Array {
   // Decimación: vértices más juntos que ~0.3 píxel no aportan (los shapefiles de costa traen millones).
   const minStepDeg = (0.3 * grid.resM) / 111_320;
 
+  // Un GeoJSON une los vértices con rectas en lon/lat (RFC 7946). Al proyectar solo los vértices, un tramo largo
+  // pasaría a ser una recta en UTM, que se desvía de la curva real (~1–2 celdas de 250 m a 100 km, ~2 km a 300 km):
+  // se densifica cada tramo largo en lon/lat antes de proyectarlo.
+  const MAX_SEG_DEG = 0.25;
   const project = (ring: Pos[]): [number, number][] => {
     const res: [number, number][] = [];
     let lx = Infinity, ly = Infinity;
+    const push = (lon: number, lat: number) => { const [x, y] = toGrid(lon, lat); res.push(mapToPixel(x, y, grid.transform)); };
     for (let i = 0; i < ring.length; i++) {
       const p = ring[i];
       const last = i === ring.length - 1;
       if (!last && Math.abs(p[0] - lx) < minStepDeg && Math.abs(p[1] - ly) < minStepDeg) continue;
+      if (Number.isFinite(lx) && Number.isFinite(p[0]) && Number.isFinite(p[1])) {
+        const d = Math.max(Math.abs(p[0] - lx), Math.abs(p[1] - ly));
+        if (d > MAX_SEG_DEG) {
+          const n = Math.min(400, Math.ceil(d / MAX_SEG_DEG));
+          for (let k = 1; k < n; k++) push(lx + ((p[0] - lx) * k) / n, ly + ((p[1] - ly) * k) / n);
+        }
+      }
       lx = p[0]; ly = p[1];
-      const [x, y] = toGrid(p[0], p[1]);
-      res.push(mapToPixel(x, y, grid.transform));
+      push(p[0], p[1]);
     }
     return res;
   };
@@ -93,9 +104,22 @@ export function burn(fc: FC, grid: GeoGrid, mode: BurnMode): Float32Array {
   };
   const line = (pts: [number, number][], v: number) => {
     for (let i = 0; i < pts.length - 1; i++) {
-      const [x0, y0] = pts[i], [x1, y1] = pts[i + 1];
+      let [x0, y0] = pts[i], [x1, y1] = pts[i + 1];
       if (![x0, y0, x1, y1].every(Number.isFinite)) continue;
       if ((x0 < -1 && x1 < -1) || (y0 < -1 && y1 < -1) || (x0 > W && x1 > W) || (y0 > H && y1 > H)) continue;
+      // Se recorta el segmento al rectángulo de la grilla (Liang-Barsky): un tramo que cruza la grilla pero se
+      // extiende millones de píxeles fuera (costas, rutas de todo un país) haría millones de iteraciones inútiles.
+      const dx = x1 - x0, dy = y1 - y0;
+      let t0 = 0, t1 = 1;
+      const clip = (p: number, q: number) => {
+        if (p === 0) return q >= 0;
+        const t = q / p;
+        if (p < 0) { if (t > t1) return false; if (t > t0) t0 = t; } else { if (t < t0) return false; if (t < t1) t1 = t; }
+        return true;
+      };
+      if (!(clip(-dx, x0 + 1) && clip(dx, W - x0) && clip(-dy, y0 + 1) && clip(dy, H - y0))) continue;
+      [x1, y1] = [x0 + dx * t1, y0 + dy * t1];
+      [x0, y0] = [x0 + dx * t0, y0 + dy * t0];
       const n = Math.max(1, Math.ceil(Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)) * 2));
       for (let k = 0; k <= n; k++) setCell(x0 + ((x1 - x0) * k) / n, y0 + ((y1 - y0) * k) / n, v);
     }
@@ -191,12 +215,40 @@ export function distanceTransform(feature: Uint8Array, w: number, h: number, res
   return out;
 }
 
-/** Atajo: rasteriza en presencia y devuelve la distancia en metros (0 dentro del elemento). */
-export function distanceLayer(fc: FC, grid: GeoGrid): Float32Array {
-  const b = burn(fc, grid, { kind: 'presence' });
+/** Celdas de margen para medir distancias a elementos que quedan FUERA de la grilla (hasta medio lado, sin pasar
+ * de `cap` celdas en total). Sin margen, una costa o una ruta justo al borde del área "desaparece" y las celdas
+ * cercanas a ella reciben una distancia mucho mayor que la real. */
+export function distancePad(w: number, h: number, cap = 3_000_000): number {
+  if (w * h >= cap) return 0;
+  const p = (-(w + h) + Math.sqrt((w + h) * (w + h) - 4 * (w * h - cap))) / 4;
+  return Math.max(0, Math.min(Math.ceil(Math.max(w, h) / 2), Math.floor(p)));
+}
+
+/** La misma grilla con `pad` celdas más por cada lado (mismo CRS, misma resolución). */
+export function paddedGrid(grid: GeoGrid, pad: number): GeoGrid {
+  const [a, b, c, d, e, f] = grid.transform;
+  return { ...grid, width: grid.width + 2 * pad, height: grid.height + 2 * pad, transform: [a, b, c - a * pad - b * pad, d, e, f - d * pad - e * pad] };
+}
+
+/** Distancia euclidiana en metros al elemento más cercano, midiendo también los elementos hasta `padM` metros fuera
+ * de la grilla. NaN en toda la capa solo si no hay ningún elemento ni siquiera en el margen. Distancia planar en el
+ * CRS de la grilla (UTM): error < 0.1 % cerca del meridiano central de la zona, ~0.4 % a 9° de él. */
+export function distanceLayerPadded(fc: FC, grid: GeoGrid): { values: Float32Array; padM: number } {
+  const pad = distancePad(grid.width, grid.height);
+  const g = pad > 0 ? paddedGrid(grid, pad) : grid;
+  const b = burn(fc, g, { kind: 'presence' });
   const mask = new Uint8Array(b.length);
   for (let i = 0; i < b.length; i++) mask[i] = Number.isNaN(b[i]) ? 0 : 1;
-  return distanceTransform(mask, grid.width, grid.height, grid.resM);
+  const d = distanceTransform(mask, g.width, g.height, g.resM);
+  if (pad === 0) return { values: d, padM: 0 };
+  const out = new Float32Array(grid.width * grid.height);
+  for (let r = 0; r < grid.height; r++) out.set(d.subarray((r + pad) * g.width + pad, (r + pad) * g.width + pad + grid.width), r * grid.width);
+  return { values: out, padM: pad * grid.resM };
+}
+
+/** Atajo: distancia en metros (0 dentro del elemento) contando los elementos cercanos fuera de la grilla. */
+export function distanceLayer(fc: FC, grid: GeoGrid): Float32Array {
+  return distanceLayerPadded(fc, grid).values;
 }
 
 /** Índice de la celda "fuente" (`isSource[i] > 0`) más cercana a cada celda, por propagación en dos
