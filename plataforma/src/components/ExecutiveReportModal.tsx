@@ -372,7 +372,7 @@ export default function ExecutiveReportModal({
               3. Relación de Superación (ELECTRE)
             </h3>
             <div style={{ breakInside: 'avoid' }}>
-              <ElectreGraph names={electre.names} outranks={electre.outranks} concordance={electre.concordance} discordance={electre.discordance} cStar={electre.cStar} dStar={electre.dStar} staticView />
+              <ElectreGraph names={electre.names} outranks={electre.outranks} concordance={electre.concordance} discordance={electre.discordance} cStar={electre.cStar} dStar={electre.dStar} />
             </div>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, marginTop: 12 }}>
               <thead>

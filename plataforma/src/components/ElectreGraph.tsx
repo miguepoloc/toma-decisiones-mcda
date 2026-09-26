@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useState } from 'react';
+import { useId } from 'react';
 
 type Props = {
   names: string[];
@@ -10,90 +10,108 @@ type Props = {
   discordance: number[][];
   cStar: number;
   dStar: number;
-  /** Modo informe/impresión: sin interacción ni leyenda de "toca una flecha"; el detalle numérico va en el texto del informe. */
-  staticView?: boolean;
 };
 
 const W = 720;
 const H = 380;
 const CX = W / 2;
 const CY = H / 2;
-const R = 122;   // radio del círculo donde se ubican los nodos
-const NODE = 22; // radio de cada nodo
-const clip = (s: string, n = 22) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
 
-/** Grafo de superación de ELECTRE: un nodo por alternativa y una flecha i → k cuando i supera a k.
- * Flecha con punta en ambos extremos = se superan mutuamente (equivalentes con estos umbrales). Sin línea = incomparables.
- * Se dibuja en SVG propio (sin librería): con las pocas alternativas de un proyecto MCDA basta un círculo, y así las
- * cuerdas nunca atraviesan otro nodo. Nace de `electre()`, así que se redibuja solo cuando cambian c* o d*. */
-export default function ElectreGraph({ names, outranks, concordance, discordance, cStar, dStar, staticView = false }: Props) {
+/** Parte un nombre en dos líneas por el espacio más cercano al centro, para que quepa dentro del nodo. */
+function lines(name: string, max: number): string[] {
+  const clip = (s: string) => (s.length > max ? s.slice(0, max - 1) + '…' : s);
+  if (name.length <= max - 2 || !name.includes(' ')) return [clip(name)];
+  const mid = name.length / 2;
+  let cut = -1;
+  for (let i = 0; i < name.length; i++) if (name[i] === ' ' && (cut < 0 || Math.abs(i - mid) < Math.abs(cut - mid))) cut = i;
+  return [clip(name.slice(0, cut)), clip(name.slice(cut + 1))];
+}
+
+/** Grafo de superación de ELECTRE: un nodo por alternativa; flecha i → k cuando i supera a k, con su concordancia (c) y
+ * discordancia (d) escritas sobre la flecha; punta en ambos extremos si se superan mutuamente; línea punteada gris
+ * «incomparables» cuando ninguna supera a la otra. Todo va escrito en el propio dibujo (no depende de hover ni de color),
+ * así que sirve igual en pantalla táctil, con teclado y en el informe impreso. SVG propio sin librerías: con las pocas
+ * alternativas de un proyecto MCDA basta una elipse, y así las líneas no atraviesan otros nodos. Se redibuja con c* y d*. */
+export default function ElectreGraph({ names, outranks, concordance, discordance, cStar, dStar }: Props) {
   const uid = useId().replace(/:/g, '');
-  const [active, setActive] = useState<[number, number] | null>(null);
   const n = names.length;
   if (n === 0) return null;
 
-  const a0 = n === 2 ? Math.PI : -Math.PI / 2;
+  const big = n <= 4;
+  const NODE = big ? 46 : 36;
+  const Rx = big ? 250 : 265;
+  const Ry = big ? 118 : 128;
+  // n=3: dos nodos arriba y uno abajo (lectura natural); n par: rectángulo; n impar > 3: uno arriba
+  const a0 = n === 2 ? Math.PI : n === 3 ? -(5 * Math.PI) / 6 : n % 2 === 0 ? -Math.PI / 2 - Math.PI / n : -Math.PI / 2;
   const pos = names.map((_, i) => {
     const t = a0 + (2 * Math.PI * i) / n;
-    return { x: CX + R * Math.cos(t), y: CY + R * Math.sin(t), c: Math.cos(t), s: Math.sin(t) };
+    return { x: CX + Rx * Math.cos(t), y: CY + Ry * Math.sin(t) };
   });
   const beats = (i: number, k: number) => !!outranks[i]?.[k];
   const inDeg = names.map((_, k) => names.filter((__, i) => i !== k && beats(i, k)).length);
   const outDeg = names.map((_, i) => names.filter((__, k) => i !== k && beats(i, k)).length);
-  const kernel = names.map((_, i) => inDeg[i] === 0);
   const hasRelations = outDeg.some((d) => d > 0);
-  const kernelCount = kernel.filter(Boolean).length;
+  const kernelCount = inDeg.filter((d) => d === 0).length;
 
-  const edges: { i: number; k: number; both: boolean }[] = [];
+  type Edge = { i: number; k: number; kind: 'one' | 'both' | 'none' };
+  const edges: Edge[] = [];
   for (let i = 0; i < n; i++) {
     for (let k = i + 1; k < n; k++) {
       const ik = beats(i, k), ki = beats(k, i);
-      if (ik && ki) edges.push({ i, k, both: true });
-      else if (ik) edges.push({ i, k, both: false });
-      else if (ki) edges.push({ i: k, k: i, both: false });
+      if (ik && ki) edges.push({ i, k, kind: 'both' });
+      else if (ik) edges.push({ i, k, kind: 'one' });
+      else if (ki) edges.push({ i: k, k: i, kind: 'one' });
+      else edges.push({ i, k, kind: 'none' });
     }
   }
 
-  const summary = hasRelations
-    ? `Grafo de superación con ${n} alternativas. ${edges.filter((e) => !e.both).map((e) => `${names[e.i]} supera a ${names[e.k]}`).concat(edges.filter((e) => e.both).map((e) => `${names[e.i]} y ${names[e.k]} se superan mutuamente`)).join('. ')}.`
-    : `Grafo de superación con ${n} alternativas: ninguna supera a otra con c* = ${cStar.toFixed(2)} y d* = ${dStar.toFixed(2)}.`;
+  const rel = edges.filter((e) => e.kind !== 'none');
+  const summary = `Grafo de superación con ${n} alternativas, c* = ${cStar.toFixed(2)} y d* = ${dStar.toFixed(2)}. `
+    + (rel.length
+      ? rel.map((e) => (e.kind === 'both' ? `${names[e.i]} y ${names[e.k]} se superan mutuamente` : `${names[e.i]} supera a ${names[e.k]}`)).join('. ') + '. '
+      : 'Ninguna alternativa supera a otra. ')
+    + (edges.some((e) => e.kind === 'none') ? 'Incomparables: ' + edges.filter((e) => e.kind === 'none').map((e) => `${names[e.i]} y ${names[e.k]}`).join(', ') + '.' : '');
 
-  const activeKey = active ? `${active[0]}-${active[1]}` : null;
-  const detail = (i: number, k: number) => (
-    <>
-      <b>{names[i]}</b> → <b>{names[k]}</b>: concordancia <b className="mono">{concordance[i]?.[k]?.toFixed(2)}</b> (≥ c* {cStar.toFixed(2)}) y discordancia <b className="mono">{discordance[i]?.[k]?.toFixed(2)}</b> (≤ d* {dStar.toFixed(2)})
-    </>
-  );
   const arrow = `url(#${uid}-a)`;
+  const halo = { paintOrder: 'stroke' as const, stroke: 'var(--surface)', strokeWidth: 5, strokeLinejoin: 'round' as const };
+  const cd = (i: number, k: number) => `c=${concordance[i]?.[k]?.toFixed(2)} · d=${discordance[i]?.[k]?.toFixed(2)}`;
+  const labelSize = big ? 13 : 11.5;
 
   return (
     <div>
       <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={summary} style={{ width: '100%', maxWidth: 720, display: 'block', margin: '0 auto' }}>
         <defs>
-          <marker id={`${uid}-a`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+          <marker id={`${uid}-a`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
             <path d="M0,0 L10,5 L0,10 z" fill="var(--m-electre)" />
           </marker>
         </defs>
 
-        {edges.map(({ i, k, both }) => {
+        {/* primero las punteadas (incomparables) para que las flechas queden encima */}
+        {[...edges].sort((a, b) => (a.kind === 'none' ? -1 : 0) - (b.kind === 'none' ? -1 : 0)).map(({ i, k, kind }) => {
           const dx = pos[k].x - pos[i].x, dy = pos[k].y - pos[i].y;
           const len = Math.hypot(dx, dy) || 1;
           const ux = dx / len, uy = dy / len;
-          const gap = NODE + 4;
+          const gap = NODE + (kind === 'none' ? 0 : 4);
           const x1 = pos[i].x + ux * gap, y1 = pos[i].y + uy * gap, x2 = pos[k].x - ux * gap, y2 = pos[k].y - uy * gap;
-          const key = `${i}-${k}`;
-          const on = activeKey === key;
+          const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+          if (kind === 'none') {
+            return (
+              <g key={`${i}-${k}`}>
+                <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="var(--muted)" strokeOpacity={0.7} strokeWidth={1.8} strokeDasharray="7 6" />
+                {n <= 4 && <text x={mx} y={my + 4} textAnchor="middle" fontSize={12.5} fontStyle="italic" fontWeight={600} fill="var(--muted)" style={halo}>incomparables</text>}
+              </g>
+            );
+          }
           return (
-            <g key={key}>
-              <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="var(--m-electre)" strokeWidth={on ? 3.5 : 2.2} strokeOpacity={activeKey && !on ? 0.35 : 1}
-                markerEnd={arrow} markerStart={both ? arrow : undefined} />
-              {!staticView && (
-                <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="transparent" strokeWidth={22} style={{ cursor: 'pointer' }}
-                  tabIndex={0} role="button" aria-label={`${names[i]} ${both ? 'y ' + names[k] + ' se superan mutuamente' : 'supera a ' + names[k]}: ver concordancia y discordancia`}
-                  onMouseEnter={() => setActive([i, k])} onMouseLeave={() => setActive(null)}
-                  onFocus={() => setActive([i, k])} onBlur={() => setActive(null)}
-                  onClick={() => setActive(on ? null : [i, k])}
-                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setActive(on ? null : [i, k]); } }} />
+            <g key={`${i}-${k}`}>
+              <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="var(--m-electre)" strokeWidth={2.6} markerEnd={arrow} markerStart={kind === 'both' ? arrow : undefined} />
+              {kind === 'both' ? (
+                <>
+                  <text x={mx} y={my - 3} textAnchor="middle" fontSize={labelSize} fontWeight={700} fill="var(--ink)" className="mono" style={halo}>{'→ ' + cd(i, k)}</text>
+                  <text x={mx} y={my + 13} textAnchor="middle" fontSize={labelSize} fontWeight={700} fill="var(--ink)" className="mono" style={halo}>{'← ' + cd(k, i)}</text>
+                </>
+              ) : (
+                <text x={mx} y={my + 4} textAnchor="middle" fontSize={labelSize} fontWeight={700} fill="var(--ink)" className="mono" style={halo}>{cd(i, k)}</text>
               )}
             </g>
           );
@@ -101,39 +119,33 @@ export default function ElectreGraph({ names, outranks, concordance, discordance
 
         {names.map((nm, i) => {
           const p = pos[i];
-          const anchor = p.c > 0.3 ? 'start' : p.c < -0.3 ? 'end' : 'middle';
-          const lx = p.x + p.c * (NODE + 10) + (anchor === 'middle' ? 0 : p.c > 0 ? 2 : -2);
-          const ly = anchor === 'middle' ? p.y + p.s * (NODE + 18) + (p.s > 0 ? 4 : 0) : p.y + 4;
-          const k = hasRelations && kernel[i] && kernelCount === 1;
+          const k = hasRelations && inDeg[i] === 0 && kernelCount === 1;
+          const ls = lines(nm, big ? 13 : 10);
+          const fs = big ? 13.5 : 11.5;
           return (
             <g key={i}>
-              <circle cx={p.x} cy={p.y} r={NODE} fill="var(--surface2)" stroke={k ? 'var(--pass)' : 'var(--m-electre)'} strokeWidth={k ? 3.5 : 2} />
-              <text x={p.x} y={p.y + 5} textAnchor="middle" fontSize="15" fontWeight="700" fill="var(--ink)" className="mono">{i + 1}</text>
-              <text x={lx} y={ly} textAnchor={anchor} fontSize="13.5" fontWeight={k ? 700 : 500} fill="var(--ink)">
-                <title>{nm}</title>
-                {clip(nm)}{k ? ' ✓' : ''}
-              </text>
+              <title>{nm}</title>
+              <circle cx={p.x} cy={p.y} r={NODE} fill="var(--m-electre)" fillOpacity={0.28} stroke={k ? 'var(--pass)' : 'var(--m-electre)'} strokeWidth={k ? 4 : 2.5} />
+              {ls.map((l, j) => (
+                <text key={j} x={p.x} y={p.y + 4.5 + (j - (ls.length - 1) / 2) * (fs + 2)} textAnchor="middle" fontSize={fs} fontWeight={700} fill="var(--ink)">{l}</text>
+              ))}
+              {k && (
+                <g>
+                  <circle cx={p.x + NODE * 0.72} cy={p.y - NODE * 0.72} r={11} fill="var(--pass)" />
+                  <text x={p.x + NODE * 0.72} y={p.y - NODE * 0.72 + 4.5} textAnchor="middle" fontSize={13} fontWeight={700} fill="#fff">✓</text>
+                </g>
+              )}
             </g>
           );
         })}
 
         {!hasRelations && (
-          <text x={CX} y={CY + 4} textAnchor="middle" fontSize="12.5" fill="var(--muted)">Sin flechas: ninguna supera a otra con estos umbrales</text>
+          <text x={CX} y={H - 8} textAnchor="middle" fontSize={12.5} fill="var(--muted)">Ninguna alternativa supera a otra con estos umbrales</text>
         )}
       </svg>
 
-      {!staticView && (
-        <p className="muted" style={{ fontSize: 13, margin: '6px 0 0', minHeight: 20, textAlign: 'center' }} aria-live="polite">
-          {active
-            ? (() => {
-                const [i, k] = active;
-                return beats(i, k) && beats(k, i) ? <>{detail(i, k)}<br />{detail(k, i)}</> : detail(i, k);
-              })()
-            : hasRelations ? 'Toca o pasa el cursor sobre una flecha para ver su concordancia y discordancia.' : ''}
-        </p>
-      )}
       <p className="muted" style={{ fontSize: 12.5, margin: '6px 0 0', textAlign: 'center' }}>
-        <b style={{ color: 'var(--m-electre)' }}>A → B</b> = A supera a B · <b style={{ color: 'var(--m-electre)' }}>A ↔ B</b> = se superan mutuamente · sin línea = incomparables{hasRelations && kernelCount === 1 ? ' · ✓ = nadie la supera' : ''}
+        <b style={{ color: 'var(--m-electre)' }}>A → B</b> = A supera a B (con su concordancia c y discordancia d) · <b style={{ color: 'var(--m-electre)' }}>A ↔ B</b> = se superan mutuamente · <b>línea punteada</b> = incomparables (verificado: ninguna supera a la otra){hasRelations && kernelCount === 1 ? ' · ✓ = nadie la supera' : ''}
       </p>
     </div>
   );
