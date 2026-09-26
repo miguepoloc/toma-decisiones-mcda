@@ -1,6 +1,7 @@
 'use client';
 
 import { Fragment, useMemo, useState, type CSSProperties } from 'react';
+import ElectreGraph from './ElectreGraph';
 import type { Alternative, Criterion, DecisionMatrix, JudgmentRow, Method, WeightingMethod } from '@/lib/types';
 import {
   CRIT_SHEET, DEFAULT_WEIGHT_METHOD, altSheet, aggMatrix, fmt, getV, indexJudgments, pairsOf, phrase, sheetItems, sheetResult, synthesis,
@@ -318,6 +319,11 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
             ? ' Se guardan con el proyecto y los ven quienes abran el enlace público.'
             : ' Aquí solo cambian en tu pantalla: no modifican el proyecto.'}
         </p>
+      </div>
+      <div className="card">
+        <h3 style={{ marginBottom: 4 }}>Grafo de superación</h3>
+        <p className="muted" style={{ fontSize: 13, margin: '0 0 10px' }}>Mueve c* o d* arriba y mira aparecer o desaparecer flechas.</p>
+        <ElectreGraph names={elecSyn.names} outranks={elecSyn.result.outranks} concordance={elecSyn.result.concordance} discordance={elecSyn.result.discordance} cStar={elecSyn.result.cStar} dStar={elecSyn.result.dStar} />
       </div>
       <div className="card">
         <h3 style={{ marginBottom: 10 }}>Quién supera a quién</h3>
