@@ -221,6 +221,18 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
     return [ahpView, ...quantViews];
   }, [syn, topSyn, vikSyn, promSyn, sawSyn, fuzzyTopSyn]);
   const decidableViews = compareViews.filter((m) => !m.tie);
+  // ELECTRE no da un ranking total, así que va en su propia columna: cuántas alternativas supera cada
+  // una y por cuántas es superada. Su "primer lugar" solo existe si hay relaciones y una única alternativa
+  // que nadie supera (el núcleo); si no, participa en la tabla pero no suma al consenso (como VIKOR sin ganador único).
+  const electreCompare = useMemo(() => {
+    const hasData = alternatives.length > 1 && alternatives.some((a) => criteria.some((c) => getCell(dm, a.id, c.id) != null));
+    const out = alternatives.map((_, i) => elecSyn.result.outranks[i]?.filter(Boolean).length ?? 0);
+    const inn = alternatives.map((_, i) => elecSyn.result.outranks.filter((row) => row[i]).length);
+    const kernel = alternatives.filter((_, i) => inn[i] === 0).map((a) => a.name);
+    const winner = hasData && elecSyn.relations.length > 0 && kernel.length === 1 ? kernel[0] : null;
+    return { hasData, out, inn, winner };
+  }, [alternatives, criteria, dm, elecSyn]);
+  const totalMethods = decidableViews.length + (electreCompare.hasData ? 1 : 0);
   // Alternativa que más veces queda #1 entre los métodos con datos suficientes; null si hay empate en el conteo.
   const topWinner = useMemo(() => {
     const counts = new Map<string, number>();
@@ -229,11 +241,12 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
       const first = m.rows.find((r) => r.rank === 1);
       if (first) counts.set(first.name, (counts.get(first.name) ?? 0) + 1);
     });
+    if (electreCompare.winner) counts.set(electreCompare.winner, (counts.get(electreCompare.winner) ?? 0) + 1);
     const entries = [...counts.entries()].sort((a, b) => b[1] - a[1]);
     if (!entries.length) return null;
     const [name, count] = entries[0];
     return entries.filter(([, c]) => c === count).length > 1 ? null : { name, count };
-  }, [decidableViews]);
+  }, [decidableViews, electreCompare]);
 
   const sheets = method === 'ahp'
     ? [{ key: CRIT_SHEET, label: 'Criterios' }, ...criteria.map((c) => ({ key: altSheet(c.id), label: c.name }))]
@@ -559,7 +572,7 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
           <div className="card win">
             <span className="eyebrow">Ganador más frecuente</span>
             {topWinner ? (
-              <span className="big">{topWinner.name} <span className="muted mono" style={{ fontSize: 13, fontWeight: 500 }}>— {topWinner.count} de {decidableViews.length} métodos</span></span>
+              <span className="big">{topWinner.name} <span className="muted mono" style={{ fontSize: 13, fontWeight: 500 }}>— {topWinner.count} de {totalMethods} métodos</span></span>
             ) : <span className="big">Sin consenso claro entre métodos</span>}
           </div>
 
@@ -575,12 +588,17 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
                           <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: 99, background: m.color, marginRight: 5 }} />{m.label}
                         </th>
                       ))}
+                      <th className="n" title="ELECTRE no ordena: muestra a cuántas alternativas supera cada una (↑) y por cuántas es superada (↓)">
+                        <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: 99, background: 'var(--m-electre)', marginRight: 5 }} />ELECTRE
+                      </th>
                       <th className="n">Consenso</th>
                     </tr>
                   </thead>
                   <tbody>
                     {alternatives.map((a) => {
-                      const firsts = compareViews.filter((m) => !m.tie && !m.soft && m.rows.find((row) => row.name === a.name)?.rank === 1).length;
+                      const ai = alternatives.indexOf(a);
+                      const elecFirst = electreCompare.winner === a.name;
+                      const firsts = compareViews.filter((m) => !m.tie && !m.soft && m.rows.find((row) => row.name === a.name)?.rank === 1).length + (elecFirst ? 1 : 0);
                       return (
                         <tr key={a.id}>
                           <td>{a.name}</td>
@@ -596,13 +614,23 @@ export default function Results({ mode, criteria, alternatives, experts, judgmen
                               </td>
                             );
                           })}
-                          <td className="n muted" style={{ fontSize: 12.5 }}><b className="mono" style={{ color: 'var(--ink)' }}>{firsts}/{decidableViews.length}</b> en 1er lugar</td>
+                          <td className="n">
+                            {electreCompare.hasData
+                              ? <span className="mono" style={{ fontWeight: elecFirst ? 700 : 500, color: elecFirst ? 'var(--pass)' : 'var(--ink)' }} title={`Supera a ${electreCompare.out[ai]} y es superada por ${electreCompare.inn[ai]}${elecFirst ? ' — única alternativa que nadie supera' : ''}`}>{electreCompare.out[ai]}↑ {electreCompare.inn[ai]}↓</span>
+                              : <span className="muted mono">—</span>}
+                          </td>
+                          <td className="n muted" style={{ fontSize: 12.5 }}><b className="mono" style={{ color: 'var(--ink)' }}>{firsts}/{totalMethods}</b> en 1er lugar</td>
                         </tr>
                       );
                     })}
                   </tbody>
                 </table>
               </div>
+              {electreCompare.hasData && (
+                <p className="muted" style={{ fontSize: 12.5, margin: '8px 0 0' }}>
+                  ELECTRE no ordena las alternativas: <b className="mono">n↑ m↓</b> = supera a n y es superada por m (c* = {cEff.toFixed(2)}, d* = {dEff.toFixed(2)}). Cuenta como primer lugar solo si hay una única alternativa que nadie supera{electreCompare.winner ? '' : ' — con estos umbrales no la hay'}.
+                </p>
+              )}
               {compareViews.find((m) => m.key === 'vikor')?.soft && (
                 <p className="muted" style={{ fontSize: 12.5, margin: '8px 0 0' }}>
                   ◆ VIKOR no declara un ganador único con v = {vEff.toFixed(2)} (falla una de las condiciones de Opricovic &amp; Tzeng): su conjunto de compromiso es {compareViews.find((m) => m.key === 'vikor')?.soft?.join(', ')}, y su #1 no se cuenta como primer lugar en el consenso.
